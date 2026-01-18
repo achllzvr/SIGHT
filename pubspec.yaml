@@ -46,6 +46,16 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
 
+  # --- SIGHT DEPENDENCIES ---
+  camera: ^0.10.5
+  google_mlkit_face_detection: ^0.11.0 # The "Brain" for distance & blinking
+  permission_handler: ^11.3.0          # For asking permission
+  image_picker: ^1.0.7                 # For taking static photos (Module C)
+  tflite_flutter: ^0.10.4              # For your custom AI model (Module C)
+
+  # UI Polishes (Optional but recommended)
+  cupertino_icons: ^1.0.6
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
