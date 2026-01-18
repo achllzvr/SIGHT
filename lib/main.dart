@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 // Import your screens
 import 'distance_test_screen.dart';
 import 'blink_test_screen.dart';
+import 'screening_test_screen.dart';
 
 List<CameraDescription> cameras = [];
 
@@ -83,6 +84,22 @@ class LabHubScreen extends StatelessWidget {
                 await _navigateToModule(context, const BlinkTestScreen());
               },
             ),
+
+            // MODULE C
+            _buildModuleCard(
+              context,
+              title: 'Module C: AI Screening',
+              subtitle: 'Test TFLite Pipeline (Static Image).',
+              icon: Icons.health_and_safety,
+              color: Colors.orange.shade100,
+              onTap: () {
+                 Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ScreeningTestScreen()),
+                );
+              },
+            ),
+
           ],
         ),
       ),
