@@ -50,13 +50,16 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
 
     await _controller!.initialize();
 
-    // 4. Start Streaming
+    // Get the sensor orientation (e.g., 270 for front camera)
+    int sensorRotation = _controller!.description.sensorOrientation;
+
     if (mounted) {
       setState(() {});
       _controller!.startImageStream((image) async {
         if (_isServiceInitialized) {
-          // Analyze frame and update UI
-          final results = await _aiService.analyzeFrame(image);
+          // PASS sensorRotation HERE
+          final results = await _aiService.analyzeFrame(image, sensorRotation);
+          
           if (mounted && results.isNotEmpty) {
             setState(() {
               _leftEyeResult = results['Left'] ?? "Scanning...";

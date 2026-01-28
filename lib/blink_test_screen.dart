@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'main.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:typed_data';
+import 'dart:io';
 
 class BlinkTestScreen extends StatefulWidget {
   const BlinkTestScreen({super.key});
@@ -13,19 +14,17 @@ class BlinkTestScreen extends StatefulWidget {
 
 class _BlinkTestScreenState extends State<BlinkTestScreen> {
   CameraController? _controller;
+  // Enable Classification to get "Eye Open Probability"
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
-      enableClassification: true,
-      enableLandmarks: true,
-      performanceMode: FaceDetectorMode.fast,
+      enableClassification: true, 
+      performanceMode: FaceDetectorMode.fast, // FAST mode for blinks
     ),
   );
 
-  bool _isBusy = false;
+  bool _isProcessing = false;
   int _blinkCount = 0;
-  String _eyeState = "Waiting...";
-  double _eyeOpenProb = 0.0;
-  bool _wasClosed = false;
+  bool _eyesClosed = false; 
 
   @override
   void initState() {
@@ -34,6 +33,8 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
   }
 
   Future<void> _initializeCamera() async {
+    await Permission.camera.request();
+    final cameras = await availableCameras();
     final frontCamera = cameras.firstWhere(
       (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
@@ -43,80 +44,140 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
       frontCamera,
       ResolutionPreset.medium,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.nv21,
     );
 
     await _controller!.initialize();
-    if (!mounted) return;
-    _controller!.startImageStream(_processCameraImage);
-    setState(() {});
+
+    if (mounted) {
+      setState(() {});
+      _controller!.startImageStream((image) {
+        _processCameraImage(image);
+      });
+    }
   }
 
   Future<void> _processCameraImage(CameraImage image) async {
-    if (_isBusy) return;
-    _isBusy = true;
+    if (_isProcessing) return;
+    _isProcessing = true;
 
     try {
-      final inputImage = _convertCameraImageToInputImage(image);
+      final inputImage = _inputImageFromCameraImage(image);
       if (inputImage == null) return;
 
       final faces = await _faceDetector.processImage(inputImage);
 
       if (faces.isNotEmpty) {
         final face = faces.first;
-        final double? leftProb = face.leftEyeOpenProbability;
-        final double? rightProb = face.rightEyeOpenProbability;
+        
+        // Probability 0.0 = Closed, 1.0 = Open
+        double? leftOpen = face.leftEyeOpenProbability;
+        double? rightOpen = face.rightEyeOpenProbability;
 
-        if (leftProb != null && rightProb != null) {
-          double avgProb = (leftProb + rightProb) / 2.0;
+        if (leftOpen != null && rightOpen != null) {
+          double avgOpen = (leftOpen + rightOpen) / 2.0;
+          
+          // Threshold for "Closed" (0.2 is a good baseline)
+          bool currentlyClosed = avgOpen < 0.2;
 
-          if (mounted) {
-            setState(() {
-              _eyeOpenProb = avgProb;
-              if (avgProb < 0.2) {
-                _eyeState = "CLOSED";
-                _wasClosed = true;
-              } else {
-                _eyeState = "OPEN";
-                if (_wasClosed && avgProb > 0.5) {
-                  _blinkCount++;
-                  _wasClosed = false;
-                }
-              }
-            });
+          if (currentlyClosed && !_eyesClosed) {
+            _eyesClosed = true; // Blink Started
+          } else if (!currentlyClosed && _eyesClosed) {
+            _eyesClosed = false; // Blink Ended
+            if (mounted) {
+              setState(() {
+                _blinkCount++;
+              });
+            }
           }
         }
       }
     } catch (e) {
-      debugPrint("Error: $e");
+      print("Error counting blinks: $e");
     } finally {
-      _isBusy = false;
+      _isProcessing = false;
     }
   }
 
-  InputImage? _convertCameraImageToInputImage(CameraImage image) {
+  InputImage? _inputImageFromCameraImage(CameraImage image) {
     final camera = _controller!.description;
-    final sensorOrientation = camera.sensorOrientation;
-    final InputImageRotation rotation =
-        InputImageRotationValue.fromRawValue(sensorOrientation) ??
-            InputImageRotation.rotation0deg;
-    final format = InputImageFormat.nv21;
+    final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation) 
+        ?? InputImageRotation.rotation270deg;
 
-    final WriteBuffer allBytes = WriteBuffer();
-    for (final Plane plane in image.planes) {
-      allBytes.putUint8List(plane.bytes);
+    // FIX: Manually convert YUV420 to NV21 to handle Android stride/padding issues
+    if (image.format.group == ImageFormatGroup.yuv420) {
+      return InputImage.fromBytes(
+        bytes: _yuv420ToNv21(image),
+        metadata: InputImageMetadata(
+          size: Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: rotation,
+          format: InputImageFormat.nv21, // Force NV21
+          bytesPerRow: image.width,      // Packed NV21 has stride == width
+        ),
+      );
+    } 
+    
+    // Fallback for iOS (BGRA8888)
+    if (image.format.group == ImageFormatGroup.bgra8888) {
+      return InputImage.fromBytes(
+        bytes: image.planes[0].bytes,
+        metadata: InputImageMetadata(
+          size: Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: rotation,
+          format: InputImageFormat.bgra8888,
+          bytesPerRow: image.planes[0].bytesPerRow,
+        ),
+      );
     }
-    final bytes = allBytes.done().buffer.asUint8List();
+    return null;
+  }
 
-    return InputImage.fromBytes(
-      bytes: bytes,
-      metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
-        format: format,
-        bytesPerRow: image.planes.first.bytesPerRow,
-      ),
-    );
+  // ROBUST CONVERTER: YUV420 -> NV21
+  // This handles the "padding bytes" that crash Xiaomi/Samsung phones
+  Uint8List _yuv420ToNv21(CameraImage image) {
+    final int width = image.width;
+    final int height = image.height;
+    
+    final Plane yPlane = image.planes[0];
+    final Plane uPlane = image.planes[1];
+    final Plane vPlane = image.planes[2];
+
+    final Uint8List yBuffer = yPlane.bytes;
+    final Uint8List uBuffer = uPlane.bytes;
+    final Uint8List vBuffer = vPlane.bytes;
+
+    final int numPixels = (width * height * 1.5).toInt();
+    final Uint8List nv21 = Uint8List(numPixels);
+
+    // Copy Y Channel (Luma) row by row to skip padding
+    int idY = 0;
+    for (int i = 0; i < height; i++) {
+      int srcPos = i * yPlane.bytesPerRow;
+      for (int j = 0; j < width; j++) {
+        nv21[idY++] = yBuffer[srcPos + j];
+      }
+    }
+
+    // Copy UV Channels (Chroma)
+    int idUV = width * height;
+    final int uvHeight = height ~/ 2;
+    final int uvWidth = width ~/ 2;
+    
+    final int uPixelStride = uPlane.bytesPerPixel ?? 1;
+    final int uRowStride = uPlane.bytesPerRow;
+    final int vPixelStride = vPlane.bytesPerPixel ?? 1;
+    final int vRowStride = vPlane.bytesPerRow;
+
+    for (int i = 0; i < uvHeight; i++) {
+      for (int j = 0; j < uvWidth; j++) {
+        int uIndex = i * uRowStride + j * uPixelStride;
+        int vIndex = i * vRowStride + j * vPixelStride;
+        
+        // V first, then U for NV21
+        nv21[idUV++] = vBuffer[vIndex];
+        nv21[idUV++] = uBuffer[uIndex];
+      }
+    }
+    return nv21;
   }
 
   @override
@@ -128,99 +189,43 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (_controller == null || !_controller!.value.isInitialized) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Blink Analysis")),
-      body: Column(
+      appBar: AppBar(title: const Text("Blink Rate Test")),
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          // 1. Camera Viewfinder (Matches Distance Screen Size)
-          Expanded(
-            flex: 4,
-            child: Container(
-              margin: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(30),
-                child: _controller == null || !_controller!.value.isInitialized
-                    ? const Center(child: CircularProgressIndicator())
-                    : Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // FIX: FittedBox prevents warping
-                          FittedBox(
-                            fit: BoxFit.cover,
-                            child: SizedBox(
-                              width: _controller!.value.previewSize!.height,
-                              height: _controller!.value.previewSize!.width,
-                              child: CameraPreview(_controller!),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-          ),
-
-          // 2. Data Panel (Matches Distance Screen Size)
-          Expanded(
-            flex: 3,
-            child: Container(
-              padding: const EdgeInsets.all(30),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-              ),
+          CameraPreview(_controller!),
+          Positioned(
+            bottom: 50,
+            left: 0,
+            right: 0,
+            child: Center(
               child: Column(
                 children: [
-                  const Text("Total Blinks", style: TextStyle(color: Colors.grey)),
+                  const Text(
+                    "Blinks Detected",
+                    style: TextStyle(color: Colors.white, fontSize: 18),
+                  ),
                   Text(
                     "$_blinkCount",
-                    style: TextStyle(
-                      fontSize: 90,
+                    style: const TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 60,
                       fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
-                  const SizedBox(height: 30),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("Eye Openness", style: TextStyle(fontWeight: FontWeight.bold)),
-                      Text("${(_eyeOpenProb * 100).toStringAsFixed(0)}%"),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: LinearProgressIndicator(
-                      value: _eyeOpenProb,
-                      minHeight: 15,
-                      backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        _eyeOpenProb < 0.2 ? Colors.red : Colors.green,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _eyeState,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: _eyeState == "CLOSED" ? Colors.red : Colors.green,
-                    ),
-                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh, color: Colors.white, size: 40),
+                    onPressed: () {
+                      setState(() {
+                        _blinkCount = 0;
+                      });
+                    },
+                  )
                 ],
               ),
             ),

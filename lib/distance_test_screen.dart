@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'main.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:typed_data';
+import 'dart:io'; 
 
 class DistanceTestScreen extends StatefulWidget {
   const DistanceTestScreen({super.key});
@@ -15,19 +16,14 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
   CameraController? _controller;
   final FaceDetector _faceDetector = FaceDetector(
     options: FaceDetectorOptions(
-      enableClassification: false,
       enableLandmarks: true,
-      enableTracking: true,
-      performanceMode: FaceDetectorMode.fast,
+      performanceMode: FaceDetectorMode.accurate,
     ),
   );
-
-  bool _isBusy = false;
-  String _statusMessage = "Align Face";
-  double _currentDistanceCm = 0.0;
-  Color _statusColor = Colors.grey;
-  final double _avgFaceWidthCm = 15.0;
-  double _focalLength = 500.0;
+  
+  String _distanceResult = "Align Face";
+  bool _isProcessing = false;
+  int _lastRun = 0; 
 
   @override
   void initState() {
@@ -36,6 +32,8 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
   }
 
   Future<void> _initializeCamera() async {
+    await Permission.camera.request();
+    final cameras = await availableCameras();
     final frontCamera = cameras.firstWhere(
       (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
@@ -45,85 +43,158 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
       frontCamera,
       ResolutionPreset.medium,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.nv21,
     );
 
     await _controller!.initialize();
-    if (!mounted) return;
-    _controller!.startImageStream(_processCameraImage);
-    setState(() {});
+
+    if (mounted) {
+      setState(() {});
+      _controller!.startImageStream((image) {
+        _processCameraImage(image);
+      });
+    }
   }
 
   Future<void> _processCameraImage(CameraImage image) async {
-    if (_isBusy) return;
-    _isBusy = true;
+    final int now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _lastRun < 300) return; 
+    
+    if (_isProcessing) return;
+    _isProcessing = true;
+    _lastRun = now;
 
     try {
-      final inputImage = _convertCameraImageToInputImage(image);
+      final inputImage = _inputImageFromCameraImage(image);
       if (inputImage == null) return;
 
       final faces = await _faceDetector.processImage(inputImage);
 
-      if (faces.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _statusMessage = "No Face Detected";
-            _statusColor = Colors.grey;
-            _currentDistanceCm = 0.0;
-          });
-        }
-      } else {
+      if (faces.isNotEmpty) {
         final face = faces.first;
-        final boundingBox = face.boundingBox;
-        double faceWidthPixels = boundingBox.width;
-        double distance = (_avgFaceWidthCm * _focalLength) / faceWidthPixels;
+        double pixelWidth = face.boundingBox.width;
+        // Calibration Factor (4500 is a baseline)
+        double estimatedDistanceCm = (4500 / pixelWidth); 
+
+        String status = "Safe Distance";
+        Color color = Colors.green;
+
+        if (estimatedDistanceCm < 30) {
+          status = "TOO CLOSE!";
+          color = Colors.red;
+        } else if (estimatedDistanceCm > 70) {
+          status = "Too Far";
+          color = Colors.orange;
+        }
 
         if (mounted) {
           setState(() {
-            _currentDistanceCm = distance;
-            if (distance < 30.0) {
-              _statusMessage = "TOO CLOSE";
-              _statusColor = Colors.redAccent;
-            } else if (distance > 30.0 && distance < 60.0) {
-              _statusMessage = "OPTIMAL";
-              _statusColor = Colors.green;
-            } else {
-              _statusMessage = "TOO FAR";
-              _statusColor = Colors.blue;
-            }
+            _distanceResult = "${estimatedDistanceCm.toStringAsFixed(1)} cm\n$status";
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _distanceResult = "No Face Detected";
           });
         }
       }
     } catch (e) {
-      debugPrint("Error: $e");
+      print("Error processing distance: $e");
     } finally {
-      _isBusy = false;
+      _isProcessing = false;
     }
   }
 
-  InputImage? _convertCameraImageToInputImage(CameraImage image) {
+  InputImage? _inputImageFromCameraImage(CameraImage image) {
     final camera = _controller!.description;
-    final sensorOrientation = camera.sensorOrientation;
-    final InputImageRotation rotation =
-        InputImageRotationValue.fromRawValue(sensorOrientation) ??
-            InputImageRotation.rotation0deg;
-    final format = InputImageFormat.nv21;
+    final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation) ?? InputImageRotation.rotation270deg;
 
-    final WriteBuffer allBytes = WriteBuffer();
-    for (final Plane plane in image.planes) {
-      allBytes.putUint8List(plane.bytes);
+    // FIX: ML Kit on Android expects NV21 format for "fromBytes".
+    // We must manually construct a valid NV21 byte array from the YUV_420_888 planes.
+    // This handles the stride/padding issues on Xiaomi/Samsung.
+    
+    if (image.format.group == ImageFormatGroup.yuv420) {
+      return InputImage.fromBytes(
+        bytes: _yuv420ToNv21(image),
+        metadata: InputImageMetadata(
+          size: Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: rotation,
+          format: InputImageFormat.nv21, // We forced it to NV21
+          bytesPerRow: image.width, // NV21 stride is usually just the width
+        ),
+      );
+    } else if (image.format.group == ImageFormatGroup.bgra8888) {
+      // iOS usually uses BGRA
+      return InputImage.fromBytes(
+        bytes: image.planes[0].bytes,
+        metadata: InputImageMetadata(
+          size: Size(image.width.toDouble(), image.height.toDouble()),
+          rotation: rotation,
+          format: InputImageFormat.bgra8888,
+          bytesPerRow: image.planes[0].bytesPerRow,
+        ),
+      );
     }
-    final bytes = allBytes.done().buffer.asUint8List();
+    return null;
+  }
 
-    return InputImage.fromBytes(
-      bytes: bytes,
-      metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
-        format: format,
-        bytesPerRow: image.planes.first.bytesPerRow,
-      ),
-    );
+  // ROBUST CONVERTER: YUV420 -> NV21
+  Uint8List _yuv420ToNv21(CameraImage image) {
+    final int width = image.width;
+    final int height = image.height;
+    
+    final Plane yPlane = image.planes[0];
+    final Plane uPlane = image.planes[1];
+    final Plane vPlane = image.planes[2];
+
+    final Uint8List yBuffer = yPlane.bytes;
+    final Uint8List uBuffer = uPlane.bytes;
+    final Uint8List vBuffer = vPlane.bytes;
+
+    final int numPixels = (width * height * 1.5).toInt();
+    final Uint8List nv21 = Uint8List(numPixels);
+
+    // Copy Y Channel (Luma)
+    // We must respect the Row Stride (bytesPerRow)
+    int idY = 0;
+    for (int i = 0; i < height; i++) {
+      int srcPos = i * yPlane.bytesPerRow;
+      for (int j = 0; j < width; j++) {
+        nv21[idY++] = yBuffer[srcPos + j];
+      }
+    }
+
+    // Copy UV Channels (Chroma) - Interleaved
+    // NV21 layout: YYYYY... VUVU...
+    int idUV = width * height;
+    final int uvHeight = height ~/ 2;
+    final int uvWidth = width ~/ 2;
+    
+    final int uPixelStride = uPlane.bytesPerPixel ?? 1;
+    final int uRowStride = uPlane.bytesPerRow;
+    final int vPixelStride = vPlane.bytesPerPixel ?? 1;
+    final int vRowStride = vPlane.bytesPerRow;
+
+    for (int i = 0; i < uvHeight; i++) {
+      for (int j = 0; j < uvWidth; j++) {
+        int uIndex = i * uRowStride + j * uPixelStride;
+        int vIndex = i * vRowStride + j * vPixelStride;
+        
+        // V first, then U for NV21
+        nv21[idUV++] = vBuffer[vIndex];
+        nv21[idUV++] = uBuffer[uIndex];
+      }
+    }
+    return nv21;
+  }
+
+  // FIXED: Use BytesBuilder instead of WriteBuffer
+  Uint8List _concatenatePlanes(List<Plane> planes) {
+    final BytesBuilder allBytes = BytesBuilder();
+    for (Plane plane in planes) {
+      allBytes.add(plane.bytes);
+    }
+    return allBytes.toBytes();
   }
 
   @override
@@ -135,145 +206,35 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_controller == null || !_controller!.value.isInitialized) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Distance Monitor"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline),
-            onPressed: () => _showInstructions(context),
-          )
-        ],
-      ),
-      body: Column(
+      appBar: AppBar(title: const Text("Distance Check")),
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          // 1. Camera Viewfinder (Uniform Style)
-          Expanded(
-            flex: 4,
+          CameraPreview(_controller!),
+          Center(
             child: Container(
-              margin: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(30),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(15),
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(30),
-                child: _controller == null || !_controller!.value.isInitialized
-                    ? const Center(child: CircularProgressIndicator())
-                    : Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          // FIX: FittedBox prevents warping/stretching
-                          FittedBox(
-                            fit: BoxFit.cover,
-                            child: SizedBox(
-                              width: _controller!.value.previewSize!.height,
-                              height: _controller!.value.previewSize!.width,
-                              child: CameraPreview(_controller!),
-                            ),
-                          ),
-                          // Gradient Overlay
-                          Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: _statusColor.withOpacity(0.5),
-                                width: 4,
-                              ),
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-          ),
-
-          // 2. Data Panel
-          Expanded(
-            flex: 3,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 30),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _statusColor.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      _statusMessage,
-                      style: TextStyle(
-                        color: _statusColor,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    "${_currentDistanceCm.toStringAsFixed(0)} cm",
-                    style: TextStyle(
-                      fontSize: 72,
-                      fontWeight: FontWeight.w300,
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
-                      height: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text("Estimated Distance", style: TextStyle(color: Colors.grey.shade500)),
-                  const Spacer(),
-                  Row(
-                    children: [
-                      const Icon(Icons.tune, size: 16, color: Colors.grey),
-                      const SizedBox(width: 10),
-                      Text("Calibrate", style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                      Expanded(
-                        child: Slider.adaptive(
-                          value: _focalLength,
-                          min: 200,
-                          max: 1000,
-                          activeColor: Theme.of(context).colorScheme.primary,
-                          onChanged: (val) => setState(() => _focalLength = val),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-                ],
+              child: Text(
+                _distanceResult,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  void _showInstructions(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: const [
-            Text("How to Test", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            SizedBox(height: 10),
-            Text("1. Hold a ruler against your face.\n2. Move phone to exactly 30cm.\n3. Adjust the bottom slider until the app reads '30 cm'."),
-          ],
-        ),
       ),
     );
   }
