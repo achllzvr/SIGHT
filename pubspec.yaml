@@ -30,13 +30,15 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
+  # Existing
   cupertino_icons: ^1.0.8
   tflite_flutter: ^0.12.1
-  image_picker: ^1.0.7
   image: ^4.1.7
+  image_picker: ^1.0.7
+  
+  camera: ^0.11.0
+  google_mlkit_face_detection: ^0.13.1
+  permission_handler: ^12.0.1
 
 dev_dependencies:
   flutter_test:
@@ -56,8 +58,9 @@ dev_dependencies:
   permission_handler: ^12.0.1          # For asking permission
   image_picker: ^1.0.7                 # For taking static photos (Module C)
   tflite_flutter: ^0.12.1
-              # For your custom AI model (Module C)
-
+  image: ^4.1.3
+  path_provider: ^2.1.1
+  
   # UI Polishes (Optional but recommended)
   cupertino_icons: ^1.0.6
 
@@ -74,7 +77,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/model.tflite
+    - assets/sight_model_quant.tflite
     - assets/labels.txt
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg

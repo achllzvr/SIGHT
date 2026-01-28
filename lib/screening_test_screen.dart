@@ -1,9 +1,8 @@
-import 'dart:io';
-import 'dart:typed_data';
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:tflite_flutter/tflite_flutter.dart';
-import 'package:image/image.dart' as img;
+import 'package:permission_handler/permission_handler.dart';
+import '../services/ai_service.dart';
+import '../widgets/camera_overlay.dart';
 
 class ScreeningTestScreen extends StatefulWidget {
   const ScreeningTestScreen({super.key});
@@ -13,201 +12,142 @@ class ScreeningTestScreen extends StatefulWidget {
 }
 
 class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
-  Interpreter? _interpreter;
-  List<String> _labels = [];
-  File? _selectedImage;
-  String _resultLabel = "Ready to Analyze";
-  String _confidence = "";
-  bool _isAnalyzing = false;
+  CameraController? _controller;
+  final EyeDiagnosisService _aiService = EyeDiagnosisService();
+  
+  // Results State
+  String _leftEyeResult = "Align Left Eye";
+  String _rightEyeResult = "Align Right Eye";
+  bool _isServiceInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _loadModel();
+    _initializeCamera();
   }
 
-  Future<void> _loadModel() async {
-    try {
-      _interpreter = await Interpreter.fromAsset('assets/model.tflite');
-      
-      // Load Labels
-      final labelData = await DefaultAssetBundle.of(context).loadString('assets/labels.txt');
-      _labels = labelData.split('\n'); // Split by new line
+  Future<void> _initializeCamera() async {
+    // 1. Request Permissions
+    await Permission.camera.request();
 
-    } catch (e) {
-      setState(() => _resultLabel = "Model Error: $e");
-    }
-  }
+    // 2. Initialize AI
+    await _aiService.initialize();
+    setState(() => _isServiceInitialized = true);
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    // 3. Setup Camera
+    final cameras = await availableCameras();
+    // Use Front Camera for Self-Check
+    final frontCamera = cameras.firstWhere(
+      (c) => c.lensDirection == CameraLensDirection.front,
+      orElse: () => cameras.first,
+    );
 
-    if (pickedFile != null) {
-      setState(() {
-        _selectedImage = File(pickedFile.path);
-        _isAnalyzing = true;
-      });
-      // Small delay to allow UI to show loader
-      await Future.delayed(const Duration(milliseconds: 100));
-      await _runInference(_selectedImage!);
-    }
-  }
+    _controller = CameraController(
+      frontCamera,
+      ResolutionPreset.medium, // Medium is faster for AI processing
+      enableAudio: false,
+    );
 
-  Future<void> _runInference(File imageFile) async {
-    if (_interpreter == null) return;
+    await _controller!.initialize();
 
-    try {
-      final imageData = await imageFile.readAsBytes();
-      final img.Image? originalImage = img.decodeImage(imageData);
-      if (originalImage == null) return;
-
-      final img.Image resizedImage = img.copyResize(originalImage, width: 224, height: 224);
-
-      // Quantized Input (0-255 Integers)
-      var input = List.generate(1, (i) => List.generate(224, (j) => List.generate(224, (k) => List.generate(3, (l) => 0))));
-      
-      for (int y = 0; y < 224; y++) {
-        for (int x = 0; x < 224; x++) {
-          final pixel = resizedImage.getPixel(x, y);
-          input[0][y][x][0] = pixel.r.toInt();
-          input[0][y][x][1] = pixel.g.toInt();
-          input[0][y][x][2] = pixel.b.toInt();
+    // 4. Start Streaming
+    if (mounted) {
+      setState(() {});
+      _controller!.startImageStream((image) async {
+        if (_isServiceInitialized) {
+          // Analyze frame and update UI
+          final results = await _aiService.analyzeFrame(image);
+          if (mounted && results.isNotEmpty) {
+            setState(() {
+              _leftEyeResult = results['Left'] ?? "Scanning...";
+              _rightEyeResult = results['Right'] ?? "Scanning...";
+            });
+          }
         }
-      }
-
-      var output = List.filled(1 * 1001, 0).reshape([1, 1001]);
-      _interpreter!.run(input, output);
-
-      List<int> probabilities = List<int>.from(output[0]);
-      int maxScore = 0;
-      int maxIndex = 0;
-
-      for (int i = 0; i < probabilities.length; i++) {
-        if (probabilities[i] > maxScore) {
-          maxScore = probabilities[i];
-          maxIndex = i;
-        }
-      }
-
-      setState(() {
-        _isAnalyzing = false;
-        
-        // Get the label, or fallback to ID if list is empty
-        String labelName = _labels.isNotEmpty && maxIndex < _labels.length 
-            ? _labels[maxIndex] 
-            : "ID: $maxIndex";
-
-        _resultLabel = labelName; // Now shows "Sports Car" instead of 818
-        
-        _confidence = "${(maxScore / 255.0 * 100).toStringAsFixed(1)}%";
-      });
-    } catch (e) {
-      setState(() {
-        _isAnalyzing = false;
-        _resultLabel = "Error";
-        _confidence = e.toString();
       });
     }
   }
 
   @override
   void dispose() {
-    _interpreter?.close();
+    _controller?.dispose();
+    _aiService.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Symptom Screening")),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 1. Image Picker Area
-              GestureDetector(
-                onTap: _pickImage,
-                child: Container(
-                  height: 300,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardTheme.color ?? Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.grey.withOpacity(0.3), width: 2),
-                  ),
-                  child: _selectedImage == null
-                      ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add_photo_alternate_rounded, size: 60, color: Colors.grey.shade400),
-                            const SizedBox(height: 10),
-                            Text("Tap to Select Photo", style: TextStyle(color: Colors.grey.shade600)),
-                          ],
-                        )
-                      : ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              Image.file(_selectedImage!, fit: BoxFit.cover),
-                              if (_isAnalyzing)
-                                Container(
-                                  color: Colors.black45,
-                                  child: const Center(child: CircularProgressIndicator(color: Colors.white)),
-                                ),
-                            ],
-                          ),
-                        ),
-                ),
-              ),
-              const SizedBox(height: 30),
+    if (_controller == null || !_controller!.value.isInitialized) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
-              // 2. Result Card
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    children: [
-                      const Text("ANALYSIS REPORT", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
-                      const SizedBox(height: 10),
-                      Text(
-                        _resultLabel,
-                        style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (_confidence.isNotEmpty) ...[
-                        const SizedBox(height: 5),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            "Confidence: $_confidence",
-                            style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ]
-                    ],
-                  ),
-                ),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. Camera Feed
+          CameraPreview(_controller!),
+
+          // 2. The Green "Safe Area" Overlay
+          EyeCameraOverlay(),
+
+          // 3. Results Display (Bottom Sheet)
+          Positioned(
+            bottom: 30,
+            left: 20,
+            right: 20,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(20),
               ),
-              
-              const SizedBox(height: 20),
-              const Center(
-                child: Text(
-                  "Uses quantization-aware MobileNet V1.\nInput: 224x224 (RGB) | Output: Uint8 Probability",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 11, color: Colors.grey),
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildResultColumn("Left Eye", _leftEyeResult),
+                  Container(width: 1, height: 50, color: Colors.grey),
+                  _buildResultColumn("Right Eye", _rightEyeResult),
+                ],
               ),
-            ],
+            ),
+          ),
+          
+          // 4. Back Button
+          Positioned(
+            top: 50,
+            left: 20,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResultColumn(String title, String result) {
+    // Color coding based on result
+    Color statusColor = Colors.black;
+    if (result.contains("Healthy")) statusColor = Colors.green;
+    if (result.contains("Uveitis") || result.contains("Cataract")) statusColor = Colors.red;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        const SizedBox(height: 5),
+        Text(
+          result,
+          style: TextStyle(
+            color: statusColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
           ),
         ),
-      ),
+      ],
     );
   }
 }
