@@ -1,171 +1,98 @@
-import 'dart:typed_data';
 import 'dart:io';
-import 'package:camera/camera.dart';
-import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'dart:typed_data';
+import 'package:flutter/services.dart';
+import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detection.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:image/image.dart' as img;
-import 'package:flutter/services.dart';
-import '../utils/image_utils.dart';
-import 'package:flutter/foundation.dart';
 
 class EyeDiagnosisService {
   Interpreter? _interpreter;
-  late FaceDetector _faceDetector;
+  FaceMeshDetector? _meshDetector;
   List<String> _labels = [];
-  bool _isBusy = false;
-  int _lastRun = 0;
-  bool _isDisposed = false; // Guard against SIGSEGV
 
   Future<void> initialize() async {
     try {
       final options = InterpreterOptions();
-      // On some Samsungs, NNAPI causes crashes. Disabling it is safer.
-      options.useNnApiForAndroid = false; 
       
-      _interpreter = await Interpreter.fromAsset('assets/sight_model_quant.tflite', options: options);
+      // Select Model
+      String modelPath = Platform.isIOS 
+          ? 'assets/sight_model_ios.tflite' 
+          : 'assets/sight_model_android.tflite';
       
+      if (Platform.isAndroid) options.useNnApiForAndroid = true;
+
+      _interpreter = await Interpreter.fromAsset(modelPath, options: options);
+      
+      // Load Labels
       final labelData = await rootBundle.loadString('assets/labels.txt');
       _labels = labelData.split('\n');
 
-      _faceDetector = FaceDetector(
-        options: FaceDetectorOptions(
-          enableLandmarks: true,
-          performanceMode: FaceDetectorMode.accurate,
-        ),
-      );
-      print("SIGHT AI Service: Ready.");
+      // Initialize Face Mesh (More robust than standard detector)
+      _meshDetector = FaceMeshDetector(option: FaceMeshDetectorOptions.faceMesh);
+      
+      print("SIGHT AI Service: Ready (Face Mesh Mode).");
     } catch (e) {
       print("Error initializing AI Service: $e");
     }
   }
 
-  Future<Map<String, String>> analyzeFrame(CameraImage cameraImage, int sensorRotation) async {
-    if (_isDisposed) return {}; // Prevent crash
-    
-    // Throttle
-    final int now = DateTime.now().millisecondsSinceEpoch;
-    if (now - _lastRun < 350) return {};
-    _lastRun = now;
-
-    if (_isBusy || _interpreter == null) return {};
-    _isBusy = true;
-
-    Map<String, String> results = {};
+  Future<Map<String, dynamic>> analyzePhoto(String filePath) async {
+    if (_interpreter == null || _meshDetector == null) {
+      return {'Error': 'AI not ready'};
+    }
 
     try {
-      // Conversion for TFLite
-      img.Image fullImage = convertYUV420ToImage(cameraImage);
+      final File imageFile = File(filePath);
+      final img.Image? fullImage = img.decodeImage(imageFile.readAsBytesSync());
 
-      // ML Kit Input Preparation
-      final rotation = InputImageRotationValue.fromRawValue(sensorRotation) 
-          ?? InputImageRotation.rotation270deg;
+      if (fullImage == null) return {'Error': 'Image decode failed'};
 
-      Uint8List bytes;
-      InputImageFormat format;
-      int bytesPerRow;
+      // Detect Mesh
+      final inputImage = InputImage.fromFilePath(filePath);
+      final meshes = await _meshDetector!.processImage(inputImage);
 
-      if (cameraImage.format.group == ImageFormatGroup.yuv420) {
-        // Android: Convert YUV_420_888 to NV21 manually
-        bytes = _yuv420ToNv21(cameraImage);
-        format = InputImageFormat.nv21;
-        bytesPerRow = cameraImage.width;
+      if (meshes.isNotEmpty) {
+        final mesh = meshes.first;
+        
+        // Return results AND the mesh points for visualization
+        return {
+          'Left': _predictEye(fullImage, mesh, isLeftEye: true),
+          'Right': _predictEye(fullImage, mesh, isLeftEye: false),
+          'Mesh': mesh.points, // Return points to draw on screen
+        };
       } else {
-        // iOS/Fallback: Use BGRA8888
-        bytes = _concatenatePlanes(cameraImage.planes);
-        format = InputImageFormat.bgra8888;
-        bytesPerRow = cameraImage.planes[0].bytesPerRow;
-      }
-
-      final inputImage = InputImage.fromBytes(
-        bytes: bytes,
-        metadata: InputImageMetadata(
-          size: Size(cameraImage.width.toDouble(), cameraImage.height.toDouble()),
-          rotation: rotation,
-          format: format,
-          bytesPerRow: bytesPerRow,
-        ),
-      );
-
-      final faces = await _faceDetector.processImage(inputImage);
-
-      if (faces.isNotEmpty) {
-        final face = faces.first;
-        results['Left'] = _predictEye(fullImage, face.landmarks[FaceLandmarkType.leftEye]);
-        results['Right'] = _predictEye(fullImage, face.landmarks[FaceLandmarkType.rightEye]);
+        return {'Error': 'No Face Detected (Try better lighting)'};
       }
     } catch (e) {
-      print("Inference Error: $e");
-    } finally {
-      _isBusy = false;
+      return {'Error': e.toString()};
     }
-
-    return results;
   }
 
-  // ROBUST CONVERTER: YUV420 -> NV21
-  // This handles stride and padding correctly for Xiaomi/Samsung
-  Uint8List _yuv420ToNv21(CameraImage image) {
-    final int width = image.width;
-    final int height = image.height;
+  String _predictEye(img.Image fullImage, FaceMesh mesh, {required bool isLeftEye}) {
+    // Face Mesh Indices for Eye Centers
+    // Left Eye: 33 (Inner), 133 (Outer) -> Center approx
+    // Right Eye: 362 (Inner), 263 (Outer) -> Center approx
     
-    final Plane yPlane = image.planes[0];
-    final Plane uPlane = image.planes[1];
-    final Plane vPlane = image.planes[2];
-
-    final Uint8List yBuffer = yPlane.bytes;
-    final Uint8List uBuffer = uPlane.bytes;
-    final Uint8List vBuffer = vPlane.bytes;
-
-    final int numPixels = (width * height * 1.5).toInt();
-    final Uint8List nv21 = Uint8List(numPixels);
-
-    // Copy Y Channel (Luma)
-    int idY = 0;
-    for (int i = 0; i < height; i++) {
-      int srcPos = i * yPlane.bytesPerRow;
-      for (int j = 0; j < width; j++) {
-        nv21[idY++] = yBuffer[srcPos + j];
-      }
-    }
-
-    // Copy UV Channels (Chroma) - Interleaved
-    int idUV = width * height;
-    final int uvHeight = height ~/ 2;
-    final int uvWidth = width ~/ 2;
+    // Get center point of the eye based on mesh landmarks
+    final int inner = isLeftEye ? 33 : 362;
+    final int outer = isLeftEye ? 133 : 263;
     
-    final int uPixelStride = uPlane.bytesPerPixel ?? 1;
-    final int uRowStride = uPlane.bytesPerRow;
-    final int vPixelStride = vPlane.bytesPerPixel ?? 1;
-    final int vRowStride = vPlane.bytesPerRow;
+    // Safety check for bounds
+    if (inner >= mesh.points.length || outer >= mesh.points.length) return "Mesh Error";
 
-    for (int i = 0; i < uvHeight; i++) {
-      for (int j = 0; j < uvWidth; j++) {
-        int uIndex = i * uRowStride + j * uPixelStride;
-        int vIndex = i * vRowStride + j * vPixelStride;
-        
-        // V first, then U for NV21
-        nv21[idUV++] = vBuffer[vIndex];
-        nv21[idUV++] = uBuffer[uIndex];
-      }
-    }
-    return nv21;
-  }
+    final p1 = mesh.points[inner];
+    final p2 = mesh.points[outer];
 
-  Uint8List _concatenatePlanes(List<Plane> planes) {
-    final BytesBuilder allBytes = BytesBuilder();
-    for (Plane plane in planes) {
-      allBytes.add(plane.bytes);
-    }
-    return allBytes.toBytes();
-  }
+    // Calculate center
+    final int centerX = ((p1.x + p2.x) / 2).toInt();
+    final int centerY = ((p1.y + p2.y) / 2).toInt();
 
-  String _predictEye(img.Image fullImage, FaceLandmark? landmark) {
-    if (landmark == null || _interpreter == null) return "Not Visible";
-
-    int size = 100;
-    int x = landmark.position.x.toInt() - (size ~/ 2);
-    int y = landmark.position.y.toInt() - (size ~/ 2);
+    // Crop Logic
+    int size = 120;
+    int x = centerX - (size ~/ 2);
+    int y = centerY - (size ~/ 2);
     
+    // Clamp to image bounds
     if (x < 0) x = 0;
     if (y < 0) y = 0;
     if (x + size > fullImage.width) size = fullImage.width - x;
@@ -174,23 +101,21 @@ class EyeDiagnosisService {
     img.Image eyeCrop = img.copyCrop(fullImage, x: x, y: y, width: size, height: size);
     img.Image resized = img.copyResize(eyeCrop, width: 224, height: 224);
 
-    var input = imageToByteListFloat32(resized, 224);
-    // Flat buffer for input
+    // Prepare Input (1D -> 4D Reshape)
+    var inputFlat = _imageToByteListFloat32(resized, 224);
+    var input = inputFlat.reshape([1, 224, 224, 3]); 
+    
+    // Prepare Output
     var output = List.filled(1 * 5, 0.0).reshape([1, 5]);
 
     try {
+      // Use standard run
       _interpreter!.run(input, output); 
     } catch (e) {
-      // If flat fails, try reshaping the input list itself in Dart
-      try {
-         var inputReshaped = input.reshape([1, 224, 224, 3]);
-         _interpreter!.run(inputReshaped, output);
-      } catch (e2) {
-         print("Run Error: $e2");
-         return "Error";
-      }
+      return "Err: ${e.toString().substring(0, 20)}"; // Return short error to UI
     }
 
+    // Process Result
     List<dynamic> probs = output[0];
     int maxIndex = 0;
     double maxVal = 0.0;
@@ -208,10 +133,24 @@ class EyeDiagnosisService {
     return "$disease ($percentage%)";
   }
 
+  Float32List _imageToByteListFloat32(img.Image image, int inputSize) {
+    var convertedBytes = Float32List(1 * inputSize * inputSize * 3);
+    var buffer = Float32List.view(convertedBytes.buffer);
+    int pixelIndex = 0;
+
+    for (var i = 0; i < inputSize; i++) {
+      for (var j = 0; j < inputSize; j++) {
+        var pixel = image.getPixel(j, i);
+        buffer[pixelIndex++] = pixel.r.toDouble() / 255.0;
+        buffer[pixelIndex++] = pixel.g.toDouble() / 255.0;
+        buffer[pixelIndex++] = pixel.b.toDouble() / 255.0;
+      }
+    }
+    return convertedBytes;
+  }
+
   void dispose() {
-    _isDisposed = true; // Signal everything to stop
     _interpreter?.close();
-    _interpreter = null;
-    _faceDetector.close();
+    _meshDetector?.close();
   }
 }

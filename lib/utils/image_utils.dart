@@ -2,7 +2,7 @@ import 'package:camera/camera.dart';
 import 'package:image/image.dart' as img;
 import 'dart:typed_data';
 
-// Standard YUV to RGB (Keep this as is)
+// ANDROID CONVERTER: YUV420 to RGB
 img.Image convertYUV420ToImage(CameraImage cameraImage) {
   final int width = cameraImage.width;
   final int height = cameraImage.height;
@@ -29,7 +29,35 @@ img.Image convertYUV420ToImage(CameraImage cameraImage) {
   return image;
 }
 
-// CONVERTER: Float32 Normalized [0.0 - 1.0]
+// IPHONE CONVERTER: BGRA8888 to RGB
+// iOS sends data as Blue-Green-Red-Alpha. We need to swap B and R.
+img.Image convertBGRA8888ToImage(CameraImage cameraImage) {
+  final int width = cameraImage.width;
+  final int height = cameraImage.height;
+  final Plane plane = cameraImage.planes[0];
+  
+  // Create a standard RGB image container
+  var image = img.Image(width: width, height: height);
+  
+  final int bytesPerRow = plane.bytesPerRow;
+  
+  for (int y = 0; y < height; y++) {
+    int pOffset = y * bytesPerRow;
+    for (int x = 0; x < width; x++) {
+      // BGRA layout: [Blue, Green, Red, Alpha]
+      int b = plane.bytes[pOffset];
+      int g = plane.bytes[pOffset + 1];
+      int r = plane.bytes[pOffset + 2];
+      // We ignore Alpha (pOffset + 3) for the AI model
+      
+      image.setPixelRgb(x, y, r, g, b);
+      pOffset += 4; // Move to next pixel (4 bytes per pixel)
+    }
+  }
+  return image;
+}
+
+// AI INPUT FORMATTER: Float32 Normalized [0.0 - 1.0]
 Float32List imageToByteListFloat32(img.Image image, int inputSize) {
   var convertedBytes = Float32List(1 * inputSize * inputSize * 3);
   var buffer = Float32List.view(convertedBytes.buffer);

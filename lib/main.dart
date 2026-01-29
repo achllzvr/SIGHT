@@ -328,8 +328,14 @@ class LabHubScreen extends StatelessWidget {
     // Haptic feedback for "premium" feel
     HapticFeedback.lightImpact();
 
-    // Check permissions before navigation
-    final status = await Permission.camera.request();
+    // 1. Check current status
+    var status = await Permission.camera.status;
+    print("Camera Permission Status: $status");
+
+    // 2. If denied/restricted, request it
+    if (!status.isGranted) {
+      status = await Permission.camera.request();
+    }
     
     if (status.isGranted) {
       if (context.mounted) {
