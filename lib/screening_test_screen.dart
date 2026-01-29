@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:ui'; // Added for BackdropFilter
+import 'dart:ui'; 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detection.dart';
@@ -21,9 +21,8 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
   String _leftEyeResult = "---";
   String _rightEyeResult = "---";
   bool _isAnalyzing = false;
-  String _debugStatus = "Ready";
+  String _errorMessage = ""; // Holds actual errors
   
-  // Visualizer State
   bool _showMesh = true; 
   File? _capturedImage;
   List<FaceMeshPoint> _meshPoints = [];
@@ -37,12 +36,7 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
 
   Future<void> _initializeCamera() async {
     await Permission.camera.request();
-    
-    try {
-      await _aiService.initialize();
-    } catch (e) {
-      print("DEBUG: CRITICAL AI ERROR: $e");
-    }
+    try { await _aiService.initialize(); } catch (e) {}
 
     final cameras = await availableCameras();
     final frontCamera = cameras.firstWhere(
@@ -60,7 +54,7 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
 
     setState(() {
       _isAnalyzing = true;
-      _debugStatus = "Capturing...";
+      _errorMessage = ""; // Clear errors
       _meshPoints = []; 
     });
 
@@ -71,7 +65,6 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
       setState(() {
         _capturedImage = File(image.path);
         _imageSize = Size(decodedImage.width.toDouble(), decodedImage.height.toDouble());
-        _debugStatus = "Analyzing...";
       });
 
       final results = await _aiService.analyzePhoto(image.path);
@@ -79,21 +72,18 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
       if (mounted) {
         setState(() {
           if (results.containsKey('Error')) {
-             _debugStatus = results['Error'];
+             _errorMessage = results['Error']; // Show this!
+             _leftEyeResult = "---";
+             _rightEyeResult = "---";
           } else {
-             _debugStatus = "Analysis Complete";
              _leftEyeResult = results['Left'] ?? "Unknown";
              _rightEyeResult = results['Right'] ?? "Unknown";
-             
-             if (results.containsKey('Mesh')) {
-               _meshPoints = results['Mesh'] as List<FaceMeshPoint>;
-             }
+             // Optional: Add mesh logic if needed later
           }
         });
       }
     } catch (e) {
-      print("DEBUG: UI ERROR: $e");
-      setState(() => _debugStatus = "Error: Please try again");
+      setState(() => _errorMessage = "System Error: ${e.toString()}");
     } finally {
       if (mounted) setState(() => _isAnalyzing = false);
     }
@@ -105,7 +95,7 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
       _meshPoints = [];
       _leftEyeResult = "---";
       _rightEyeResult = "---";
-      _debugStatus = "Ready";
+      _errorMessage = "";
     });
   }
 
@@ -119,24 +109,27 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
   @override
   Widget build(BuildContext context) {
     if (_controller == null || !_controller!.value.isInitialized) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        backgroundColor: Color(0xFF121212), 
+        body: Center(child: CircularProgressIndicator(color: Colors.white))
+      );
     }
 
     final size = MediaQuery.of(context).size;
-    // WARP FIX: Calculate Scale to Cover Screen
     var scale = size.aspectRatio * _controller!.value.aspectRatio;
     if (scale < 1) scale = 1 / scale;
 
     return Scaffold(
+      backgroundColor: const Color(0xFF121212), // Dark Gray Base
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFFE5E5E7)), // Off-white
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text("Symptom Screening", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+        title: const Text("Symptom Screening", style: TextStyle(color: Color(0xFFE5E5E7), fontWeight: FontWeight.w600)),
         actions: [
           Switch.adaptive(
             value: _showMesh,
@@ -148,7 +141,7 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // 1. Layer: Camera OR Captured Image
+          // 1. Camera / Image Layer
           if (_capturedImage != null) 
             Image.file(_capturedImage!, fit: BoxFit.cover)
           else
@@ -157,16 +150,16 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
               child: Center(child: CameraPreview(_controller!)),
             ),
 
-          // 2. Layer: Face Mesh Visualizer
+          // 2. Mesh Layer
           if (_showMesh && _meshPoints.isNotEmpty && _imageSize != null)
              CustomPaint(
                painter: FaceMeshPainter(_meshPoints, _imageSize!, MediaQuery.of(context).size),
              ),
 
-          // 3. Layer: Eye Guide Overlay (Only in live mode)
+          // 3. Eye Guide (Live only)
           if (_capturedImage == null) EyeCameraOverlay(),
           
-          // 4. Layer: UI Controls (Frosted Glass)
+          // 4. UI Layer
           Positioned(
             bottom: 40,
             left: 20,
@@ -174,41 +167,68 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(24),
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
                 child: Container(
                   padding: const EdgeInsets.all(24),
-                  color: Colors.white.withOpacity(0.85),
+                  // Dark Gray Frosted Card
+                  color: const Color(0xFF2C2C2E).withOpacity(0.90), 
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Status / Results
-                      if (_capturedImage != null) ...[
+                      
+                      // ERROR MESSAGE (Crucial Fix)
+                      if (_errorMessage.isNotEmpty) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 20),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.withOpacity(0.5))
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.redAccent),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // RESULT TILES
+                      if (_capturedImage != null && _errorMessage.isEmpty) ...[
                         Row(
                           children: [
                             Expanded(child: _buildResultTile("Left Eye", _leftEyeResult)),
-                            Container(width: 1, height: 40, color: Colors.grey.shade300),
+                            Container(width: 1, height: 50, color: Colors.grey.withOpacity(0.3)),
                             Expanded(child: _buildResultTile("Right Eye", _rightEyeResult)),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                      ] else 
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 20),
+                        const SizedBox(height: 24),
+                      ] else if (_errorMessage.isEmpty) 
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 24),
                           child: Text(
-                            _isAnalyzing ? "Processing..." : "Align face within guide",
-                            style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                            "Position face within the guide",
+                            style: TextStyle(color: Color(0xFF98989D), fontWeight: FontWeight.w500),
                           ),
                         ),
 
-                      // Action Button
+                      // BUTTON
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: _isAnalyzing ? null : (_capturedImage == null ? _captureAndAnalyze : _reset),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _capturedImage == null ? Colors.blueAccent : Colors.grey.shade800,
+                            backgroundColor: _capturedImage == null ? Colors.blueAccent : const Color(0xFF3A3A3C),
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            padding: const EdgeInsets.symmetric(vertical: 18),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             elevation: 0,
                           ),
@@ -232,25 +252,27 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
   }
 
   Widget _buildResultTile(String title, String result) {
-    // Simple color logic for demo
     bool isHealthy = result.toLowerCase().contains("healthy") || result.toLowerCase().contains("normal");
-    Color color = isHealthy ? Colors.green : Colors.orange.shade800;
+    Color color = isHealthy ? Colors.greenAccent : Colors.orangeAccent;
     
     return Column(
       children: [
-        Text(title, style: TextStyle(fontSize: 13, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
+        Text(
+          title.toUpperCase(), 
+          style: const TextStyle(fontSize: 12, color: Color(0xFF8E8E93), fontWeight: FontWeight.w600, letterSpacing: 0.5)
+        ),
+        const SizedBox(height: 8),
         Text(
           result,
           textAlign: TextAlign.center,
-          style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16),
+          style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18, height: 1.2),
         ),
       ],
     );
   }
 }
 
-// Reusing your existing painter logic as it handles file-based coordinates correctly
+// Reused Painter (Unchanged)
 class FaceMeshPainter extends CustomPainter {
   final List<FaceMeshPoint> points;
   final Size imageSize;
@@ -261,24 +283,16 @@ class FaceMeshPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = Colors.greenAccent.withOpacity(0.6)..strokeWidth = 2;
-    
-    // BoxFit.cover logic to match Image.file and CameraPreview
     final double scaleX = screenSize.width / imageSize.width;
     final double scaleY = screenSize.height / imageSize.height;
     final double scale = scaleX > scaleY ? scaleX : scaleY;
-    
     final double offsetX = (screenSize.width - (imageSize.width * scale)) / 2;
     final double offsetY = (screenSize.height - (imageSize.height * scale)) / 2;
 
     for (var point in points) {
-      canvas.drawCircle(
-        Offset((point.x * scale) + offsetX, (point.y * scale) + offsetY),
-        2, 
-        paint
-      );
+      canvas.drawCircle(Offset((point.x * scale) + offsetX, (point.y * scale) + offsetY), 2, paint);
     }
   }
-
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
