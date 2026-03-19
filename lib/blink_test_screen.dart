@@ -4,6 +4,7 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:typed_data';
+import 'services/metrics_service.dart';
 import 'dart:io';
 import 'dart:ui';
 
@@ -49,15 +50,17 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
       final inputImage = _inputImageFromCameraImage(image);
       if (inputImage == null) return;
       final faces = await _faceDetector.processImage(inputImage);
-      if (faces.isNotEmpty) {
+          if (faces.isNotEmpty) {
         final face = faces.first;
         if (face.leftEyeOpenProbability != null && face.rightEyeOpenProbability != null) {
           bool currentlyClosed = ((face.leftEyeOpenProbability! + face.rightEyeOpenProbability!) / 2.0) < 0.2;
           if (currentlyClosed && !_eyesClosed) _eyesClosed = true;
-          else if (!currentlyClosed && _eyesClosed) {
-            _eyesClosed = false;
-            if (mounted) setState(() => _blinkCount++);
-          }
+                else if (!currentlyClosed && _eyesClosed) {
+                _eyesClosed = false;
+                // register blink in central metrics service
+                if (mounted) setState(() => _blinkCount++);
+                MetricsService.instance.registerBlink();
+               }
         }
       }
       if (_showMesh) {
@@ -118,7 +121,11 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
                       ),
                       Container(
                         decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(16)),
-                        child: IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: () => setState(() => _blinkCount = 0)),
+                        child: IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: () {
+                          setState(() => _blinkCount = 0);
+                          // reset global metrics
+                          MetricsService.instance.resetBlinks();
+                        }),
                       )
                     ],
                   ),

@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'dart:typed_data';
 import 'dart:io'; 
 import 'dart:ui'; 
+import 'services/metrics_service.dart';
 
 class DistanceTestScreen extends StatefulWidget {
   const DistanceTestScreen({super.key});
@@ -69,10 +70,14 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
         _faceDetected = true;
         if (_calibrationConstant != null && _currentFaceWidth > 0) {
           _currentDistanceCm = _calibrationConstant! / _currentFaceWidth;
+          MetricsService.instance.setDistance(_currentDistanceCm);
+          MetricsService.instance.setFaceDetected(true);
         }
       } else {
         _faceDetected = false;
         _currentDistanceCm = 0.0;
+        MetricsService.instance.setFaceDetected(false);
+        MetricsService.instance.setDistance(0.0);
       }
 
       if (_showMesh) {
@@ -279,16 +284,31 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
   void dispose() { _controller?.dispose(); _faceDetector.close(); _meshDetector.close(); super.dispose(); }
 }
 
-// --- PAINTER (Same logic, adjusted color) ---
+// --- PAINTER (cleaned) ---
 class FaceMeshPainter extends CustomPainter {
-  final List<FaceMeshPoint> points; final Size imageSize; final Size widgetSize;
+  final List<FaceMeshPoint> points;
+  final Size imageSize;
+  final Size widgetSize;
+
   FaceMeshPainter({required this.points, required this.imageSize, required this.widgetSize});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = Colors.greenAccent.withOpacity(0.5)..strokeWidth = 1.5..style = PaintingStyle.fill;
-    final double scaleX = widgetSize.width / imageSize.width; final double scaleY = widgetSize.height / imageSize.height; final double scale = scaleX > scaleY ? scaleX : scaleY; final double offsetX = (widgetSize.width - imageSize.width * scale) / 2; final double offsetY = (widgetSize.height - imageSize.height * scale) / 2;
-    for (var point in points) { double x = point.x * scale + offsetX; double y = point.y * scale + offsetY; x = widgetSize.width - x; canvas.drawCircle(Offset(x, y), 2, paint); }
+    final double scaleX = widgetSize.width / imageSize.width;
+    final double scaleY = widgetSize.height / imageSize.height;
+    final double scale = scaleX > scaleY ? scaleX : scaleY;
+    final double offsetX = (widgetSize.width - imageSize.width * scale) / 2;
+    final double offsetY = (widgetSize.height - imageSize.height * scale) / 2;
+
+    for (var point in points) {
+      double x = point.x * scale + offsetX;
+      double y = point.y * scale + offsetY;
+      x = widgetSize.width - x;
+      canvas.drawCircle(Offset(x, y), 2, paint);
+    }
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

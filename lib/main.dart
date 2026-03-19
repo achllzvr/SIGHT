@@ -7,6 +7,11 @@ import 'package:permission_handler/permission_handler.dart';
 import 'distance_test_screen.dart';
 import 'blink_test_screen.dart';
 import 'screening_test_screen.dart';
+// New UI Screens (scaffolds)
+import 'screens/home_screen.dart';
+import 'screens/tracking_screen.dart';
+import 'screens/tasks_screen.dart';
+import 'screens/calibration_screen.dart';
 
 // Global Camera List
 List<CameraDescription> cameras = [];
@@ -180,6 +185,54 @@ class LabHubScreen extends StatelessWidget {
                     color: Colors.orangeAccent.shade700,
                     isDark: isDark,
                     onTap: () => _navigateTo(context, const ScreeningTestScreen()),
+                  ),
+
+                  const SizedBox(height: 12),
+                  // New UI: Home (Pet) Screen
+                  _buildModuleTile(
+                    context,
+                    title: "UI: Home (Pet)",
+                    subtitle: "Preview Pet home + metrics",
+                    icon: Icons.home,
+                    color: Colors.purpleAccent,
+                    isDark: isDark,
+                    onTap: () => _navigateTo(context, const HomeScreen()),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // New UI: Tracker Screen
+                  _buildModuleTile(
+                    context,
+                    title: "UI: Tracker",
+                    subtitle: "Preview distance floating sheet",
+                    icon: Icons.my_location,
+                    color: Colors.blueGrey,
+                    isDark: isDark,
+                    onTap: () => _navigateTo(context, const TrackingScreen()),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // New UI: Tasks Screen
+                  _buildModuleTile(
+                    context,
+                    title: "UI: Tasks",
+                    subtitle: "Preview tasks & progress",
+                    icon: Icons.task,
+                    color: Colors.teal,
+                    isDark: isDark,
+                    onTap: () => _navigateTo(context, const TasksScreen()),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // New UI: Calibration
+                  _buildModuleTile(
+                    context,
+                    title: "Calibration",
+                    subtitle: "Calibrate distance estimator",
+                    icon: Icons.tune,
+                    color: Colors.indigo,
+                    isDark: isDark,
+                    onTap: () => _navigateTo(context, const CalibrationScreen()),
                   ),
 
                   const SizedBox(height: 40),
