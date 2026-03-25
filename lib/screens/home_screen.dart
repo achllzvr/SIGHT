@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../widgets/stat_card.dart';
 import '../widgets/bottom_pill_nav.dart';
 import '../services/metrics_service.dart';
 
@@ -9,11 +8,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const LinearGradient(
-        colors: [Color(0xFFF7FFF7), Color(0xFFEFFAF0)],
-      ).createShader(const Rect.fromLTWH(0, 0, 400, 800)) == null
-          ? Colors.white
-          : null,
+      backgroundColor: Theme.of(context).colorScheme.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -39,24 +34,33 @@ class HomeScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).cardColor,
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.black87, width: 1.2),
+                      border: Border.all(color: Colors.black12, width: 1.0),
                     ),
                     child: const Text('Lumi Dress Up'),
                   )
                 ],
               ),
             ),
-            const Expanded(
+
+            // Mascot area
+            Expanded(
               child: Center(
-                child: Text('Mascot Placeholder', style: TextStyle(fontSize: 24)),
+                child: SizedBox(
+                  width: 260,
+                  height: 320,
+                  child: CustomPaint(
+                    painter: MascotPainter(),
+                  ),
+                ),
               ),
             ),
+
             Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
               child: Column(
@@ -71,13 +75,18 @@ class HomeScreen extends StatelessWidget {
                       ),
                       ValueListenableBuilder<double>(
                         valueListenable: MetricsService.instance.distanceCmNotifier,
-                        builder: (_, value, __) => _MetricChip(label: value > 0 ? '${value.toStringAsFixed(1)}cm' : '--', caption: 'Distance'),
+                        builder: (_, value, __) => _MetricChip(label: value > 0 ? '${value.toStringAsFixed(1)} cm' : '--', caption: 'Distance'),
                       ),
                       const _MetricChip(label: 'Happy', caption: 'Pet Mood'),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const BottomPillNav(),
+                  // Navigation handled by root app; show a small hint instead
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(color: Colors.grey.withOpacity(0.06), borderRadius: BorderRadius.circular(12)),
+                    child: const Text('Use the bottom navigation to go to Tracker or Tasks', style: TextStyle(fontSize: 12)),
+                  ),
                 ],
               ),
             )
@@ -102,7 +111,7 @@ class _MetricChip extends StatelessWidget {
           height: 72,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white,
+            color: Theme.of(context).scaffoldBackgroundColor,
             border: Border.all(color: Colors.black12),
           ),
           child: Center(child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold))),
@@ -112,4 +121,36 @@ class _MetricChip extends StatelessWidget {
       ],
     );
   }
+}
+
+class MascotPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2 - 20);
+    final faceRadius = size.width * 0.35;
+
+    final facePaint = Paint()..color = const Color(0xFFFFE082);
+    canvas.drawCircle(center, faceRadius, facePaint);
+
+    final eyePaint = Paint()..color = Colors.black;
+    final leftEye = Offset(center.dx - faceRadius * 0.45, center.dy - faceRadius * 0.15);
+    final rightEye = Offset(center.dx + faceRadius * 0.45, center.dy - faceRadius * 0.15);
+    canvas.drawCircle(leftEye, faceRadius * 0.12, eyePaint);
+    canvas.drawCircle(rightEye, faceRadius * 0.12, eyePaint);
+
+    final smilePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..color = Colors.black87
+      ..strokeCap = StrokeCap.round;
+    final smileRect = Rect.fromCenter(center: Offset(center.dx, center.dy + faceRadius * 0.15), width: faceRadius * 1.0, height: faceRadius * 0.6);
+    canvas.drawArc(smileRect, 0.2 * 3.14, 0.8 * 3.14, false, smilePaint);
+
+    final blushPaint = Paint()..color = Colors.pinkAccent.withOpacity(0.25);
+    canvas.drawCircle(Offset(center.dx - faceRadius * 0.6, center.dy + faceRadius * 0.1), faceRadius * 0.2, blushPaint);
+    canvas.drawCircle(Offset(center.dx + faceRadius * 0.6, center.dy + faceRadius * 0.1), faceRadius * 0.2, blushPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -15,7 +15,7 @@ class DetectionService {
   bool _initialized = false;
 
   final FaceDetector _faceDetector = FaceDetector(
-    options: FaceDetectorOptions(enableLandmarks: true, performanceMode: FaceDetectorMode.accurate),
+    options: FaceDetectorOptions(enableLandmarks: true, enableClassification: true, performanceMode: FaceDetectorMode.accurate),
   );
   final FaceMeshDetector _meshDetector = FaceMeshDetector(option: FaceMeshDetectorOptions.faceMesh);
 
@@ -25,6 +25,7 @@ class DetectionService {
 
   double? _calibrationConstant;
   double _currentFaceWidth = 0.0;
+  bool _eyesClosed = false;
 
   Future<void> initialize({CameraLensDirection preferred = CameraLensDirection.front}) async {
     if (_initialized) return;
@@ -48,6 +49,8 @@ class DetectionService {
   void calibrateReferenceCm(double cm) {
     if (_currentFaceWidth == 0) return;
     _calibrationConstant = cm * _currentFaceWidth;
+    // mark as calibrated
+    MetricsService.instance.setCalibrated(true);
   }
 
   InputImage? _inputImageFromCameraImage(CameraImage image) {
@@ -82,6 +85,17 @@ class DetectionService {
         final face = faces.first;
         _currentFaceWidth = face.boundingBox.width;
         faceDetected.value = true;
+        // Blink detection (uses ML Kit classification probabilities)
+        if (face.leftEyeOpenProbability != null && face.rightEyeOpenProbability != null) {
+          final avg = (face.leftEyeOpenProbability! + face.rightEyeOpenProbability!) / 2.0;
+          final currentlyClosed = avg < 0.2;
+          if (currentlyClosed && !_eyesClosed) {
+            _eyesClosed = true;
+          } else if (!currentlyClosed && _eyesClosed) {
+            _eyesClosed = false;
+            MetricsService.instance.registerBlink();
+          }
+        }
         if (_calibrationConstant != null && _currentFaceWidth > 0) {
           final cm = _calibrationConstant! / _currentFaceWidth;
           distanceCm.value = cm;

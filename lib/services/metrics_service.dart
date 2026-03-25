@@ -13,6 +13,7 @@ class MetricsService {
   final ValueNotifier<int> blinkRatePerMinNotifier = ValueNotifier<int>(0);
   final ValueNotifier<double> distanceCmNotifier = ValueNotifier<double>(0.0);
   final ValueNotifier<bool> faceDetectedNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> calibratedNotifier = ValueNotifier<bool>(false);
 
   void registerBlink() {
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -38,5 +39,9 @@ class MetricsService {
 
   void setFaceDetected(bool v) {
     faceDetectedNotifier.value = v;
+  }
+
+  void setCalibrated(bool v) {
+    calibratedNotifier.value = v;
   }
 }

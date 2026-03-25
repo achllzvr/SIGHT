@@ -15,31 +15,36 @@ class BottomPillNav extends StatelessWidget {
             height: 64,
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: Colors.green[100],
+              color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(40),
-              border: Border.all(color: Colors.black87, width: 1.2),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6)],
+              border: Border.all(color: Colors.black12, width: 1.0),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: List.generate(3, (i) {
                 final icon = i == 0
-                    ? Icons.favorite
+                    ? Icons.home
                     : i == 1
                         ? Icons.monitor_heart
                         : Icons.list;
                 final selected = i == currentIndex;
-                return GestureDetector(
-                  onTap: () => onTap?.call(i),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    padding: const EdgeInsets.all(8),
-                    decoration: selected
-                        ? BoxDecoration(
-                            color: Colors.purple[100],
-                            shape: BoxShape.circle,
-                          )
-                        : null,
-                    child: Icon(icon, color: Colors.black87),
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(30),
+                    onTap: () => onTap?.call(i),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: selected
+                          ? BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                              shape: BoxShape.circle,
+                            )
+                          : null,
+                      child: Icon(icon, color: selected ? Theme.of(context).colorScheme.primary : Colors.black54),
+                    ),
                   ),
                 );
               }),
