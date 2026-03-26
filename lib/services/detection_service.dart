@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'background_notification_service.dart';
 import 'metrics_service.dart';
 
 class DetectionService {
@@ -28,6 +30,7 @@ class DetectionService {
   double _currentFaceWidth = 0.0;
   bool _eyesClosed = false;
   bool _recovering = false;
+  bool _wakelockActive = false;
 
   Future<void> _disposeControllerOnly() async {
     try {
@@ -137,7 +140,46 @@ class DetectionService {
     await forceRestartMonitoring(preferred: preferred);
   }
 
+  Future<void> enableWakelockForMonitoring() async {
+    if (_wakelockActive) return;
+    try {
+      await WakelockPlus.enable();
+      _wakelockActive = true;
+      if (kDebugMode) print('Wakelock enabled for continuous monitoring');
+    } catch (e) {
+      if (kDebugMode) print('Failed to enable wakelock: $e');
+    }
+  }
+
+  Future<void> disableWakelock() async {
+    if (!_wakelockActive) return;
+    try {
+      await WakelockPlus.disable();
+      _wakelockActive = false;
+      if (kDebugMode) print('Wakelock disabled');
+    } catch (e) {
+      if (kDebugMode) print('Failed to disable wakelock: $e');
+    }
+  }
+
+  Future<void> forceHardRestart({CameraLensDirection preferred = CameraLensDirection.front}) async {
+    if (_recovering) return;
+    _recovering = true;
+    try {
+      _lastFrameProcessedAt = 0; // Reset frame timestamp
+      await _disposeControllerOnly();
+      await Future.delayed(const Duration(milliseconds: 200));
+      await initialize(preferred: preferred);
+      if (kDebugMode) print('Force hard restart completed');
+    } catch (e) {
+      if (kDebugMode) print('Force hard restart failed: $e');
+    } finally {
+      _recovering = false;
+    }
+  }
+
   Future<void> dispose() async {
+    await disableWakelock();
     await _disposeControllerOnly();
     _faceDetector.close();
     _meshDetector.close();
@@ -148,6 +190,12 @@ class DetectionService {
     _calibrationConstant = cm * _currentFaceWidth;
     // mark as calibrated
     MetricsService.instance.setCalibrated(true);
+    BackgroundNotificationService.instance.start();
+    BackgroundNotificationService.instance.refreshNow().then((ok) {
+      if (!ok && kDebugMode) {
+        debugPrint('Background notification refresh failed: ${BackgroundNotificationService.instance.lastError}');
+      }
+    });
   }
 
   void calibrateReferenceFromMeasuredWidth(double cm, double measuredFaceWidth) {
@@ -155,6 +203,12 @@ class DetectionService {
     _calibrationConstant = cm * measuredFaceWidth;
     _currentFaceWidth = measuredFaceWidth;
     MetricsService.instance.setCalibrated(true);
+    BackgroundNotificationService.instance.start();
+    BackgroundNotificationService.instance.refreshNow().then((ok) {
+      if (!ok && kDebugMode) {
+        debugPrint('Background notification refresh failed: ${BackgroundNotificationService.instance.lastError}');
+      }
+    });
   }
 
   InputImage? _inputImageFromCameraImage(CameraImage image) {
@@ -178,6 +232,13 @@ class DetectionService {
   static const int _meshIntervalMs = 66;
   bool _isProcessing = false;
   int _lastFrameProcessedAt = 0;
+
+  int get millisSinceLastFrame {
+    if (_lastFrameProcessedAt == 0) return 1 << 30;
+    return DateTime.now().millisecondsSinceEpoch - _lastFrameProcessedAt;
+  }
+
+  bool get hasFreshFrames => millisSinceLastFrame < 2000;
 
   Future<void> _processCameraImage(CameraImage image) async {
     final now = DateTime.now().millisecondsSinceEpoch;

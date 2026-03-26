@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'widgets/bottom_pill_nav.dart';
 // New UI Screens (scaffolds)
 import 'screens/home_screen.dart';
 import 'screens/tracking_screen.dart';
 import 'screens/tasks_screen.dart';
 import 'services/detection_service.dart';
+import 'services/metrics_service.dart';
 import 'services/background_notification_service.dart';
 
 // Global Camera List
@@ -120,6 +122,8 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    Permission.notification.request();
+
     try {
       DetectionService.instance.initialize();
     } catch (e) {
@@ -152,9 +156,14 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     debugPrint('AppLifecycleState changed: $state');
     try {
       if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+        // When app leaves foreground, ensure wakelock for monitoring
+        if (MetricsService.instance.calibratedNotifier.value) {
+          DetectionService.instance.enableWakelockForMonitoring();
+        }
         BackgroundNotificationService.instance.start();
       } else if (state == AppLifecycleState.resumed) {
-        DetectionService.instance.restartMonitoringWithDelay();
+        // When app returns to foreground, aggressively restart monitoring
+        DetectionService.instance.forceHardRestart();
       }
     } catch (e) {
       debugPrint('BackgroundNotificationService lifecycle error: $e');

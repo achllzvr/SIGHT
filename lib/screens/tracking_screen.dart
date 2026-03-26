@@ -23,6 +23,9 @@ class TrackingScreen extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const SizedBox(height: 8),
+                  const _CameraStatusIndicator(),
+                  const SizedBox(height: 24),
                   _TrackingStatCard(
                     title: 'Blink Analysis',
                     statusBuilder: (context) => const _StatusPill(label: 'GOOD'),
@@ -186,3 +189,74 @@ class _StatusPill extends StatelessWidget {
     );
   }
 }
+
+class _CameraStatusIndicator extends StatefulWidget {
+  const _CameraStatusIndicator();
+
+  @override
+  State<_CameraStatusIndicator> createState() => _CameraStatusIndicatorState();
+}
+
+class _CameraStatusIndicatorState extends State<_CameraStatusIndicator> {
+  late Future<void> _refreshFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshFuture = _startRefresh();
+  }
+
+  Future<void> _startRefresh() async {
+    while (mounted) {
+      setState(() {});
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final frameFreshness = DetectionService.instance.millisSinceLastFrame;
+    final hasFreshFrames = DetectionService.instance.hasFreshFrames;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: hasFreshFrames
+            ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green.withOpacity(0.1))
+            : (isDark ? Colors.orange.withOpacity(0.15) : Colors.orange.withOpacity(0.1)),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: hasFreshFrames ? Colors.green.shade400 : Colors.orange.shade300,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: hasFreshFrames ? Colors.green.shade400 : Colors.orange.shade300,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              hasFreshFrames
+                  ? 'Camera active (${frameFreshness}ms)'
+                  : 'Camera paused (${frameFreshness}ms)',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: hasFreshFrames ? Colors.green.shade700 : Colors.orange.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
