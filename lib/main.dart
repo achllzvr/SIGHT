@@ -1,19 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
-import 'package:flutter_background/flutter_background.dart';
 import 'widgets/bottom_pill_nav.dart';
-import 'package:permission_handler/permission_handler.dart';
-
-// Test Screens
-import 'distance_test_screen.dart';
-import 'blink_test_screen.dart';
-import 'screening_test_screen.dart';
 // New UI Screens (scaffolds)
 import 'screens/home_screen.dart';
 import 'screens/tracking_screen.dart';
 import 'screens/tasks_screen.dart';
-import 'screens/calibration_screen.dart';
 import 'services/detection_service.dart';
 import 'services/background_notification_service.dart';
 
@@ -21,7 +13,7 @@ import 'services/background_notification_service.dart';
 List<CameraDescription> cameras = [];
 
 // Theme Notifier for Global Dark/Light Mode
-final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -127,7 +119,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Initialize detection service once for app lifecycle
+
     try {
       DetectionService.instance.initialize();
     } catch (e) {
@@ -144,17 +136,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
   }
 
   Future<void> _enableBackgroundExecution() async {
-    try {
-      const androidConfig = FlutterBackgroundAndroidConfig(
-        notificationTitle: 'Sight Monitoring',
-        notificationText: 'Monitoring distance and blinks',
-        enableWifiLock: true,
-      );
-      final initialized = await FlutterBackground.initialize(androidConfig: androidConfig);
-      if (initialized) await FlutterBackground.enableBackgroundExecution();
-    } catch (e) {
-      debugPrint('Background enable failed: $e');
-    }
+    return;
   }
 
   @override
@@ -172,7 +154,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
       if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
         BackgroundNotificationService.instance.start();
       } else if (state == AppLifecycleState.resumed) {
-        BackgroundNotificationService.instance.stop();
+        DetectionService.instance.restartMonitoringWithDelay();
       }
     } catch (e) {
       debugPrint('BackgroundNotificationService lifecycle error: $e');
@@ -189,11 +171,6 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
           children: _pages,
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CalibrationScreen())),
-        child: const Icon(Icons.tune),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: SizedBox(
         height: 88,
         child: BottomPillNav(

@@ -1,133 +1,188 @@
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
-import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detection.dart';
-import 'dart:ui';
 
-import '../widgets/rounded_card.dart';
+import '../blink_test_screen.dart';
+import '../distance_test_screen.dart';
 import '../services/detection_service.dart';
+import '../services/metrics_service.dart';
+import '../widgets/rounded_card.dart';
 
-class TrackingScreen extends StatefulWidget {
-  const TrackingScreen({Key? key}) : super(key: key);
-
-  @override
-  State<TrackingScreen> createState() => _TrackingScreenState();
-}
-
-class _TrackingScreenState extends State<TrackingScreen> {
-  bool _showMesh = true;
-
-  @override
-  void initState() {
-    super.initState();
-    DetectionService.instance.initialize();
-  }
+class TrackingScreen extends StatelessWidget {
+  const TrackingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final controller = DetectionService.instance.controller;
-    if (controller == null || !controller.value.isInitialized) {
-      return const Scaffold(backgroundColor: Color(0xFF1C1C1E), body: Center(child: CircularProgressIndicator()));
-    }
-
-    final size = MediaQuery.of(context).size;
-    var scale = size.aspectRatio * controller.value.aspectRatio;
-    if (scale < 1) scale = 1 / scale;
-
     return Scaffold(
-      backgroundColor: const Color(0xFF1C1C1E),
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white), onPressed: () => Navigator.pop(context)),
-        title: const Text('Distance Monitor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-        actions: [Switch.adaptive(value: _showMesh, onChanged: (v) => setState(() => _showMesh = v), activeColor: Colors.blueAccent)],
-      ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Transform.scale(scale: scale, child: Center(child: CameraPreview(controller))),
-          if (_showMesh)
-            ValueListenableBuilder<List<FaceMeshPoint>>(
-              valueListenable: DetectionService.instance.meshPoints,
-              builder: (_, points, __) {
-                if (points.isEmpty) return const SizedBox.shrink();
-                return IgnorePointer(
-                  child: CustomPaint(
-                    painter: _TrackingMeshPainter(points: points, imageSize: Size(controller.value.previewSize!.height, controller.value.previewSize!.width), widgetSize: size),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _TrackingStatCard(
+                    title: 'Blink Analysis',
+                    statusBuilder: (context) => const _StatusPill(label: 'GOOD'),
+                    valueBuilder: (context) => ValueListenableBuilder<int>(
+                      valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
+                      builder: (_, value, __) => Text(
+                        '$value',
+                        style: const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF7FC86D),
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                    unitText: ' blinks per minute',
+                    footnoteBuilder: (context) => ValueListenableBuilder<int>(
+                      valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
+                      builder: (_, value, __) => Text(
+                        'Good blinks per minute! ${value}/min',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFA68AC0),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const BlinkTestScreen()),
+                    ).then((_) => DetectionService.instance.restartMonitoringWithDelay()),
                   ),
-                );
-              },
-            ),
-          ValueListenableBuilder<bool>(
-            valueListenable: DetectionService.instance.faceDetected,
-            builder: (_, detected, __) {
-              if (!detected) return Container(color: Colors.red.withOpacity(0.4));
-              return const SizedBox.shrink();
-            },
-          ),
-          Positioned(
-            bottom: 40, left: 20, right: 20,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  color: const Color(0xFF2C2C2E).withOpacity(0.9),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ValueListenableBuilder<double>(
-                        valueListenable: DetectionService.instance.distanceCm,
-                        builder: (_, value, __) {
-                          if (value <= 0) {
-                            return Column(
-                              children: [
-                                const Text('Calibration Required', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
-                                const SizedBox(height: 8),
-                                const Text('Place phone exactly 30cm away from face.', style: TextStyle(fontSize: 14, color: Colors.white70)),
-                                const SizedBox(height: 20),
-                                SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () => DetectionService.instance.calibrateReferenceCm(30.0), style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, foregroundColor: Colors.white, padding: EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), child: const Text('Set 30cm Reference', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)))),
-                              ],
-                            );
-                          }
-                          return Column(
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [const Text('Distance', style: TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.w500)), const SizedBox(height: 4), Text('${value.toStringAsFixed(1)} cm', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white))]),
-                                  Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: Colors.green.withOpacity(0.2), borderRadius: BorderRadius.circular(12)), child: const Text('Safe', style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold)))
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              SizedBox(width: double.infinity, child: TextButton(onPressed: () => DetectionService.instance.calibrateReferenceCm(30.0), child: const Text('Recalibrate', style: TextStyle(color: Colors.blueAccent)))),
-                            ],
-                          );
-                        },
-                      )
-                    ],
+                  const SizedBox(height: 18),
+                  _TrackingStatCard(
+                    title: 'Screen Distance',
+                    statusBuilder: (context) => ValueListenableBuilder<double>(
+                      valueListenable: MetricsService.instance.distanceCmNotifier,
+                      builder: (_, distance, __) => _StatusPill(
+                        label: distance >= 30 ? 'SAFE' : (distance > 0 ? 'CLOSE' : 'SAFE'),
+                      ),
+                    ),
+                    valueBuilder: (context) => ValueListenableBuilder<double>(
+                      valueListenable: MetricsService.instance.distanceCmNotifier,
+                      builder: (_, value, __) => Text(
+                        value > 0 ? value.toStringAsFixed(0) : '--',
+                        style: const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF7FC86D),
+                          height: 1,
+                        ),
+                      ),
+                    ),
+                    unitText: ' centimeters away',
+                    footnoteBuilder: (context) => ValueListenableBuilder<double>(
+                      valueListenable: MetricsService.instance.distanceCmNotifier,
+                      builder: (_, value, __) => Text(
+                        value > 0 ? 'Current distance: ${value.toStringAsFixed(1)}cm' : 'Tap to open distance monitor',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFFA68AC0),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DistanceTestScreen()),
+                    ).then((_) => DetectionService.instance.restartMonitoringWithDelay()),
                   ),
-                ),
+                ],
               ),
             ),
-          )
-        ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _TrackingMeshPainter extends CustomPainter {
-  final List<FaceMeshPoint> points; final Size imageSize; final Size widgetSize;
-  _TrackingMeshPainter({required this.points, required this.imageSize, required this.widgetSize});
+class _TrackingStatCard extends StatelessWidget {
+  final String title;
+  final WidgetBuilder statusBuilder;
+  final WidgetBuilder valueBuilder;
+  final String unitText;
+  final WidgetBuilder footnoteBuilder;
+  final VoidCallback onTap;
+
+  const _TrackingStatCard({
+    required this.title,
+    required this.statusBuilder,
+    required this.valueBuilder,
+    required this.unitText,
+    required this.footnoteBuilder,
+    required this.onTap,
+  });
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.greenAccent.withOpacity(0.5)..strokeWidth = 1.5..style = PaintingStyle.fill;
-    final double scaleX = widgetSize.width / imageSize.width; final double scaleY = widgetSize.height / imageSize.height; final double scale = scaleX > scaleY ? scaleX : scaleY; final double offsetX = (widgetSize.width - imageSize.width * scale) / 2; final double offsetY = (widgetSize.height - imageSize.height * scale) / 2;
-    for (var point in points) { double x = point.x * scale + offsetX; double y = point.y * scale + offsetY; x = widgetSize.width - x; canvas.drawCircle(Offset(x, y), 2, paint); }
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: RoundedCard(
+        borderRadius: 20,
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+                ),
+                const Spacer(),
+                statusBuilder(context),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                valueBuilder(context),
+                Text(
+                  unitText,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).brightness == Brightness.dark ? Colors.white60 : Colors.black54,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Align(alignment: Alignment.centerLeft, child: footnoteBuilder(context)),
+          ],
+        ),
+      ),
+    );
   }
+}
+
+class _StatusPill extends StatelessWidget {
+  final String label;
+  const _StatusPill({required this.label});
+
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFD9EE),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? Colors.white70 : Colors.black54, width: 0.9),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
 }

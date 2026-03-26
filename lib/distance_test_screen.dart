@@ -5,8 +5,10 @@ import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detectio
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:typed_data';
 import 'dart:io'; 
-import 'dart:ui'; 
 import 'services/metrics_service.dart';
+import 'services/detection_service.dart';
+import 'widgets/rounded_card.dart';
+import 'main.dart' as app;
 
 class DistanceTestScreen extends StatefulWidget {
   const DistanceTestScreen({super.key});
@@ -38,13 +40,22 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
   }
 
   Future<void> _initializeCamera() async {
-    await Permission.camera.request();
-    final cameras = await availableCameras();
+    final permission = await Permission.camera.status;
+    if (!permission.isGranted) {
+      final requested = await Permission.camera.request();
+      if (!requested.isGranted) return;
+    }
+
+    final cameras = app.cameras.isNotEmpty ? app.cameras : await availableCameras();
     final frontCamera = cameras.firstWhere(
       (c) => c.lensDirection == CameraLensDirection.front,
       orElse: () => cameras.first,
     );
-    _controller = CameraController(frontCamera, ResolutionPreset.medium, enableAudio: false);
+    _controller = CameraController(
+      frontCamera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
     await _controller!.initialize();
     if (mounted) {
       setState(() {});
@@ -102,6 +113,7 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
     setState(() {
       _calibrationConstant = 30.0 * _currentFaceWidth;
     });
+    DetectionService.instance.calibrateReferenceFromMeasuredWidth(30.0, _currentFaceWidth);
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Calibrated.")));
   }
 
@@ -179,84 +191,80 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
               bottom: 40,
               left: 20,
               right: 20,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    // Dark Frosted Card
-                    color: const Color(0xFF2C2C2E).withOpacity(0.9), 
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_calibrationConstant == null) ...[
-                          const Text(
-                            "Calibration Required",
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+              child: RoundedCard(
+                borderRadius: 22,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                backgroundColor: const Color(0xFF1F1F22),
+                borderColor: Colors.white70,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_calibrationConstant == null) ...[
+                      const Text(
+                        "Calibration Required",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Place phone exactly 30cm away from face.",
+                        style: TextStyle(fontSize: 14, color: Colors.white70),
+                      ),
+                      const SizedBox(height: 14),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _calibrate,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF7FC86D),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                           ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            "Place phone exactly 30cm away from face.",
-                            style: TextStyle(fontSize: 14, color: Colors.white70),
-                          ),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _calibrate,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blueAccent,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                              ),
-                              child: const Text("Set 30cm Reference", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                        ] else ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          child: const Text("Set 30cm Reference", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ] else ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    "Distance",
-                                    style: TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.w500),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "${_currentDistanceCm.toStringAsFixed(1)} cm",
-                                    style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white),
-                                  ),
-                                ],
+                              const Text(
+                                "Distance",
+                                style: TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.w500),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Text(
-                                  "Safe",
-                                  style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold),
-                                ),
-                              )
+                              const SizedBox(height: 4),
+                              Text(
+                                "${_currentDistanceCm.toStringAsFixed(1)} cm",
+                                style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Color(0xFF9DE18A)),
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            child: TextButton(
-                              onPressed: () => setState(() => _calibrationConstant = null),
-                              child: const Text("Recalibrate", style: TextStyle(color: Colors.blueAccent)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEAF4E3),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white70, width: 0.8),
+                            ),
+                            child: const Text(
+                              "SAFE",
+                              style: TextStyle(color: Color(0xFF4A8D3B), fontWeight: FontWeight.bold),
                             ),
                           )
-                        ]
-                      ],
-                    ),
-                  ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton(
+                          onPressed: () => setState(() => _calibrationConstant = null),
+                          child: const Text("Recalibrate", style: TextStyle(fontSize: 12.5, color: Color(0xFFA68AC0))),
+                        ),
+                      )
+                    ]
+                  ],
                 ),
               ),
             ),
@@ -281,7 +289,13 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
     final int width = image.width; final int height = image.height; final Plane yPlane = image.planes[0]; final Plane uPlane = image.planes[1]; final Plane vPlane = image.planes[2]; final Uint8List yBuffer = yPlane.bytes; final Uint8List uBuffer = uPlane.bytes; final Uint8List vBuffer = vPlane.bytes; final int numPixels = (width * height * 1.5).toInt(); final Uint8List nv21 = Uint8List(numPixels); int idY = 0; for (int i = 0; i < height; i++) { int srcPos = i * yPlane.bytesPerRow; for (int j = 0; j < width; j++) { nv21[idY++] = yBuffer[srcPos + j]; } } int idUV = width * height; final int uvHeight = height ~/ 2; final int uvWidth = width ~/ 2; final int uPixelStride = uPlane.bytesPerPixel ?? 1; final int uRowStride = uPlane.bytesPerRow; final int vPixelStride = vPlane.bytesPerPixel ?? 1; final int vRowStride = vPlane.bytesPerRow; for (int i = 0; i < uvHeight; i++) { for (int j = 0; j < uvWidth; j++) { int uIndex = i * uRowStride + j * uPixelStride; int vIndex = i * vRowStride + j * vPixelStride; nv21[idUV++] = vBuffer[vIndex]; nv21[idUV++] = uBuffer[uIndex]; } } return nv21;
   }
   @override
-  void dispose() { _controller?.dispose(); _faceDetector.close(); _meshDetector.close(); super.dispose(); }
+  void dispose() {
+    _controller?.dispose();
+    _faceDetector.close();
+    _meshDetector.close();
+    DetectionService.instance.restartMonitoringWithDelay();
+    super.dispose();
+  }
 }
 
 // --- PAINTER (cleaned) ---

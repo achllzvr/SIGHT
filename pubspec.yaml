@@ -38,3 +38,4 @@ flutter:
     - assets/sight_model_android.tflite
     - assets/sight_model_ios.tflite
     - assets/labels.txt
+    - assets/mascot/

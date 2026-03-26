@@ -54,72 +54,98 @@ class _TasksScreenState extends State<TasksScreen> {
   }
 
   Widget _taskCard(BuildContext context, _TaskItem task) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return RoundedCard(
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: task.done ? Colors.green : Colors.grey[200],
-          child: task.done ? const Icon(Icons.check, color: Colors.white) : null,
-        ),
-        title: Text(task.title),
-        subtitle: Text(task.subtitle),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.pink[50],
-            borderRadius: BorderRadius.circular(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: task.done ? const Color(0xFF7FC86D) : (isDark ? Colors.white12 : const Color(0xFFEAF4E3)),
+              border: Border.all(color: isDark ? Colors.white70 : Colors.black54),
+            ),
+            child: task.done ? const Icon(Icons.check, color: Colors.white, size: 16) : null,
           ),
-          child: const Text('20/20 Score'),
-        ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(task.title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(task.subtitle, style: TextStyle(fontSize: 10, color: isDark ? Colors.white60 : Colors.black54)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFD9EE),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isDark ? Colors.white70 : Colors.black54, width: 0.8),
+            ),
+            child: const Text('20/20 Score', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600)),
+          ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final doneCount = _tasks.where((t) => t.done).length;
     final progress = _tasks.isEmpty ? 0.0 : doneCount / _tasks.length;
 
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text("Today's Tasks", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: BorderRadius.circular(20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text("Today's Tasks", style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEAF4E3),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: isDark ? Colors.white70 : Colors.black54, width: 0.8),
+                        ),
+                        child: Text('$doneCount/${_tasks.length} done', style: const TextStyle(fontWeight: FontWeight.w600)),
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 12,
+                      color: const Color(0xFF7FC86D),
+                      backgroundColor: isDark ? Colors.white10 : Colors.white,
                     ),
-                    child: Text('$doneCount/${_tasks.length} done'),
-                  )
+                  ),
+                  const SizedBox(height: 20),
+                  ..._tasks.map((task) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _taskCard(context, task),
+                      )),
                 ],
               ),
-              const SizedBox(height: 12),
-              LinearProgressIndicator(value: progress, minHeight: 12, color: Colors.green),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(top: 12, bottom: 24),
-                  itemCount: _tasks.length,
-                  itemBuilder: (_, i) {
-                    final t = _tasks[i];
-                    return Column(
-                      children: [
-                        _taskCard(context, t),
-                        const SizedBox(height: 12),
-                      ],
-                    );
-                  },
-                ),
-              )
-            ],
+            ),
           ),
         ),
       ),

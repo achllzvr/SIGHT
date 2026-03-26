@@ -1,11 +1,11 @@
 import 'dart:io';
-import 'dart:ui'; 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/ai_service.dart';
 import '../widgets/camera_overlay.dart';
+import '../widgets/rounded_card.dart';
 
 class ScreeningTestScreen extends StatefulWidget {
   const ScreeningTestScreen({super.key});
@@ -164,85 +164,74 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
             bottom: 40,
             left: 20,
             right: 20,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  // Dark Gray Frosted Card
-                  color: const Color(0xFF2C2C2E).withOpacity(0.90), 
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      
-                      // ERROR MESSAGE (Crucial Fix)
-                      if (_errorMessage.isNotEmpty) ...[
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          margin: const EdgeInsets.only(bottom: 20),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.red.withOpacity(0.5))
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.error_outline, color: Colors.redAccent),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  _errorMessage,
-                                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-
-                      // RESULT TILES
-                      if (_capturedImage != null && _errorMessage.isEmpty) ...[
-                        Row(
-                          children: [
-                            Expanded(child: _buildResultTile("Left Eye", _leftEyeResult)),
-                            Container(width: 1, height: 50, color: Colors.grey.withOpacity(0.3)),
-                            Expanded(child: _buildResultTile("Right Eye", _rightEyeResult)),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                      ] else if (_errorMessage.isEmpty) 
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 24),
-                          child: Text(
-                            "Position face within the guide",
-                            style: TextStyle(color: Color(0xFF98989D), fontWeight: FontWeight.w500),
-                          ),
-                        ),
-
-                      // BUTTON
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isAnalyzing ? null : (_capturedImage == null ? _captureAndAnalyze : _reset),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _capturedImage == null ? Colors.blueAccent : const Color(0xFF3A3A3C),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            elevation: 0,
-                          ),
-                          child: _isAnalyzing 
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : Text(
-                                _capturedImage == null ? "Analyze Face" : "New Scan",
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                        ),
+            child: RoundedCard(
+              borderRadius: 22,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              backgroundColor: const Color(0xFF1F1F22),
+              borderColor: Colors.white70,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_errorMessage.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.only(bottom: 20),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEFD9EE),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white70),
                       ),
-                    ],
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline, color: Color(0xFFA35E5A)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _errorMessage,
+                              style: const TextStyle(color: Colors.white, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (_capturedImage != null && _errorMessage.isEmpty) ...[
+                    Row(
+                      children: [
+                        Expanded(child: _buildResultTile("Left Eye", _leftEyeResult)),
+                        Container(width: 1, height: 50, color: Colors.white24),
+                        Expanded(child: _buildResultTile("Right Eye", _rightEyeResult)),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ] else if (_errorMessage.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        "Position face within the guide",
+                        style: TextStyle(color: Color(0xFFD0D0D4), fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isAnalyzing ? null : (_capturedImage == null ? _captureAndAnalyze : _reset),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _capturedImage == null ? const Color(0xFF7FC86D) : const Color(0xFFA68AC0),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      child: _isAnalyzing
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : Text(
+                              _capturedImage == null ? "Analyze Face" : "New Scan",
+                              style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold),
+                            ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -253,19 +242,19 @@ class _ScreeningTestScreenState extends State<ScreeningTestScreen> {
 
   Widget _buildResultTile(String title, String result) {
     bool isHealthy = result.toLowerCase().contains("healthy") || result.toLowerCase().contains("normal");
-    Color color = isHealthy ? Colors.greenAccent : Colors.orangeAccent;
+    Color color = isHealthy ? const Color(0xFF9DE18A) : const Color(0xFFE9C37F);
     
     return Column(
       children: [
         Text(
           title.toUpperCase(), 
-          style: const TextStyle(fontSize: 12, color: Color(0xFF8E8E93), fontWeight: FontWeight.w600, letterSpacing: 0.5)
+          style: const TextStyle(fontSize: 11, color: Color(0xFF8E8E93), fontWeight: FontWeight.w600, letterSpacing: 0.8)
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
           result,
           textAlign: TextAlign.center,
-          style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18, height: 1.2),
+          style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 17, height: 1.2),
         ),
       ],
     );

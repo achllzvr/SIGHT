@@ -5,8 +5,10 @@ import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detectio
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:typed_data';
 import 'services/metrics_service.dart';
+import 'services/detection_service.dart';
 import 'dart:io';
-import 'dart:ui';
+import 'widgets/rounded_card.dart';
+import 'main.dart' as app;
 
 class BlinkTestScreen extends StatefulWidget {
   const BlinkTestScreen({super.key});
@@ -22,6 +24,8 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
   List<FaceMeshPoint> _meshPoints = [];
   bool _showMesh = true;
   bool _isProcessing = false;
+  int _lastMeshRun = 0;
+  static const int _meshIntervalMs = 66;
   int _blinkCount = 0;
   bool _eyesClosed = false; 
 
@@ -32,10 +36,19 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
   }
 
   Future<void> _initializeCamera() async {
-    await Permission.camera.request();
-    final cameras = await availableCameras();
+    final permission = await Permission.camera.status;
+    if (!permission.isGranted) {
+      final requested = await Permission.camera.request();
+      if (!requested.isGranted) return;
+    }
+
+    final cameras = app.cameras.isNotEmpty ? app.cameras : await availableCameras();
     final frontCamera = cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.front, orElse: () => cameras.first);
-    _controller = CameraController(frontCamera, ResolutionPreset.medium, enableAudio: false);
+    _controller = CameraController(
+      frontCamera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
     await _controller!.initialize();
     if (mounted) {
       setState(() {});
@@ -53,9 +66,10 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
           if (faces.isNotEmpty) {
         final face = faces.first;
         if (face.leftEyeOpenProbability != null && face.rightEyeOpenProbability != null) {
-          bool currentlyClosed = ((face.leftEyeOpenProbability! + face.rightEyeOpenProbability!) / 2.0) < 0.2;
+          final avg = (face.leftEyeOpenProbability! + face.rightEyeOpenProbability!) / 2.0;
+          final currentlyClosed = avg < 0.38;
           if (currentlyClosed && !_eyesClosed) _eyesClosed = true;
-                else if (!currentlyClosed && _eyesClosed) {
+                else if (avg > 0.58 && _eyesClosed) {
                 _eyesClosed = false;
                 // register blink in central metrics service
                 if (mounted) setState(() => _blinkCount++);
@@ -63,7 +77,9 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
                }
         }
       }
-      if (_showMesh) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (_showMesh && now - _lastMeshRun >= _meshIntervalMs) {
+        _lastMeshRun = now;
         try {
           final meshes = await _meshDetector.processImage(inputImage);
           if (meshes.isNotEmpty && mounted) setState(() => _meshPoints = meshes.first.points);
@@ -101,35 +117,37 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
           if (_showMesh && _meshPoints.isNotEmpty) IgnorePointer(child: CustomPaint(painter: FaceMeshPainter(points: _meshPoints, imageSize: Size(_controller!.value.previewSize!.height, _controller!.value.previewSize!.width), widgetSize: size))),
           Positioned(
             bottom: 40, left: 20, right: 20,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                  color: const Color(0xFF2C2C2E).withOpacity(0.9), // Dark Card
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: RoundedCard(
+              borderRadius: 22,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              backgroundColor: const Color(0xFF1F1F22),
+              borderColor: Colors.white70,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text("Total Blinks", style: TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.w600)),
-                          const SizedBox(height: 4),
-                          Text("$_blinkCount", style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, letterSpacing: -1, color: Colors.white)),
-                        ],
-                      ),
-                      Container(
-                        decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(16)),
-                        child: IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: () {
-                          setState(() => _blinkCount = 0);
-                          // reset global metrics
-                          MetricsService.instance.resetBlinks();
-                        }),
-                      )
+                      const Text("Total Blinks", style: TextStyle(fontSize: 14, color: Colors.white70, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Text("$_blinkCount", style: const TextStyle(fontSize: 38, fontWeight: FontWeight.bold, letterSpacing: -1, color: Color(0xFF9DE18A))),
                     ],
                   ),
-                ),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFD9EE),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white70, width: 0.8),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.refresh, size: 20, color: Colors.black87),
+                      onPressed: () {
+                        setState(() => _blinkCount = 0);
+                        MetricsService.instance.resetBlinks();
+                      },
+                    ),
+                  )
+                ],
               ),
             ),
           ),
@@ -154,7 +172,13 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
     final int width = image.width; final int height = image.height; final Plane yPlane = image.planes[0]; final Plane uPlane = image.planes[1]; final Plane vPlane = image.planes[2]; final Uint8List yBuffer = yPlane.bytes; final Uint8List uBuffer = uPlane.bytes; final Uint8List vBuffer = vPlane.bytes; final int numPixels = (width * height * 1.5).toInt(); final Uint8List nv21 = Uint8List(numPixels); int idY = 0; for (int i = 0; i < height; i++) { int srcPos = i * yPlane.bytesPerRow; for (int j = 0; j < width; j++) { nv21[idY++] = yBuffer[srcPos + j]; } } int idUV = width * height; final int uvHeight = height ~/ 2; final int uvWidth = width ~/ 2; final int uPixelStride = uPlane.bytesPerPixel ?? 1; final int uRowStride = uPlane.bytesPerRow; final int vPixelStride = vPlane.bytesPerPixel ?? 1; final int vRowStride = vPlane.bytesPerRow; for (int i = 0; i < uvHeight; i++) { for (int j = 0; j < uvWidth; j++) { int uIndex = i * uRowStride + j * uPixelStride; int vIndex = i * vRowStride + j * vPixelStride; nv21[idUV++] = vBuffer[vIndex]; nv21[idUV++] = uBuffer[uIndex]; } } return nv21;
   }
   @override
-  void dispose() { _controller?.dispose(); _faceDetector.close(); _meshDetector.close(); super.dispose(); }
+  void dispose() {
+    _controller?.dispose();
+    _faceDetector.close();
+    _meshDetector.close();
+    DetectionService.instance.restartMonitoringWithDelay();
+    super.dispose();
+  }
 }
 
 class FaceMeshPainter extends CustomPainter {

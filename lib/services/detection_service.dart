@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:ui';
+import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
@@ -15,7 +16,7 @@ class DetectionService {
   bool _initialized = false;
 
   final FaceDetector _faceDetector = FaceDetector(
-    options: FaceDetectorOptions(enableLandmarks: true, enableClassification: true, performanceMode: FaceDetectorMode.accurate),
+    options: FaceDetectorOptions(enableClassification: true, performanceMode: FaceDetectorMode.fast),
   );
   final FaceMeshDetector _meshDetector = FaceMeshDetector(option: FaceMeshDetectorOptions.faceMesh);
 
@@ -26,22 +27,118 @@ class DetectionService {
   double? _calibrationConstant;
   double _currentFaceWidth = 0.0;
   bool _eyesClosed = false;
+  bool _recovering = false;
 
-  Future<void> initialize({CameraLensDirection preferred = CameraLensDirection.front}) async {
-    if (_initialized) return;
-    await Permission.camera.request();
-    final cameras = await availableCameras();
-    final cam = cameras.firstWhere((c) => c.lensDirection == preferred, orElse: () => cameras.first);
-    controller = CameraController(cam, ResolutionPreset.medium, enableAudio: false);
-    await controller!.initialize();
-    _initialized = true;
-    controller!.startImageStream(_processCameraImage);
-  }
-
-  Future<void> dispose() async {
+  Future<void> _disposeControllerOnly() async {
     try {
       await controller?.dispose();
     } catch (_) {}
+    controller = null;
+    _initialized = false;
+    _isProcessing = false;
+    _lastRun = 0;
+    _lastMeshRun = 0;
+    _lastFrameProcessedAt = 0;
+  }
+
+  Future<void> initialize({CameraLensDirection preferred = CameraLensDirection.front}) async {
+    if (_initialized) return;
+    final permission = await Permission.camera.status;
+    if (!permission.isGranted) {
+      final requested = await Permission.camera.request();
+      if (!requested.isGranted) return;
+    }
+    final cameras = await availableCameras();
+    final cam = cameras.firstWhere((c) => c.lensDirection == preferred, orElse: () => cameras.first);
+    controller = CameraController(
+      cam,
+      ResolutionPreset.medium,
+      enableAudio: false,
+    );
+    await controller!.initialize();
+    await controller!.startImageStream(_processCameraImage);
+    _initialized = true;
+  }
+
+  Future<void> ensureMonitoring({CameraLensDirection preferred = CameraLensDirection.front}) async {
+    if (_recovering) return;
+    _recovering = true;
+
+    try {
+      if (!_initialized || controller == null) {
+        _initialized = false;
+        await initialize(preferred: preferred);
+        return;
+      }
+
+      if (!controller!.value.isInitialized) {
+        await _disposeControllerOnly();
+        await initialize(preferred: preferred);
+        return;
+      }
+
+      if (!controller!.value.isStreamingImages) {
+        try {
+          await controller!.startImageStream(_processCameraImage);
+        } catch (_) {
+          final lens = controller!.description.lensDirection;
+          await _disposeControllerOnly();
+          await initialize(preferred: lens);
+        }
+      } else {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (_lastFrameProcessedAt > 0 && now - _lastFrameProcessedAt > 1800) {
+          final lens = controller!.description.lensDirection;
+          await _disposeControllerOnly();
+          await initialize(preferred: lens);
+        }
+      }
+    } finally {
+      _recovering = false;
+    }
+  }
+
+  Future<void> ensureMonitoringWithRetry({
+    CameraLensDirection preferred = CameraLensDirection.front,
+    int attempts = 4,
+    Duration delay = const Duration(milliseconds: 350),
+  }) async {
+    for (int i = 0; i < attempts; i++) {
+      try {
+        await ensureMonitoring(preferred: preferred);
+        if (controller != null && controller!.value.isInitialized && controller!.value.isStreamingImages) {
+          return;
+        }
+      } catch (_) {}
+      if (i < attempts - 1) {
+        await Future.delayed(delay);
+      }
+    }
+
+    await forceRestartMonitoring(preferred: preferred);
+  }
+
+  Future<void> forceRestartMonitoring({CameraLensDirection preferred = CameraLensDirection.front}) async {
+    if (_recovering) return;
+    _recovering = true;
+    try {
+      await _disposeControllerOnly();
+      await initialize(preferred: preferred);
+    } finally {
+      _recovering = false;
+    }
+  }
+
+  Future<void> restartMonitoringWithDelay({
+    CameraLensDirection preferred = CameraLensDirection.front,
+    Duration delay = const Duration(milliseconds: 650),
+  }) async {
+    await Future.delayed(delay);
+    await forceRestartMonitoring(preferred: preferred);
+  }
+
+  Future<void> dispose() async {
+    await _disposeControllerOnly();
     _faceDetector.close();
     _meshDetector.close();
   }
@@ -50,6 +147,13 @@ class DetectionService {
     if (_currentFaceWidth == 0) return;
     _calibrationConstant = cm * _currentFaceWidth;
     // mark as calibrated
+    MetricsService.instance.setCalibrated(true);
+  }
+
+  void calibrateReferenceFromMeasuredWidth(double cm, double measuredFaceWidth) {
+    if (measuredFaceWidth <= 0) return;
+    _calibrationConstant = cm * measuredFaceWidth;
+    _currentFaceWidth = measuredFaceWidth;
     MetricsService.instance.setCalibrated(true);
   }
 
@@ -69,14 +173,19 @@ class DetectionService {
   }
 
   int _lastRun = 0;
+  int _lastMeshRun = 0;
+  static const int _detectIntervalMs = 40;
+  static const int _meshIntervalMs = 66;
   bool _isProcessing = false;
+  int _lastFrameProcessedAt = 0;
 
   Future<void> _processCameraImage(CameraImage image) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (now - _lastRun < 100) return;
+    if (now - _lastRun < _detectIntervalMs) return;
     if (_isProcessing) return;
     _isProcessing = true;
     _lastRun = now;
+    _lastFrameProcessedAt = now;
     try {
       final inputImage = _inputImageFromCameraImage(image);
       if (inputImage == null) return;
@@ -88,10 +197,10 @@ class DetectionService {
         // Blink detection (uses ML Kit classification probabilities)
         if (face.leftEyeOpenProbability != null && face.rightEyeOpenProbability != null) {
           final avg = (face.leftEyeOpenProbability! + face.rightEyeOpenProbability!) / 2.0;
-          final currentlyClosed = avg < 0.2;
+          final currentlyClosed = avg < 0.38;
           if (currentlyClosed && !_eyesClosed) {
             _eyesClosed = true;
-          } else if (!currentlyClosed && _eyesClosed) {
+          } else if (avg > 0.58 && _eyesClosed) {
             _eyesClosed = false;
             MetricsService.instance.registerBlink();
           }
@@ -109,12 +218,18 @@ class DetectionService {
         MetricsService.instance.setDistance(0.0);
       }
 
-      try {
-        final meshes = await _meshDetector.processImage(inputImage);
-        if (meshes.isNotEmpty) meshPoints.value = meshes.first.points;
-        else meshPoints.value = [];
-      } catch (e) {
-        meshPoints.value = [];
+      if (now - _lastMeshRun >= _meshIntervalMs) {
+        _lastMeshRun = now;
+        try {
+          final meshes = await _meshDetector.processImage(inputImage);
+          if (meshes.isNotEmpty) {
+            meshPoints.value = meshes.first.points;
+          } else {
+            meshPoints.value = [];
+          }
+        } catch (e) {
+          meshPoints.value = [];
+        }
       }
     } catch (e) {
       if (kDebugMode) print('DetectionService error: $e');

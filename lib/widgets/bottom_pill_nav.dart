@@ -7,18 +7,25 @@ class BottomPillNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final navBg = isDark ? const Color(0xFF2A3A2A) : const Color(0xFFE3F1D6);
+    final iconDefault = isDark ? Colors.white70 : Colors.white;
+
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Center(
           child: Container(
-            height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            height: 60,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
+              color: navBg,
               borderRadius: BorderRadius.circular(40),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6)],
-              border: Border.all(color: Colors.black12, width: 1.0),
+              border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1.1),
+              boxShadow: const [
+                BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(3, 3), blurRadius: 0),
+                BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -35,15 +42,16 @@ class BottomPillNav extends StatelessWidget {
                     borderRadius: BorderRadius.circular(30),
                     onTap: () => onTap?.call(i),
                     child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      padding: const EdgeInsets.all(10),
+                      margin: const EdgeInsets.symmetric(horizontal: 7),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: selected
                           ? BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
-                              shape: BoxShape.circle,
+                              color: const Color(0xFFD5C2E8),
+                              border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
+                              borderRadius: BorderRadius.circular(18),
                             )
                           : null,
-                      child: Icon(icon, color: selected ? Theme.of(context).colorScheme.primary : Colors.black54),
+                      child: Icon(icon, size: 20, color: selected ? (isDark ? Colors.white : Colors.black87) : iconDefault),
                     ),
                   ),
                 );

@@ -10,6 +10,8 @@ class BackgroundNotificationService {
   bool _enabled = false;
 
   Future<void> start() async {
+    if (_timer != null) return;
+
     // Listen to calibration state and enable/disable background notification
     // Simple polling approach: update notification periodically when calibrated
     _timer = Timer.periodic(const Duration(seconds: 3), (t) async {
@@ -50,5 +52,6 @@ class BackgroundNotificationService {
     } catch (_) {}
     _enabled = false;
     _timer?.cancel();
+    _timer = null;
   }
 }
