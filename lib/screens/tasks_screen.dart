@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../services/gamification_service.dart';
 import '../widgets/rounded_card.dart';
-import '../services/metrics_service.dart';
 
 class TasksScreen extends StatefulWidget {
   const TasksScreen({Key? key}) : super(key: key);
@@ -10,7 +11,6 @@ class TasksScreen extends StatefulWidget {
 }
 
 class _TasksScreenState extends State<TasksScreen> {
-  // Example tasks (for now simple 4 tasks where first two are 20-20-20 breaks)
   final List<_TaskItem> _tasks = [
     _TaskItem('20-20-20 Break', 'Complete 1 eye break', false),
     _TaskItem('20-20-20 Break', 'Complete 1 eye break', false),
@@ -21,34 +21,34 @@ class _TasksScreenState extends State<TasksScreen> {
   @override
   void initState() {
     super.initState();
-    // Listen to metrics and mark tasks as done when conditions are met
-    MetricsService.instance.blinkRatePerMinNotifier.addListener(_onBlinkRateChanged);
-    MetricsService.instance.distanceCmNotifier.addListener(_onDistanceChanged);
+    GamificationService.instance.sessionXpNotifier.addListener(_onProgressChanged);
+    GamificationService.instance.dailyStreakNotifier.addListener(_onProgressChanged);
   }
 
   @override
   void dispose() {
-    MetricsService.instance.blinkRatePerMinNotifier.removeListener(_onBlinkRateChanged);
-    MetricsService.instance.distanceCmNotifier.removeListener(_onDistanceChanged);
+    GamificationService.instance.sessionXpNotifier.removeListener(_onProgressChanged);
+    GamificationService.instance.dailyStreakNotifier.removeListener(_onProgressChanged);
     super.dispose();
   }
 
-  void _onBlinkRateChanged() {
-    final rate = MetricsService.instance.blinkRatePerMinNotifier.value;
-    // if blink rate is healthy (>10) mark first two breaks as done as an example
-    if (rate >= 10) {
+  void _onProgressChanged() {
+    final xp = GamificationService.instance.sessionXpNotifier.value;
+    final streak = GamificationService.instance.dailyStreakNotifier.value;
+
+    if (xp >= 5 || streak > 0) {
       setState(() {
-        for (int i = 0; i < _tasks.length && i < 2; i++) _tasks[i].done = true;
+        for (int i = 0; i < _tasks.length && i < 2; i++) {
+          _tasks[i].done = true;
+        }
       });
     }
-  }
 
-  void _onDistanceChanged() {
-    final d = MetricsService.instance.distanceCmNotifier.value;
-    // If distance is safe (>30cm) mark next two tasks done (simple example)
-    if (d >= 30.0) {
+    if (xp >= 10 || streak >= 2) {
       setState(() {
-        for (int i = 2; i < _tasks.length; i++) _tasks[i].done = true;
+        for (int i = 2; i < _tasks.length; i++) {
+          _tasks[i].done = true;
+        }
       });
     }
   }
@@ -127,6 +127,17 @@ class _TasksScreenState extends State<TasksScreen> {
                         child: Text('$doneCount/${_tasks.length} done', style: const TextStyle(fontWeight: FontWeight.w600)),
                       )
                     ],
+                  ),
+                  const SizedBox(height: 6),
+                  ValueListenableBuilder<int>(
+                    valueListenable: GamificationService.instance.sessionXpNotifier,
+                    builder: (_, xp, __) => ValueListenableBuilder<int>(
+                      valueListenable: GamificationService.instance.dailyStreakNotifier,
+                      builder: (_, streak, __) => Text(
+                        'Session XP: $xp • Streak: $streak',
+                        style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 14),
                   ClipRRect(

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+
+import '../services/gamification_service.dart';
 import '../services/metrics_service.dart';
+import '../services/offline_models.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -85,11 +88,13 @@ class HomeScreen extends StatelessWidget {
                         valueListenable: MetricsService.instance.distanceCmNotifier,
                         builder: (_, value, __) => _MetricChip(label: value > 0 ? '${value.toStringAsFixed(1)} cm' : '--', caption: 'Distance'),
                       ),
-                      const _MetricChip(label: 'Happy', caption: 'Pet Mood'),
+                      ValueListenableBuilder<PetMood>(
+                        valueListenable: GamificationService.instance.petMoodNotifier,
+                        builder: (_, mood, __) => _MetricChip(label: _petMoodLabel(mood), caption: 'Pet Mood'),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Navigation handled by root app; show a small hint instead
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
@@ -151,24 +156,29 @@ class _TopBadge extends StatelessWidget {
     return SizedBox(
       width: 66,
       height: 46,
-      child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFD9EE),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
-        boxShadow: const [
-          BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(2, 2), blurRadius: 0),
-        ],
-      ),
-      child: const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text('0', style: TextStyle(fontWeight: FontWeight.bold, height: 1)),
-          SizedBox(height: 2),
-          Text('XP', style: TextStyle(fontSize: 9.5, height: 1)),
-        ],
-      ),
+      child: ValueListenableBuilder<int>(
+        valueListenable: GamificationService.instance.sessionXpNotifier,
+        builder: (_, xp, __) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFD9EE),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
+              boxShadow: const [
+                BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(2, 2), blurRadius: 0),
+              ],
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('$xp', style: const TextStyle(fontWeight: FontWeight.bold, height: 1)),
+                const SizedBox(height: 2),
+                const Text('XP', style: TextStyle(fontSize: 9.5, height: 1)),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -220,4 +230,15 @@ String _resolveMascotAsset({
   }
 
   return blinkRate.isEven ? 'assets/mascot/mascot_bad_v1.png' : 'assets/mascot/mascot_bad_v2.png';
+}
+
+String _petMoodLabel(PetMood mood) {
+  switch (mood) {
+    case PetMood.happy:
+      return 'Happy';
+    case PetMood.sad:
+      return 'Sad';
+    case PetMood.sleeping:
+      return 'Sleep';
+  }
 }

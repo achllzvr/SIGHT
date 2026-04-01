@@ -196,7 +196,7 @@ class BackgroundCameraService : Service() {
 
       flutterEngine?.dartExecutor?.binaryMessenger?.send(
         CHANNEL,
-        nv21,
+        ByteBuffer.wrap(nv21),
         null
       )
     } catch (e: Exception) {

@@ -4,10 +4,23 @@ import '../blink_test_screen.dart';
 import '../distance_test_screen.dart';
 import '../services/detection_service.dart';
 import '../services/metrics_service.dart';
+import '../services/offline_models.dart';
+import '../services/rule_engine_service.dart';
 import '../widgets/rounded_card.dart';
 
-class TrackingScreen extends StatelessWidget {
+class TrackingScreen extends StatefulWidget {
   const TrackingScreen({super.key});
+
+  @override
+  State<TrackingScreen> createState() => _TrackingScreenState();
+}
+
+class _TrackingScreenState extends State<TrackingScreen> {
+  @override
+  void initState() {
+    super.initState();
+    DetectionService.instance.ensureMonitoringWithRetry();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +38,8 @@ class TrackingScreen extends StatelessWidget {
                 children: [
                   const SizedBox(height: 8),
                   const _CameraStatusIndicator(),
+                  const SizedBox(height: 12),
+                  const _OfflineRuleBanner(),
                   const SizedBox(height: 24),
                   _TrackingStatCard(
                     title: 'Blink Analysis',
@@ -198,12 +213,10 @@ class _CameraStatusIndicator extends StatefulWidget {
 }
 
 class _CameraStatusIndicatorState extends State<_CameraStatusIndicator> {
-  late Future<void> _refreshFuture;
-
   @override
   void initState() {
     super.initState();
-    _refreshFuture = _startRefresh();
+    _startRefresh();
   }
 
   Future<void> _startRefresh() async {
@@ -216,6 +229,7 @@ class _CameraStatusIndicatorState extends State<_CameraStatusIndicator> {
   @override
   Widget build(BuildContext context) {
     final frameFreshness = DetectionService.instance.millisSinceLastFrame;
+    final hasReceivedAnyFrame = DetectionService.instance.hasReceivedAnyFrame;
     final hasFreshFrames = DetectionService.instance.hasFreshFrames;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -246,7 +260,9 @@ class _CameraStatusIndicatorState extends State<_CameraStatusIndicator> {
             child: Text(
               hasFreshFrames
                   ? 'Camera active (${frameFreshness}ms)'
-                  : 'Camera paused (${frameFreshness}ms)',
+                  : hasReceivedAnyFrame
+                      ? 'Camera paused (${frameFreshness}ms)'
+                      : 'Starting camera...',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -260,3 +276,45 @@ class _CameraStatusIndicatorState extends State<_CameraStatusIndicator> {
   }
 }
 
+class _OfflineRuleBanner extends StatelessWidget {
+  const _OfflineRuleBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AlertLevel>(
+      valueListenable: RuleEngineService.instance.alertLevelNotifier,
+      builder: (_, alertLevel, __) {
+        final message = RuleEngineService.instance.overlayMessageNotifier.value;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final background = alertLevel == AlertLevel.none
+            ? (isDark ? Colors.white10 : Colors.black12)
+            : alertLevel == AlertLevel.blinkBubble
+                ? const Color(0xFFEFD9EE)
+                : alertLevel == AlertLevel.redOverlay
+                    ? Colors.red.withOpacity(0.14)
+                    : Colors.black.withOpacity(0.85);
+
+        final label = alertLevel == AlertLevel.none ? 'Offline rules idle' : '${alertLevel.name} • ${message.isEmpty ? 'active' : message}';
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: alertLevel == AlertLevel.screenLock ? Colors.white : null,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        );
+      },
+    );
+  }
+}

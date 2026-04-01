@@ -8,7 +8,10 @@ import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detectio
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'background_notification_service.dart';
+import 'local_metrics_service.dart';
 import 'metrics_service.dart';
+import 'offline_database_service.dart';
+import 'offline_models.dart';
 
 class DetectionService {
   DetectionService._private();
@@ -46,6 +49,8 @@ class DetectionService {
 
   Future<void> initialize({CameraLensDirection preferred = CameraLensDirection.front}) async {
     if (_initialized) return;
+    await OfflineDatabaseService.instance.initialize();
+    _calibrationConstant ??= await OfflineDatabaseService.instance.loadCalibrationConstant();
     final permission = await Permission.camera.status;
     if (!permission.isGranted) {
       final requested = await Permission.camera.request();
@@ -178,6 +183,47 @@ class DetectionService {
     }
   }
 
+  Future<void> processCameraFrame(CameraImage image) => _processCameraImage(image);
+
+  double calculateDistance({required double faceWidthPixels, required double calibrationData}) {
+    if (faceWidthPixels <= 0) {
+      return 0.0;
+    }
+    return calibrationData / faceWidthPixels;
+  }
+
+  double calculateEAR(List<Offset> eyeLandmarks) {
+    if (eyeLandmarks.length < 6) {
+      return 0.0;
+    }
+
+    final vertical1 = (eyeLandmarks[1] - eyeLandmarks[5]).distance;
+    final vertical2 = (eyeLandmarks[2] - eyeLandmarks[4]).distance;
+    final horizontal = (eyeLandmarks[0] - eyeLandmarks[3]).distance;
+    if (horizontal == 0) {
+      return 0.0;
+    }
+
+    return (vertical1 + vertical2) / (2.0 * horizontal);
+  }
+
+  bool detectBlink({required double currentEAR, required double baselineEAR}) {
+    final closedThreshold = baselineEAR * 0.75;
+    final openThreshold = baselineEAR * 0.95;
+
+    if (currentEAR <= closedThreshold) {
+      _eyesClosed = true;
+      return false;
+    }
+
+    if (currentEAR >= openThreshold && _eyesClosed) {
+      _eyesClosed = false;
+      return true;
+    }
+
+    return false;
+  }
+
   Future<void> dispose() async {
     await disableWakelock();
     await _disposeControllerOnly();
@@ -188,7 +234,7 @@ class DetectionService {
   void calibrateReferenceCm(double cm) {
     if (_currentFaceWidth == 0) return;
     _calibrationConstant = cm * _currentFaceWidth;
-    // mark as calibrated
+    unawaited(OfflineDatabaseService.instance.saveCalibrationConstant(_calibrationConstant!));
     MetricsService.instance.setCalibrated(true);
     BackgroundNotificationService.instance.start();
     BackgroundNotificationService.instance.refreshNow().then((ok) {
@@ -202,6 +248,7 @@ class DetectionService {
     if (measuredFaceWidth <= 0) return;
     _calibrationConstant = cm * measuredFaceWidth;
     _currentFaceWidth = measuredFaceWidth;
+    unawaited(OfflineDatabaseService.instance.saveCalibrationConstant(_calibrationConstant!));
     MetricsService.instance.setCalibrated(true);
     BackgroundNotificationService.instance.start();
     BackgroundNotificationService.instance.refreshNow().then((ok) {
@@ -238,6 +285,8 @@ class DetectionService {
     return DateTime.now().millisecondsSinceEpoch - _lastFrameProcessedAt;
   }
 
+  bool get hasReceivedAnyFrame => _lastFrameProcessedAt > 0;
+
   bool get hasFreshFrames => millisSinceLastFrame < 2000;
 
   Future<void> _processCameraImage(CameraImage image) async {
@@ -258,19 +307,23 @@ class DetectionService {
         // Blink detection (uses ML Kit classification probabilities)
         if (face.leftEyeOpenProbability != null && face.rightEyeOpenProbability != null) {
           final avg = (face.leftEyeOpenProbability! + face.rightEyeOpenProbability!) / 2.0;
-          final currentlyClosed = avg < 0.38;
-          if (currentlyClosed && !_eyesClosed) {
-            _eyesClosed = true;
-          } else if (avg > 0.58 && _eyesClosed) {
-            _eyesClosed = false;
+          if (detectBlink(currentEAR: avg, baselineEAR: 0.52)) {
             MetricsService.instance.registerBlink();
+            unawaited(
+              LocalMetricsService.instance.logRawEvent(
+                'blinkRate',
+                MetricsService.instance.blinkRatePerMinNotifier.value.toDouble(),
+                DateTime.now(),
+              ),
+            );
           }
         }
         if (_calibrationConstant != null && _currentFaceWidth > 0) {
-          final cm = _calibrationConstant! / _currentFaceWidth;
+          final cm = calculateDistance(faceWidthPixels: _currentFaceWidth, calibrationData: _calibrationConstant!);
           distanceCm.value = cm;
           MetricsService.instance.setDistance(cm);
           MetricsService.instance.setFaceDetected(true);
+          unawaited(LocalMetricsService.instance.logRawEvent('distanceCm', cm, DateTime.now()));
         }
       } else {
         faceDetected.value = false;

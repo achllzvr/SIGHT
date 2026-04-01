@@ -1,15 +1,23 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
+
 import 'widgets/bottom_pill_nav.dart';
 // New UI Screens (scaffolds)
 import 'screens/home_screen.dart';
 import 'screens/tracking_screen.dart';
 import 'screens/tasks_screen.dart';
-import 'services/detection_service.dart';
-import 'services/metrics_service.dart';
+import 'services/app_lifecycle_service.dart';
 import 'services/background_notification_service.dart';
+import 'services/detection_service.dart';
+import 'services/gamification_service.dart';
+import 'services/local_metrics_service.dart';
+import 'services/metrics_service.dart';
+import 'services/offline_models.dart';
+import 'services/rule_engine_service.dart';
 
 // Global Camera List
 List<CameraDescription> cameras = [];
@@ -122,6 +130,10 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    unawaited(LocalMetricsService.instance.initialize());
+    unawaited(RuleEngineService.instance.initialize());
+    unawaited(GamificationService.instance.initialize());
+
     Permission.notification.request();
 
     try {
@@ -151,20 +163,9 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Keep DetectionService running across lifecycle; do not dispose it so
-    // it remains active while the app is backgrounded if platform permits.
     debugPrint('AppLifecycleState changed: $state');
     try {
-      if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
-        // When app leaves foreground, ensure wakelock for monitoring
-        if (MetricsService.instance.calibratedNotifier.value) {
-          DetectionService.instance.enableWakelockForMonitoring();
-        }
-        BackgroundNotificationService.instance.start();
-      } else if (state == AppLifecycleState.resumed) {
-        // When app returns to foreground, aggressively restart monitoring
-        DetectionService.instance.forceHardRestart();
-      }
+      unawaited(AppLifecycleService.instance.trackScreenState(state));
     } catch (e) {
       debugPrint('BackgroundNotificationService lifecycle error: $e');
     }
@@ -172,21 +173,90 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: IndexedStack(
-          index: _index,
-          children: _pages,
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          body: SafeArea(
+            child: IndexedStack(
+              index: _index,
+              children: _pages,
+            ),
+          ),
+          bottomNavigationBar: SizedBox(
+            height: 88,
+            child: BottomPillNav(
+              currentIndex: _index,
+              onTap: (i) => setState(() => _index = i),
+            ),
+          ),
         ),
-      ),
-      bottomNavigationBar: SizedBox(
-        height: 88,
-        child: BottomPillNav(
-          currentIndex: _index,
-          onTap: (i) => setState(() => _index = i),
-        ),
-      ),
+        const _OfflineAlertOverlay(),
+      ],
+    );
+  }
+}
+
+class _OfflineAlertOverlay extends StatelessWidget {
+  const _OfflineAlertOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AlertLevel>(
+      valueListenable: RuleEngineService.instance.alertLevelNotifier,
+      builder: (_, alertLevel, __) {
+        if (alertLevel == AlertLevel.none) {
+          return const SizedBox.shrink();
+        }
+
+        final message = RuleEngineService.instance.overlayMessageNotifier.value;
+
+        if (alertLevel == AlertLevel.blinkBubble) {
+          return Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            left: 16,
+            right: 16,
+            child: IgnorePointer(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFD9EE).withOpacity(0.96),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.black87, width: 1),
+                ),
+                child: Text(
+                  message.isEmpty ? 'Blink bubble active' : message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          );
+        }
+
+        final overlayColor = alertLevel == AlertLevel.redOverlay
+            ? Colors.red.withOpacity(0.4)
+            : Colors.black.withOpacity(0.92);
+
+        return Positioned.fill(
+          child: IgnorePointer(
+            child: Container(
+              color: overlayColor,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                message.isEmpty ? 'Tracking paused' : message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
