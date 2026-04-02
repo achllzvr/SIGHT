@@ -11,7 +11,6 @@ import 'background_notification_service.dart';
 import 'local_metrics_service.dart';
 import 'metrics_service.dart';
 import 'offline_database_service.dart';
-import 'offline_models.dart';
 
 class DetectionService {
   DetectionService._private();

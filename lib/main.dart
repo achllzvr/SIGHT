@@ -15,7 +15,6 @@ import 'services/background_notification_service.dart';
 import 'services/detection_service.dart';
 import 'services/gamification_service.dart';
 import 'services/local_metrics_service.dart';
-import 'services/metrics_service.dart';
 import 'services/offline_models.dart';
 import 'services/rule_engine_service.dart';
 
@@ -151,9 +150,6 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _enableBackgroundExecution() async {
-    return;
-  }
 
   @override
   void dispose() {
