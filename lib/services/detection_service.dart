@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:ui';
 import 'dart:async';
 import 'package:camera/camera.dart';

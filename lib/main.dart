@@ -6,7 +6,7 @@ import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'widgets/bottom_pill_nav.dart';
-// New UI Screens (scaffolds)
+
 import 'screens/home_screen.dart';
 import 'screens/tracking_screen.dart';
 import 'screens/tasks_screen.dart';
