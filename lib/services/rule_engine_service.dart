@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'critical_overlay_service.dart';
 import 'offline_database_service.dart';
 import 'offline_models.dart';
 import '../screens/guardian_override_screen.dart';
@@ -79,6 +80,8 @@ class RuleEngineService {
       if (!context.mounted) {
         return;
       }
+
+      await CriticalOverlayService.instance.showCriticalOverlay();
 
       await Navigator.of(context, rootNavigator: true).push<void>(
         MaterialPageRoute<void>(

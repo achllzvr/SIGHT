@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../services/critical_overlay_service.dart';
 import '../services/guardian_auth_service.dart';
 
 class GuardianOverrideScreen extends StatefulWidget {
@@ -33,6 +34,7 @@ class _GuardianOverrideScreenState extends State<GuardianOverrideScreen> {
     });
 
     if (unlocked) {
+      await CriticalOverlayService.instance.hideCriticalOverlay();
       Navigator.of(context).pop();
     }
   }
@@ -105,6 +107,7 @@ class _GuardianOverrideScreenState extends State<GuardianOverrideScreen> {
       }
 
       if (unlocked == true) {
+        await CriticalOverlayService.instance.hideCriticalOverlay();
         Navigator.of(context).pop();
       }
     } finally {
