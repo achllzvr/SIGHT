@@ -10,6 +10,8 @@
     </array>
     <key>NSCameraUsageDescription</key>
     <string>SIGHT needs camera access to screen your eyes.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>SIGHT uses Face ID to let a guardian unlock the app.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

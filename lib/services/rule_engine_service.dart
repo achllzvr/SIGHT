@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 import 'offline_database_service.dart';
 import 'offline_models.dart';
+import '../screens/guardian_override_screen.dart';
 
 class RuleEngineService {
   RuleEngineService._private();
@@ -12,6 +14,7 @@ class RuleEngineService {
 
   CachedRules _rules = const CachedRules.defaults();
   bool _initialized = false;
+  bool _criticalLockActive = false;
 
   Future<void> initialize() async {
     if (_initialized) {
@@ -64,5 +67,27 @@ class RuleEngineService {
   void triggerOverlay(AlertLevel alertLevel, [String reason = '']) {
     alertLevelNotifier.value = alertLevel;
     overlayMessageNotifier.value = reason;
+  }
+
+  Future<void> triggerCriticalLock(BuildContext context) async {
+    if (_criticalLockActive) {
+      return;
+    }
+
+    _criticalLockActive = true;
+    try {
+      if (!context.mounted) {
+        return;
+      }
+
+      await Navigator.of(context, rootNavigator: true).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => const GuardianOverrideScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+    } finally {
+      _criticalLockActive = false;
+    }
   }
 }

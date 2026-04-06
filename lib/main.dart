@@ -117,6 +117,7 @@ class RootApp extends StatefulWidget {
 
 class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
   int _index = 0;
+  bool _pendingCriticalLockCheck = false;
 
   final List<Widget> _pages = const [
     HomeScreen(),
@@ -128,6 +129,8 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    RuleEngineService.instance.alertLevelNotifier.addListener(_handleAlertLevelChange);
 
     unawaited(LocalMetricsService.instance.initialize());
     unawaited(RuleEngineService.instance.initialize());
@@ -153,8 +156,34 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    RuleEngineService.instance.alertLevelNotifier.removeListener(_handleAlertLevelChange);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _handleAlertLevelChange() {
+    if (_pendingCriticalLockCheck || !mounted) {
+      return;
+    }
+
+    if (RuleEngineService.instance.alertLevelNotifier.value != AlertLevel.screenLock) {
+      return;
+    }
+
+    _pendingCriticalLockCheck = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (!mounted) {
+          return;
+        }
+
+        if (RuleEngineService.instance.alertLevelNotifier.value == AlertLevel.screenLock) {
+          await RuleEngineService.instance.triggerCriticalLock(context);
+        }
+      } finally {
+        _pendingCriticalLockCheck = false;
+      }
+    });
   }
 
   @override
