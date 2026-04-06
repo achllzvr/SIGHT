@@ -30,6 +30,7 @@ class MainActivity : FlutterFragmentActivity() {
 				"showCriticalOverlay" -> result.success(showCriticalOverlay())
 				"hideCriticalOverlay" -> result.success(hideCriticalOverlay())
 				"isCriticalOverlayShowing" -> result.success(overlayView != null)
+				"openOverlaySettings" -> result.success(openOverlaySettings())
 				else -> result.notImplemented()
 			}
 		}
@@ -115,6 +116,25 @@ class MainActivity : FlutterFragmentActivity() {
 		} catch (_: Exception) {
 			overlayView = null
 			true
+		}
+	}
+
+	private fun openOverlaySettings(): Boolean {
+		return try {
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+				val intent = Intent(
+					Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+					Uri.parse("package:$packageName")
+				).apply {
+					addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+				}
+				startActivity(intent)
+				true
+			} else {
+				false
+			}
+		} catch (_: Exception) {
+			false
 		}
 	}
 }

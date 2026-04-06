@@ -13,6 +13,24 @@ class GuardianOverrideScreen extends StatefulWidget {
 
 class _GuardianOverrideScreenState extends State<GuardianOverrideScreen> {
   bool _isAuthenticating = false;
+  bool _overlayPermissionGranted = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshOverlayPermissionStatus();
+  }
+
+  Future<void> _refreshOverlayPermissionStatus() async {
+    final hasPermission = await CriticalOverlayService.instance.hasPermission();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _overlayPermissionGranted = hasPermission;
+    });
+  }
 
   Future<void> _authenticateWithBiometrics() async {
     if (_isAuthenticating) {
@@ -115,6 +133,11 @@ class _GuardianOverrideScreenState extends State<GuardianOverrideScreen> {
     }
   }
 
+  Future<void> _openOverlaySettings() async {
+    await CriticalOverlayService.instance.openOverlaySettings();
+    await _refreshOverlayPermissionStatus();
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -180,6 +203,15 @@ class _GuardianOverrideScreenState extends State<GuardianOverrideScreen> {
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                     ),
                   ),
+                  if (!_overlayPermissionGranted)
+                    TextButton(
+                      onPressed: _openOverlaySettings,
+                      style: TextButton.styleFrom(foregroundColor: Colors.white),
+                      child: const Text(
+                        'Enable Overlay Permission',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                    ),
                 ],
               ),
             ),

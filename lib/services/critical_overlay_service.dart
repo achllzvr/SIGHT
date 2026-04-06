@@ -10,6 +10,14 @@ class CriticalOverlayService {
 
   static const MethodChannel _channel = MethodChannel('com.example.sight_feasibility_lab/critical_overlay');
 
+  Future<bool> hasPermission() async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+
+    return Permission.systemAlertWindow.isGranted;
+  }
+
   Future<bool> ensurePermission() async {
     if (!Platform.isAndroid) {
       return false;
@@ -63,6 +71,19 @@ class CriticalOverlayService {
     try {
       final result = await _channel.invokeMethod<bool>('isCriticalOverlayShowing');
       return result ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> openOverlaySettings() async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+
+    try {
+      await _channel.invokeMethod<void>('openOverlaySettings');
+      return true;
     } catch (_) {
       return false;
     }
