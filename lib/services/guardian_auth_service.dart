@@ -49,7 +49,8 @@ class GuardianAuthService {
   }
 
   Future<void> saveFallbackPin(String pin) async {
-    if (pin.length != 4) {
+    final isValid = RegExp(r'^\d{4}$').hasMatch(pin);
+    if (!isValid) {
       throw ArgumentError('Guardian PIN must be exactly 4 digits.');
     }
 

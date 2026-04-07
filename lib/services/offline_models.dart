@@ -91,12 +91,14 @@ class CachedRules {
 
 class LocalMetricEvent {
   final int? id;
+  final int? childId;
   final String type;
   final double value;
   final DateTime timestamp;
 
   const LocalMetricEvent({
     this.id,
+    this.childId,
     required this.type,
     required this.value,
     required this.timestamp,
@@ -105,6 +107,7 @@ class LocalMetricEvent {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'childId': childId,
       'type': type,
       'value': value,
       'timestamp': timestamp.millisecondsSinceEpoch,
@@ -114,6 +117,7 @@ class LocalMetricEvent {
   factory LocalMetricEvent.fromMap(Map<String, dynamic> map) {
     return LocalMetricEvent(
       id: map['id'] as int?,
+      childId: (map['childId'] as num?)?.toInt(),
       type: map['type'] as String,
       value: (map['value'] as num).toDouble(),
       timestamp: DateTime.fromMillisecondsSinceEpoch(map['timestamp'] as int),
@@ -121,46 +125,99 @@ class LocalMetricEvent {
   }
 }
 
+enum SyncState { pending, synced, failed }
+
+extension SyncStateX on SyncState {
+  String get key => name;
+
+  static SyncState fromKey(String? value) {
+    switch (value) {
+      case 'synced':
+        return SyncState.synced;
+      case 'failed':
+        return SyncState.failed;
+      default:
+        return SyncState.pending;
+    }
+  }
+}
+
 class CuratedMetricBatch {
   final int? id;
+  final int? childId;
   final DateTime windowStart;
   final DateTime windowEnd;
   final double? averageBlinkRate;
   final double? averageDistanceCm;
+  final int strainEvents;
+  final int screenTimeMinutes;
   final int eventCount;
-  final bool synced;
+  final SyncState syncState;
+  final int retryCount;
+  final String? lastError;
+  final DateTime? lastSyncAttemptAt;
+  final String? remoteId;
 
   const CuratedMetricBatch({
     this.id,
+    this.childId,
     required this.windowStart,
     required this.windowEnd,
     required this.averageBlinkRate,
     required this.averageDistanceCm,
+    this.strainEvents = 0,
+    this.screenTimeMinutes = 0,
     required this.eventCount,
-    required this.synced,
+    this.syncState = SyncState.pending,
+    this.retryCount = 0,
+    this.lastError,
+    this.lastSyncAttemptAt,
+    this.remoteId,
   });
+
+  bool get synced => syncState == SyncState.synced;
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'childId': childId,
       'windowStart': windowStart.millisecondsSinceEpoch,
       'windowEnd': windowEnd.millisecondsSinceEpoch,
       'averageBlinkRate': averageBlinkRate,
       'averageDistanceCm': averageDistanceCm,
+      'strainEvents': strainEvents,
+      'screenTimeMinutes': screenTimeMinutes,
       'eventCount': eventCount,
       'synced': synced ? 1 : 0,
+      'syncState': syncState.key,
+      'retryCount': retryCount,
+      'lastError': lastError,
+      'lastSyncAttemptAt': lastSyncAttemptAt?.millisecondsSinceEpoch,
+      'remoteId': remoteId,
     };
   }
 
   factory CuratedMetricBatch.fromMap(Map<String, dynamic> map) {
+    final fallbackSynced = (map['synced'] as num?)?.toInt() == 1;
     return CuratedMetricBatch(
       id: map['id'] as int?,
+      childId: (map['childId'] as num?)?.toInt(),
       windowStart: DateTime.fromMillisecondsSinceEpoch(map['windowStart'] as int),
       windowEnd: DateTime.fromMillisecondsSinceEpoch(map['windowEnd'] as int),
       averageBlinkRate: (map['averageBlinkRate'] as num?)?.toDouble(),
       averageDistanceCm: (map['averageDistanceCm'] as num?)?.toDouble(),
+      strainEvents: (map['strainEvents'] as num?)?.toInt() ?? 0,
+      screenTimeMinutes: (map['screenTimeMinutes'] as num?)?.toInt() ?? 0,
       eventCount: (map['eventCount'] as num?)?.toInt() ?? 0,
-      synced: (map['synced'] as num?)?.toInt() == 1,
+      syncState: map['syncState'] == null
+          ? (fallbackSynced ? SyncState.synced : SyncState.pending)
+          : SyncStateX.fromKey(map['syncState'] as String?),
+      retryCount: (map['retryCount'] as num?)?.toInt() ?? 0,
+      lastError: map['lastError'] as String?,
+      lastSyncAttemptAt: map['lastSyncAttemptAt'] == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch((map['lastSyncAttemptAt'] as num).toInt()),
+      remoteId: map['remoteId'] as String?,
     );
   }
 }

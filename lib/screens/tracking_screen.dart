@@ -279,39 +279,106 @@ class _CameraStatusIndicatorState extends State<_CameraStatusIndicator> {
 class _OfflineRuleBanner extends StatelessWidget {
   const _OfflineRuleBanner();
 
+  String _friendlyMessage(String raw, AlertLevel alertLevel) {
+    if (raw.isEmpty) {
+      return alertLevel == AlertLevel.none
+          ? 'Monitoring is active.'
+          : alertLevel == AlertLevel.blinkBubble
+              ? 'A small blink correction is needed.'
+              : alertLevel == AlertLevel.redOverlay
+                  ? 'Please move the device a bit farther away.'
+                  : 'Critical threshold reached. Guardian intervention required.';
+    }
+
+    switch (raw) {
+      case 'face temporarily lost':
+        return 'Face not detected. Keep your face centered in view.';
+      case 'critical proximity or eye fatigue':
+        return 'Critical threshold reached. Guardian intervention required.';
+      case 'adjust distance or blink rhythm':
+        return 'Move farther from the screen and blink naturally.';
+      case 'minor correction needed':
+        return 'Small correction needed for healthy viewing.';
+      default:
+        return raw;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<AlertLevel>(
       valueListenable: RuleEngineService.instance.alertLevelNotifier,
       builder: (_, alertLevel, __) {
-        final message = RuleEngineService.instance.overlayMessageNotifier.value;
+        final message = _friendlyMessage(
+          RuleEngineService.instance.overlayMessageNotifier.value,
+          alertLevel,
+        );
         final isDark = Theme.of(context).brightness == Brightness.dark;
         final background = alertLevel == AlertLevel.none
-            ? (isDark ? Colors.white10 : Colors.black12)
+            ? (isDark ? const Color(0xFF2C2C2E) : Colors.white)
             : alertLevel == AlertLevel.blinkBubble
                 ? const Color(0xFFEFD9EE)
                 : alertLevel == AlertLevel.redOverlay
-                    ? Colors.red.withOpacity(0.14)
-                    : Colors.black.withOpacity(0.85);
+                    ? const Color(0xFFFFE3E1)
+                    : const Color(0xFFFFD6D2);
 
-        final label = alertLevel == AlertLevel.none ? 'Offline rules idle' : '${alertLevel.name} • ${message.isEmpty ? 'active' : message}';
+        final borderColor = isDark ? Colors.white70 : Colors.black87;
+        final title = alertLevel == AlertLevel.none
+            ? 'Monitoring'
+            : alertLevel == AlertLevel.blinkBubble
+                ? 'Blink Reminder'
+                : alertLevel == AlertLevel.redOverlay
+                    ? 'Distance Warning'
+                    : 'Rest Mode';
+        final icon = alertLevel == AlertLevel.none
+            ? Icons.radar
+            : alertLevel == AlertLevel.blinkBubble
+                ? Icons.remove_red_eye_outlined
+                : alertLevel == AlertLevel.redOverlay
+                    ? Icons.warning_amber_rounded
+                    : Icons.lock;
 
         return Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: borderColor, width: 0.9),
+            boxShadow: const [
+              BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
+              BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
+            ],
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: alertLevel == AlertLevel.screenLock ? Colors.white : null,
-            ),
-            textAlign: TextAlign.center,
+          child: Row(
+            children: [
+              Icon(icon, size: 19, color: Colors.black87),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      message,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.black87 : Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         );
       },

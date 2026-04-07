@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+import 'active_child_context_service.dart';
 import 'offline_database_service.dart';
 import 'offline_models.dart';
+import 'server_sync_service.dart';
 
 class LocalMetricsService {
   LocalMetricsService._private();
@@ -19,6 +22,7 @@ class LocalMetricsService {
     }
 
     await OfflineDatabaseService.instance.initialize();
+    await ActiveChildContextService.instance.initialize();
     _initialized = true;
 
     _batchTimer ??= Timer.periodic(const Duration(minutes: 30), (_) {
@@ -32,8 +36,9 @@ class LocalMetricsService {
 
   Future<void> logRawEvent(String type, double value, DateTime timestamp) async {
     await initialize();
+    final childId = await ActiveChildContextService.instance.getActiveChildId();
     await OfflineDatabaseService.instance.insertRawEvent(
-      LocalMetricEvent(type: type, value: value, timestamp: timestamp),
+      LocalMetricEvent(childId: childId, type: type, value: value, timestamp: timestamp),
     );
   }
 
@@ -46,6 +51,8 @@ class LocalMetricsService {
       return null;
     }
 
+    final childId = await ActiveChildContextService.instance.getActiveChildId();
+
     double? averageFor(String type) {
       final values = events.where((event) => event.type == type).map((event) => event.value).toList(growable: false);
       if (values.isEmpty) {
@@ -55,13 +62,22 @@ class LocalMetricsService {
       return total / values.length;
     }
 
+    final strainEvents = events.where((event) => event.type == 'strainEvent').length;
+    final measuredWindowMinutes = events.isEmpty
+        ? 0
+        : max(1, windowEnd.difference(events.first.timestamp).inMinutes);
+    final screenTimeMinutes = min(30, measuredWindowMinutes);
+
     final batch = CuratedMetricBatch(
+      childId: childId,
       windowStart: windowStart,
       windowEnd: windowEnd,
       averageBlinkRate: averageFor('blinkRate'),
       averageDistanceCm: averageFor('distanceCm'),
+      strainEvents: strainEvents,
+      screenTimeMinutes: screenTimeMinutes,
       eventCount: events.length,
-      synced: false,
+      syncState: SyncState.pending,
     );
 
     await OfflineDatabaseService.instance.insertCuratedBatch(batch);
@@ -87,7 +103,26 @@ class LocalMetricsService {
     }
 
     for (final batch in pending) {
-      await OfflineDatabaseService.instance.markBatchSynced(batch.id!);
+      if (batch.id == null) {
+        continue;
+      }
+
+      final nextRetryCount = batch.retryCount + 1;
+      await OfflineDatabaseService.instance.markBatchSyncAttempt(batch.id!, retryCount: nextRetryCount);
+
+      final uploadResult = await ServerSyncService.instance.uploadMetricBatch(batch);
+      if (uploadResult.success) {
+        await OfflineDatabaseService.instance.markBatchSynced(
+          batch.id!,
+          remoteId: uploadResult.data,
+        );
+      } else {
+        await OfflineDatabaseService.instance.markBatchSyncFailed(
+          batch.id!,
+          retryCount: nextRetryCount,
+          error: uploadResult.error ?? 'Unknown metric sync failure.',
+        );
+      }
     }
 
     return pending.length;

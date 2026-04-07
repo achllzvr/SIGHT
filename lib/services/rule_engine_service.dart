@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'critical_overlay_service.dart';
+import 'guardian_preferences_service.dart';
 import 'offline_database_service.dart';
 import 'offline_models.dart';
 import '../screens/guardian_override_screen.dart';
@@ -16,6 +16,7 @@ class RuleEngineService {
   CachedRules _rules = const CachedRules.defaults();
   bool _initialized = false;
   bool _criticalLockActive = false;
+  bool _enforcementActive = true;
 
   Future<void> initialize() async {
     if (_initialized) {
@@ -43,6 +44,11 @@ class RuleEngineService {
     required int blinkRatePerMin,
     required bool faceDetected,
   }) {
+    if (!_enforcementActive) {
+      triggerOverlay(AlertLevel.none, 'guardian enforcement paused');
+      return const RuleEvaluationResult(alertLevel: AlertLevel.none, reason: 'guardian enforcement paused');
+    }
+
     final rules = _rules;
     AlertLevel alertLevel = AlertLevel.none;
     String reason = 'tracking stable';
@@ -70,6 +76,23 @@ class RuleEngineService {
     overlayMessageNotifier.value = reason;
   }
 
+  Future<void> applyGuardianPreferences(GuardianPreferences preferences) async {
+    await initialize();
+    _enforcementActive = preferences.isActive;
+
+    final updatedRules = CachedRules(
+      safeDistanceCm: _rules.safeDistanceCm,
+      warningDistanceCm: preferences.distanceAlertThresholdCm,
+      criticalDistanceCm: preferences.criticalDistanceThresholdCm,
+      healthyBlinkRatePerMin: _rules.healthyBlinkRatePerMin,
+      blinkBubbleThresholdPerMin: _rules.blinkBubbleThresholdPerMin,
+      screenLockBlinkThresholdPerMin: _rules.screenLockBlinkThresholdPerMin,
+      sessionSecondsForXP: _rules.sessionSecondsForXP,
+    );
+
+    await saveCachedRules(updatedRules);
+  }
+
   Future<void> triggerCriticalLock(BuildContext context) async {
     if (_criticalLockActive) {
       return;
@@ -82,6 +105,9 @@ class RuleEngineService {
       }
 
       await CriticalOverlayService.instance.showCriticalOverlay();
+      if (!context.mounted) {
+        return;
+      }
 
       await Navigator.of(context, rootNavigator: true).push<void>(
         MaterialPageRoute<void>(

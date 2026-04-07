@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'active_child_context_service.dart';
 import 'offline_database_service.dart';
 import 'offline_models.dart';
 
@@ -110,7 +111,9 @@ class GamificationService {
     }
 
     sessionXpNotifier.value -= itemCost;
+    final childId = await ActiveChildContextService.instance.getActiveChildId();
     await OfflineDatabaseService.instance.addInventoryItem(
+      childId: childId,
       itemKey: itemKey,
       itemName: itemName,
       cost: itemCost,

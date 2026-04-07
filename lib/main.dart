@@ -7,13 +7,24 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'widgets/bottom_pill_nav.dart';
 
+import 'screens/auth/auth_options_screen.dart';
+import 'screens/add_children_screen.dart';
+import 'screens/child_dashboard_screen.dart';
+import 'screens/connect_with_doctor_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/tracking_screen.dart';
 import 'screens/tasks_screen.dart';
+import 'screens/guardian_setup_screen.dart';
+import 'screens/guardian_control_center_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'services/app_lifecycle_service.dart';
+import 'services/active_child_context_service.dart';
+import 'services/auth_session_service.dart';
 import 'services/background_notification_service.dart';
 import 'services/detection_service.dart';
 import 'services/gamification_service.dart';
+import 'services/guardian_preferences_service.dart';
+import 'services/guardian_setup_service.dart';
 import 'services/local_metrics_service.dart';
 import 'services/offline_models.dart';
 import 'services/rule_engine_service.dart';
@@ -51,6 +62,16 @@ class SightFeasibilityApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           title: 'SIGHT Lab',
           themeMode: currentMode,
+          routes: {
+            '/welcome': (_) => const WelcomeScreen(),
+            '/auth': (_) => const AuthOptionsScreen(),
+            '/child': (_) => const RootApp(),
+            '/guardian': (_) => const GuardianControlCenterScreen(),
+            '/guardian-setup': (_) => const GuardianSetupScreen(mandatory: true),
+            '/add-child': (_) => const AddChildrenScreen(),
+            '/child-dashboard': (_) => const ChildDashboardScreen(),
+            '/connect-doctor': (_) => const ConnectWithDoctorScreen(),
+          },
           
           // --- LIGHT THEME (Apple Style) ---
           theme: ThemeData(
@@ -102,8 +123,53 @@ class SightFeasibilityApp extends StatelessWidget {
             ),
           ),
 
-          home: const RootApp(),
+          home: const _SessionRouter(),
         );
+      },
+    );
+  }
+}
+
+class _SessionRouter extends StatefulWidget {
+  const _SessionRouter();
+
+  @override
+  State<_SessionRouter> createState() => _SessionRouterState();
+}
+
+class _SessionRouterState extends State<_SessionRouter> {
+  late final Future<Widget> _initialScreenFuture = _resolveInitialScreen();
+
+  Future<Widget> _resolveInitialScreen() async {
+    final session = await AuthSessionService.instance.loadUserSession();
+    if (session == null) {
+      return const WelcomeScreen();
+    }
+
+    if (session.role == AppUserRole.guardian) {
+      final hasPin = await GuardianSetupService.instance.hasGuardianPin();
+      return hasPin
+          ? const GuardianControlCenterScreen()
+          : const GuardianSetupScreen(mandatory: true);
+    }
+
+    await ActiveChildContextService.instance.setActiveChildId(session.childId);
+
+    return const RootApp();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Widget>(
+      future: _initialScreenFuture,
+      builder: (_, snapshot) {
+        if (!snapshot.hasData) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        return snapshot.data!;
       },
     );
   }
@@ -135,6 +201,8 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     unawaited(LocalMetricsService.instance.initialize());
     unawaited(RuleEngineService.instance.initialize());
     unawaited(GamificationService.instance.initialize());
+    unawaited(ActiveChildContextService.instance.initialize());
+    unawaited(_initializeGuardianPolicyState());
 
     Permission.notification.request();
 
@@ -186,6 +254,11 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _initializeGuardianPolicyState() async {
+    final preferences = await GuardianPreferencesService.instance.loadPreferences();
+    await RuleEngineService.instance.applyGuardianPreferences(preferences);
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     debugPrint('AppLifecycleState changed: $state');
@@ -225,6 +298,29 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
 class _OfflineAlertOverlay extends StatelessWidget {
   const _OfflineAlertOverlay();
 
+  String _friendlyMessage(String raw, AlertLevel alertLevel) {
+    if (raw.isEmpty) {
+      return alertLevel == AlertLevel.blinkBubble
+          ? 'Try a few natural blinks.'
+          : alertLevel == AlertLevel.redOverlay
+              ? 'Please move the device a bit farther away.'
+              : 'Time for a short rest to protect your eyes.';
+    }
+
+    switch (raw) {
+      case 'face temporarily lost':
+        return 'Face not detected. Hold the device steady and look at the screen.';
+      case 'critical proximity or eye fatigue':
+        return 'Critical eye-strain threshold reached. Guardian override is required.';
+      case 'adjust distance or blink rhythm':
+        return 'Move the screen farther and blink naturally.';
+      case 'minor correction needed':
+        return 'Small adjustment needed. Keep healthy blink rhythm.';
+      default:
+        return raw;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<AlertLevel>(
@@ -234,7 +330,11 @@ class _OfflineAlertOverlay extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        final message = RuleEngineService.instance.overlayMessageNotifier.value;
+        final message = _friendlyMessage(
+          RuleEngineService.instance.overlayMessageNotifier.value,
+          alertLevel,
+        );
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         if (alertLevel == AlertLevel.blinkBubble) {
           return Positioned(
@@ -243,16 +343,28 @@ class _OfflineAlertOverlay extends StatelessWidget {
             right: 16,
             child: IgnorePointer(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: const Color(0xFFEFD9EE).withOpacity(0.96),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.black87, width: 1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
+                    BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
+                  ],
                 ),
-                child: Text(
-                  message.isEmpty ? 'Blink bubble active' : message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                child: Row(
+                  children: [
+                    const Icon(Icons.remove_red_eye_outlined, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        message,
+                        textAlign: TextAlign.left,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -263,19 +375,58 @@ class _OfflineAlertOverlay extends StatelessWidget {
             ? Colors.red.withOpacity(0.4)
             : Colors.black.withOpacity(0.92);
 
+        final title = alertLevel == AlertLevel.redOverlay
+            ? 'Distance Warning'
+            : 'Rest Mode Active';
+
+        final icon = alertLevel == AlertLevel.redOverlay
+            ? Icons.warning_amber_rounded
+            : Icons.lock;
+
         return Positioned.fill(
           child: IgnorePointer(
             child: Container(
               color: overlayColor,
               alignment: Alignment.center,
               padding: const EdgeInsets.all(24),
-              child: Text(
-                message.isEmpty ? 'Tracking paused' : message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
+              child: Container(
+                width: double.infinity,
+                constraints: const BoxConstraints(maxWidth: 420),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFDFDFD),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.black87, width: 1),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(3, 3), blurRadius: 0),
+                    BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 34, color: Colors.black87),
+                    const SizedBox(height: 8),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

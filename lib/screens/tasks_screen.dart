@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/gamification_service.dart';
 import '../widgets/rounded_card.dart';
+import 'guardian_access_screen.dart';
 
 class TasksScreen extends StatefulWidget {
   const TasksScreen({Key? key}) : super(key: key);
@@ -117,14 +118,27 @@ class _TasksScreenState extends State<TasksScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text("Today's Tasks", style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEAF4E3),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: isDark ? Colors.white70 : Colors.black54, width: 0.8),
-                        ),
-                        child: Text('$doneCount/${_tasks.length} done', style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Row(
+                        children: [
+                          IconButton(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const GuardianAccessScreen()),
+                              );
+                            },
+                            icon: const Icon(Icons.shield_outlined),
+                            tooltip: 'Guardian Access',
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEAF4E3),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: isDark ? Colors.white70 : Colors.black54, width: 0.8),
+                            ),
+                            child: Text('$doneCount/${_tasks.length} done', style: const TextStyle(fontWeight: FontWeight.w600)),
+                          ),
+                        ],
                       )
                     ],
                   ),
