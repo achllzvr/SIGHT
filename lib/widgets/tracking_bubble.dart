@@ -32,6 +32,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
   @override
   void initState() {
     super.initState();
+    MetricsService.instance.ensureMinuteCounterActive();
     _minuteTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) {
         return;
@@ -95,8 +96,8 @@ class _TrackingBubbleState extends State<TrackingBubble> {
     final minuteProgress = ((_now.second + (_now.millisecond / 1000.0)) / 60.0).clamp(0.0, 1.0);
 
     return ValueListenableBuilder<int>(
-      valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
-      builder: (_, blinkCount, __) {
+      valueListenable: MetricsService.instance.currentMinuteBlinkCountNotifier,
+      builder: (_, minuteBlinkCount, __) {
         return ValueListenableBuilder<double>(
           valueListenable: MetricsService.instance.distanceCmNotifier,
           builder: (_, distanceCm, ___) {
@@ -189,7 +190,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                                         ),
                                         const SizedBox(height: 6),
                                         Text(
-                                          '$blinkCount',
+                                          '$minuteBlinkCount',
                                           style: const TextStyle(
                                             fontSize: 30,
                                             fontWeight: FontWeight.w900,
@@ -199,7 +200,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                                         ),
                                         const SizedBox(height: 3),
                                         const Text(
-                                          'Blinks',
+                                          'This Min',
                                           style: TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.w700,
@@ -241,7 +242,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          '$blinkCount',
+                                          '$minuteBlinkCount',
                                           style: const TextStyle(
                                             fontSize: 26,
                                             fontWeight: FontWeight.w900,
@@ -251,7 +252,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                                         ),
                                         const SizedBox(height: 2),
                                         const Text(
-                                          'Blinks',
+                                          'This Min',
                                           style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w700,

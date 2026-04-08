@@ -157,8 +157,102 @@ class BackgroundForegroundService {
     }
   }
 
+  Future<bool> canDrawOverlays() async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+
+    try {
+      final result = await _backgroundChannel.invokeMethod<bool>('canDrawOverlays');
+      return result ?? false;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[BackgroundForegroundService] Error checking overlay permission: $e');
+      }
+      return false;
+    }
+  }
+
+  Future<bool> openOverlaySettings() async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+
+    try {
+      final result = await _backgroundChannel.invokeMethod<bool>('openOverlaySettings');
+      return result ?? false;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[BackgroundForegroundService] Error opening overlay settings: $e');
+      }
+      return false;
+    }
+  }
+
+  Future<bool> showFloatingBubble() async {
+    if (!Platform.isAndroid || !_isRunning) {
+      return false;
+    }
+
+    try {
+      final result = await _backgroundChannel.invokeMethod<bool>('showFloatingBubble');
+      return result ?? false;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[BackgroundForegroundService] Error showing floating bubble: $e');
+      }
+      return false;
+    }
+  }
+
+  Future<bool> hideFloatingBubble() async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+
+    try {
+      final result = await _backgroundChannel.invokeMethod<bool>('hideFloatingBubble');
+      return result ?? false;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[BackgroundForegroundService] Error hiding floating bubble: $e');
+      }
+      return false;
+    }
+  }
+
+  Future<bool> updateFloatingBubble({
+    required int blinkCountThisMinute,
+    required double distanceCm,
+    required bool isTracking,
+  }) async {
+    if (!Platform.isAndroid || !_isRunning) {
+      return false;
+    }
+
+    final distanceLabel = distanceCm > 0 ? '${distanceCm.toStringAsFixed(1)}cm' : '--';
+    final statusLabel = isTracking ? 'Live' : 'Recovering';
+
+    try {
+      final result = await _backgroundChannel.invokeMethod<bool>(
+        'updateFloatingBubble',
+        {
+          'title': '$blinkCountThisMinute blinks',
+          'subtitle': '$distanceLabel • $statusLabel',
+        },
+      );
+      return result ?? false;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[BackgroundForegroundService] Error updating floating bubble: $e');
+      }
+      return false;
+    }
+  }
+
   /// Cleanup and shutdown
   Future<void> dispose() async {
+    await hideFloatingBubble();
     await stopBackgroundMonitoring();
   }
 }

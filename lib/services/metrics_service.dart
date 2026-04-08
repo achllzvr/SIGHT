@@ -10,12 +10,48 @@ class MetricsService {
   static final MetricsService instance = MetricsService._privateConstructor();
 
   final List<int> _blinkTimestamps = [];
+  Timer? _minuteResetTimer;
+  int _currentMinuteStamp = _minuteStamp(DateTime.now());
 
   final ValueNotifier<int> blinkCountNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> blinkRatePerMinNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<int> currentMinuteBlinkCountNotifier = ValueNotifier<int>(0);
   final ValueNotifier<double> distanceCmNotifier = ValueNotifier<double>(0.0);
   final ValueNotifier<bool> faceDetectedNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<bool> calibratedNotifier = ValueNotifier<bool>(false);
+
+  static int _minuteStamp(DateTime value) => value.year * 100000000 + value.month * 1000000 + value.day * 10000 + value.hour * 100 + value.minute;
+
+  void _scheduleMinuteReset() {
+    _minuteResetTimer?.cancel();
+    final now = DateTime.now();
+    final nextMinute = DateTime(now.year, now.month, now.day, now.hour, now.minute + 1);
+    final delay = nextMinute.difference(now);
+    _minuteResetTimer = Timer(delay, () {
+      _rollMinuteWindow(DateTime.now());
+      _scheduleMinuteReset();
+    });
+  }
+
+  void _rollMinuteWindow(DateTime now) {
+    final stamp = _minuteStamp(now);
+    if (stamp == _currentMinuteStamp) {
+      return;
+    }
+
+    _currentMinuteStamp = stamp;
+    currentMinuteBlinkCountNotifier.value = 0;
+  }
+
+  void _ensureMinuteCounterInitialized() {
+    if (_minuteResetTimer != null) {
+      return;
+    }
+
+    _currentMinuteStamp = _minuteStamp(DateTime.now());
+    currentMinuteBlinkCountNotifier.value = 0;
+    _scheduleMinuteReset();
+  }
 
   void _refreshOfflineEngines() {
     final blinkRate = blinkRatePerMinNotifier.value;
@@ -38,6 +74,9 @@ class MetricsService {
   }
 
   void registerBlink() {
+    _ensureMinuteCounterInitialized();
+    _rollMinuteWindow(DateTime.now());
+
     final now = DateTime.now().millisecondsSinceEpoch;
     _blinkTimestamps.add(now);
     final cutoff = now - 60000;
@@ -45,6 +84,7 @@ class MetricsService {
       _blinkTimestamps.removeAt(0);
     }
     blinkCountNotifier.value = blinkCountNotifier.value + 1;
+    currentMinuteBlinkCountNotifier.value = currentMinuteBlinkCountNotifier.value + 1;
     blinkRatePerMinNotifier.value = _blinkTimestamps.length;
     _refreshOfflineEngines();
     unawaited(
@@ -60,6 +100,9 @@ class MetricsService {
     _blinkTimestamps.clear();
     blinkCountNotifier.value = 0;
     blinkRatePerMinNotifier.value = 0;
+    currentMinuteBlinkCountNotifier.value = 0;
+    _currentMinuteStamp = _minuteStamp(DateTime.now());
+    _ensureMinuteCounterInitialized();
   }
 
   void setDistance(double cm) {
@@ -76,5 +119,10 @@ class MetricsService {
   void setCalibrated(bool v) {
     calibratedNotifier.value = v;
     _refreshOfflineEngines();
+  }
+
+  void ensureMinuteCounterActive() {
+    _ensureMinuteCounterInitialized();
+    _rollMinuteWindow(DateTime.now());
   }
 }

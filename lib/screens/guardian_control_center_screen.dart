@@ -298,7 +298,7 @@ class _GuardianControlCenterScreenState extends State<GuardianControlCenterScree
     final childIdController = TextEditingController();
 
     try {
-      await showDialog<void>(
+      final createdLoginCode = await showDialog<String?>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) {
@@ -388,16 +388,8 @@ class _GuardianControlCenterScreenState extends State<GuardianControlCenterScree
                               return;
                             }
 
-                            Navigator.of(dialogContext).pop();
-                            final updated = await AuthAccountService.instance.listChildrenForGuardian(guardianEmail);
-                            if (!mounted) {
-                              return;
-                            }
-
-                            setState(() {
-                              _childAccounts = updated;
-                              _statusMessage = 'Child account created. Login code: ${result.account?.loginCode ?? '-'}';
-                            });
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            Navigator.of(dialogContext).pop(result.account?.loginCode);
                           },
                     child: inProgress
                         ? const SizedBox(
@@ -413,6 +405,20 @@ class _GuardianControlCenterScreenState extends State<GuardianControlCenterScree
           );
         },
       );
+
+      if (!mounted || createdLoginCode == null) {
+        return;
+      }
+
+      final updated = await AuthAccountService.instance.listChildrenForGuardian(guardianEmail);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _childAccounts = updated;
+        _statusMessage = 'Child account created. Login code: ${createdLoginCode.isEmpty ? '-' : createdLoginCode}';
+      });
     } finally {
       nameController.dispose();
       passwordController.dispose();
