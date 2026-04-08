@@ -6,6 +6,7 @@ import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'widgets/bottom_pill_nav.dart';
+import 'widgets/tracking_bubble.dart';
 
 import 'screens/auth/auth_options_screen.dart';
 import 'screens/add_children_screen.dart';
@@ -289,6 +290,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
             ),
           ),
         ),
+        const TrackingBubble(),
         const _OfflineAlertOverlay(),
       ],
     );

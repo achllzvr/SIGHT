@@ -181,6 +181,30 @@ class DetectionService {
     }
   }
 
+  /// Ensures continuous monitoring with background-aware recovery.
+  /// Designed for use in background tasks via workmanager.
+  /// Checks camera health and restarts if necessary.
+  Future<void> ensureContinuousMonitoring({CameraLensDirection preferred = CameraLensDirection.front}) async {
+    try {
+      // First, ensure basic monitoring is set up
+      await ensureMonitoringWithRetry(preferred: preferred, attempts: 3);
+
+      // Keep wakelock active for background monitoring
+      await enableWakelockForMonitoring();
+
+      if (kDebugMode) {
+        print('[DetectionService] Continuous monitoring ensured: '
+            'streaming=${controller?.value.isStreamingImages}, '
+            'fresh_frames=$hasFreshFrames, '
+            'wakelock=$_wakelockActive');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[DetectionService] Error in ensureContinuousMonitoring: $e');
+      }
+    }
+  }
+
   Future<void> processCameraFrame(CameraImage image) => _processCameraImage(image);
 
   double calculateDistance({required double faceWidthPixels, required double calibrationData}) {

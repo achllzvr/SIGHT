@@ -19,6 +19,7 @@ class _GuardianAccessScreenState extends State<GuardianAccessScreen> {
   String? _error;
 
   void _openControlCenter() {
+    FocusManager.instance.primaryFocus?.unfocus();
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const GuardianControlCenterScreen()),
     );
@@ -35,6 +36,7 @@ class _GuardianAccessScreenState extends State<GuardianAccessScreen> {
     }
 
     if (!hasPin) {
+      FocusManager.instance.primaryFocus?.unfocus();
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const GuardianSetupScreen()),
       );
@@ -67,6 +69,7 @@ class _GuardianAccessScreenState extends State<GuardianAccessScreen> {
   }
 
   Future<void> _showPinDialog() async {
+    FocusManager.instance.primaryFocus?.unfocus();
     final controller = TextEditingController();
     try {
       final result = await showDialog<bool>(

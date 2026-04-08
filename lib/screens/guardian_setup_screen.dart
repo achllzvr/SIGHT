@@ -54,6 +54,8 @@ class _GuardianSetupScreenState extends State<GuardianSetupScreen> {
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const GuardianControlCenterScreen()),
     );

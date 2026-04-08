@@ -19,6 +19,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
 	private val overlayChannelName = "com.example.sight_feasibility_lab/critical_overlay"
+	private val backgroundChannelName = "com.example.sight_feasibility_lab/background_service"
 	private var overlayView: View? = null
 	private var windowManager: WindowManager? = null
 
@@ -33,6 +34,85 @@ class MainActivity : FlutterFragmentActivity() {
 				"openOverlaySettings" -> result.success(openOverlaySettings())
 				else -> result.notImplemented()
 			}
+		}
+
+		MethodChannel(flutterEngine.dartExecutor.binaryMessenger, backgroundChannelName).setMethodCallHandler { call, result ->
+			when (call.method) {
+				"startForegroundService" -> result.success(startForegroundService())
+				"stopForegroundService" -> result.success(stopForegroundService())
+				"updateNotification" -> {
+					val title = call.argument<String>("title") ?: "SIGHT Monitoring"
+					val message = call.argument<String>("message") ?: "Monitoring active"
+					result.success(updateForegroundNotification(title, message))
+				}
+				"hasForegroundServicePermission" -> result.success(hasForegroundServicePermission())
+				"requestForegroundServicePermission" -> result.success(true) // Handled via activity permissions
+				"configureBackgroundModes" -> result.success(true) // iOS only, return success
+				else -> result.notImplemented()
+			}
+		}
+	}
+
+	private fun startForegroundService(): Boolean {
+		return try {
+			val intent = Intent(this, MonitoringForegroundService::class.java).apply {
+				action = MonitoringForegroundService.ACTION_START
+				putExtra("title", "SIGHT Eye Monitoring")
+				putExtra("message", "Monitoring active")
+			}
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+				startForegroundService(intent)
+			} else {
+				@Suppress("DEPRECATION")
+				startService(intent)
+			}
+			true
+		} catch (e: Exception) {
+			android.util.Log.e("MainActivity", "Failed to start foreground service: ${e.message}")
+			false
+		}
+	}
+
+	private fun stopForegroundService(): Boolean {
+		return try {
+			val intent = Intent(this, MonitoringForegroundService::class.java).apply {
+				action = MonitoringForegroundService.ACTION_STOP
+			}
+			stopService(intent)
+			true
+		} catch (e: Exception) {
+			android.util.Log.e("MainActivity", "Failed to stop foreground service: ${e.message}")
+			false
+		}
+	}
+
+	private fun updateForegroundNotification(title: String, message: String): Boolean {
+		return try {
+			val intent = Intent(this, MonitoringForegroundService::class.java).apply {
+				action = MonitoringForegroundService.ACTION_UPDATE
+				putExtra("title", title)
+				putExtra("message", message)
+			}
+			if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+				startForegroundService(intent)
+			} else {
+				@Suppress("DEPRECATION")
+				startService(intent)
+			}
+			true
+		} catch (e: Exception) {
+			android.util.Log.e("MainActivity", "Failed to update foreground notification: ${e.message}")
+			false
+		}
+	}
+
+	private fun hasForegroundServicePermission(): Boolean {
+		return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+			// Android 12+ requires FOREGROUND_SERVICE permission
+			val permission = "android.permission.FOREGROUND_SERVICE"
+			checkSelfPermission(permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
+		} else {
+			true
 		}
 	}
 

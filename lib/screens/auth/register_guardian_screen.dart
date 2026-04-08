@@ -73,6 +73,8 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
       return;
     }
 
+    FocusManager.instance.primaryFocus?.unfocus();
+
     Navigator.of(context).pushNamedAndRemoveUntil(
       hasPin ? '/guardian' : '/guardian-setup',
       (route) => false,

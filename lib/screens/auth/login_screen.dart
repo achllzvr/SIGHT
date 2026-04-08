@@ -65,6 +65,8 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      FocusManager.instance.primaryFocus?.unfocus();
+
       Navigator.of(context).pushNamedAndRemoveUntil(
         hasPin ? '/guardian' : '/guardian-setup',
         (route) => false,
@@ -97,6 +99,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) {
       return;
     }
+
+    FocusManager.instance.primaryFocus?.unfocus();
 
     Navigator.of(context).pushNamedAndRemoveUntil('/child', (route) => false);
   }
