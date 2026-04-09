@@ -22,20 +22,19 @@ class _TrackingBubbleState extends State<TrackingBubble> {
   Timer? _minuteTicker;
   DateTime _now = DateTime.now();
 
-  static const double _collapsedSize = 68.0;
-  static const double _expandedSize = 154.0;
   static const double _margin = 12.0;
 
   void _toggleExpanded() {
+    // On Media Hub screen (index 1), clicking bubble toggles fullscreen instead of expanding
+    if (widget.currentPageIndex == 1) {
+      mediaHubBubbleTapNotifier.value = !mediaHubBubbleTapNotifier.value;
+      return;
+    }
+    
+    // On other screens, toggle expanded state normally
     setState(() {
       _expanded = !_expanded;
     });
-    
-    // Notify MediaHubScreen if we're on the media hub (index 1)
-    if (widget.currentPageIndex == 1) {
-      // Pulse the notifier by toggling it
-      mediaHubBubbleTapNotifier.value = !mediaHubBubbleTapNotifier.value;
-    }
   }
 
   @override
@@ -54,10 +53,17 @@ class _TrackingBubbleState extends State<TrackingBubble> {
   }
 
   void _snapToNearestEdge(Size screenSize) {
-    final bubbleSize = _expanded ? _expandedSize : _collapsedSize;
+    // Calculate responsive sizes
+    final responsiveCollapsedSize = (screenSize.width * 0.15).clamp(60.0, 80.0);
+    final responsiveExpandedSize = (screenSize.width * 0.35).clamp(140.0, 180.0);
+    final bubbleSize = _expanded ? responsiveExpandedSize : responsiveCollapsedSize;
+    
     final leftSnap = _margin;
     final rightSnap = screenSize.width - bubbleSize - _margin;
-    final topSnap = _offset.dy.clamp(MediaQuery.of(context).padding.top + _margin, screenSize.height - bubbleSize - _margin);
+    final topSnap = _offset.dy.clamp(
+      MediaQuery.of(context).padding.top + _margin,
+      screenSize.height - bubbleSize - _margin,
+    );
     final snappedLeft = (_offset.dx + bubbleSize / 2) < (screenSize.width / 2) ? leftSnap : rightSnap;
 
     setState(() {
@@ -104,6 +110,10 @@ class _TrackingBubbleState extends State<TrackingBubble> {
     final screenSize = MediaQuery.of(context).size;
     final minuteProgress = ((_now.second + (_now.millisecond / 1000.0)) / 60.0).clamp(0.0, 1.0);
 
+    // Make bubble sizes responsive to screen width
+    final responsiveCollapsedSize = (screenSize.width * 0.15).clamp(60.0, 80.0);
+    final responsiveExpandedSize = (screenSize.width * 0.35).clamp(140.0, 180.0);
+
     return ValueListenableBuilder<int>(
       valueListenable: MetricsService.instance.currentMinuteBlinkCountNotifier,
       builder: (_, minuteBlinkCount, __) {
@@ -115,6 +125,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
               builder: (_, alertLevel, ____) {
                 final bubbleColor = _bubbleColor(distanceCm: distanceCm, alertLevel: alertLevel);
                 final label = _statusLabel(distanceCm, alertLevel);
+                final bubbleSize = _expanded ? responsiveExpandedSize : responsiveCollapsedSize;
 
                 return Positioned(
                   left: _offset.dx,
@@ -126,11 +137,11 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                         _offset = Offset(
                           (_offset.dx + details.delta.dx).clamp(
                             _margin,
-                            screenSize.width - (_expanded ? _expandedSize : _collapsedSize) - _margin,
+                            screenSize.width - bubbleSize - _margin,
                           ),
                           (_offset.dy + details.delta.dy).clamp(
                             MediaQuery.of(context).padding.top + _margin,
-                            screenSize.height - (_expanded ? _expandedSize : _collapsedSize) - _margin,
+                            screenSize.height - bubbleSize - _margin,
                           ),
                         );
                       });
@@ -139,8 +150,8 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 180),
                       curve: Curves.easeOut,
-                      width: _expanded ? _expandedSize : _collapsedSize,
-                      height: _expanded ? _expandedSize : _collapsedSize,
+                      width: bubbleSize,
+                      height: bubbleSize,
                       decoration: BoxDecoration(
                         color: bubbleColor,
                         shape: BoxShape.circle,
@@ -158,8 +169,8 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                           alignment: Alignment.center,
                           children: [
                             SizedBox(
-                              width: _expanded ? _expandedSize : _collapsedSize,
-                              height: _expanded ? _expandedSize : _collapsedSize,
+                              width: bubbleSize,
+                              height: bubbleSize,
                               child: CircularProgressIndicator(
                                 value: minuteProgress,
                                 strokeWidth: _expanded ? 6.0 : 4.5,
@@ -174,105 +185,112 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 150),
                               child: _expanded
-                                  ? Column(
+                                  ? SingleChildScrollView(
                                       key: const ValueKey('bubble-expanded'),
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        SizedBox(
-                                          height: 64,
-                                          width: 120,
-                                          child: Stack(
-                                            clipBehavior: Clip.none,
-                                            alignment: Alignment.topCenter,
-                                            children: [
-                                              Positioned(
-                                                top: -6,
-                                                child: Image.asset(
-                                                  'assets/mascot/mascot_head_v1.png',
-                                                  width: 118,
-                                                  fit: BoxFit.contain,
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          SizedBox(
+                                            height: bubbleSize * 0.35,
+                                            width: bubbleSize * 0.75,
+                                            child: Stack(
+                                              clipBehavior: Clip.antiAlias,
+                                              alignment: Alignment.topCenter,
+                                              children: [
+                                                Positioned(
+                                                  top: -bubbleSize * 0.08,
+                                                  child: Image.asset(
+                                                    'assets/mascot/mascot_head_v1.png',
+                                                    width: bubbleSize * 0.73,
+                                                    fit: BoxFit.contain,
+                                                  ),
                                                 ),
+                                              ],
+                                            ),
+                                          ),
+                                          SizedBox(height: bubbleSize * 0.08),
+                                          Text(
+                                            '$minuteBlinkCount',
+                                            style: TextStyle(
+                                              fontSize: bubbleSize * 0.2,
+                                              fontWeight: FontWeight.w900,
+                                              color: Colors.black87,
+                                              height: 1,
+                                            ),
+                                          ),
+                                          SizedBox(height: bubbleSize * 0.04),
+                                          Text(
+                                            'This Min',
+                                            style: TextStyle(
+                                              fontSize: bubbleSize * 0.12,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.black87,
+                                            ),
+                                          ),
+                                          SizedBox(height: bubbleSize * 0.05),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                            child: Text(
+                                              '${distanceCm > 0 ? distanceCm.toStringAsFixed(1) : '--'} cm • $label',
+                                              style: TextStyle(
+                                                fontSize: bubbleSize * 0.065,
+                                                fontWeight: FontWeight.w800,
+                                                color: Colors.black87,
                                               ),
-                                            ],
+                                              textAlign: TextAlign.center,
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          '$minuteBlinkCount',
-                                          style: const TextStyle(
-                                            fontSize: 30,
-                                            fontWeight: FontWeight.w900,
-                                            color: Colors.black87,
-                                            height: 1,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 3),
-                                        const Text(
-                                          'This Min',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.black87,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '${distanceCm > 0 ? distanceCm.toStringAsFixed(1) : '--'} cm • $label',
-                                          style: const TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w800,
-                                            color: Colors.black87,
-                                          ),
-                                        ),
-                                      ],
+                                          SizedBox(height: bubbleSize * 0.04),
+                                        ],
+                                      ),
                                     )
                                   : Column(
                                       key: const ValueKey('bubble-collapsed'),
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
                                         SizedBox(
-                                          height: 36,
-                                          width: 58,
+                                          height: bubbleSize * 0.5,
+                                          width: bubbleSize * 0.8,
                                           child: Stack(
-                                            clipBehavior: Clip.none,
+                                            clipBehavior: Clip.antiAlias,
                                             alignment: Alignment.topCenter,
                                             children: [
                                               Positioned(
-                                                top: -18,
+                                                top: -bubbleSize * 0.25,
                                                 child: Image.asset(
                                                   'assets/mascot/mascot_head_v1.png',
-                                                  width: 62,
+                                                  width: bubbleSize * 0.9,
                                                   fit: BoxFit.contain,
                                                 ),
                                               ),
                                             ],
                                           ),
                                         ),
-                                        const SizedBox(height: 2),
+                                        SizedBox(height: bubbleSize * 0.03),
                                         Text(
                                           '$minuteBlinkCount',
-                                          style: const TextStyle(
-                                            fontSize: 26,
+                                          style: TextStyle(
+                                            fontSize: bubbleSize * 0.38,
                                             fontWeight: FontWeight.w900,
                                             color: Colors.black87,
                                             height: 1,
                                           ),
                                         ),
-                                        const SizedBox(height: 2),
-                                        const Text(
+                                        SizedBox(height: bubbleSize * 0.02),
+                                        Text(
                                           'This Min',
                                           style: TextStyle(
-                                            fontSize: 11,
+                                            fontSize: bubbleSize * 0.16,
                                             fontWeight: FontWeight.w700,
                                             color: Colors.black87,
                                           ),
                                         ),
-                                        const SizedBox(height: 3),
+                                        SizedBox(height: bubbleSize * 0.03),
                                         Text(
                                           label,
-                                          style: const TextStyle(
-                                            fontSize: 10,
+                                          style: TextStyle(
+                                            fontSize: bubbleSize * 0.15,
                                             fontWeight: FontWeight.w800,
                                             color: Colors.black87,
                                           ),
@@ -281,11 +299,11 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                                     ),
                             ),
                             Positioned(
-                              right: 6,
-                              bottom: 6,
+                              right: bubbleSize * 0.08,
+                              bottom: bubbleSize * 0.08,
                               child: Container(
-                                width: 10,
-                                height: 10,
+                                width: bubbleSize * 0.15,
+                                height: bubbleSize * 0.15,
                                 decoration: BoxDecoration(
                                   color: alertLevel == AlertLevel.screenLock || alertLevel == AlertLevel.redOverlay
                                       ? const Color(0xFFD74E4E)
