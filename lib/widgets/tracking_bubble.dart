@@ -2,12 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../main.dart';
 import '../services/metrics_service.dart';
 import '../services/offline_models.dart';
 import '../services/rule_engine_service.dart';
 
 class TrackingBubble extends StatefulWidget {
-  const TrackingBubble({super.key});
+  final int currentPageIndex;
+  
+  const TrackingBubble({super.key, this.currentPageIndex = 0});
 
   @override
   State<TrackingBubble> createState() => _TrackingBubbleState();
@@ -27,6 +30,12 @@ class _TrackingBubbleState extends State<TrackingBubble> {
     setState(() {
       _expanded = !_expanded;
     });
+    
+    // Notify MediaHubScreen if we're on the media hub (index 1)
+    if (widget.currentPageIndex == 1) {
+      // Pulse the notifier by toggling it
+      mediaHubBubbleTapNotifier.value = !mediaHubBubbleTapNotifier.value;
+    }
   }
 
   @override

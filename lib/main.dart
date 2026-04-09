@@ -37,6 +37,12 @@ List<CameraDescription> cameras = [];
 // Theme Notifier for Global Dark/Light Mode
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 
+// Media Hub Fullscreen Mode Notifier
+final ValueNotifier<bool> mediaHubFullscreenNotifier = ValueNotifier(false);
+
+// Media Hub Bubble Tap Notifier - used to communicate bubble taps to MediaHubScreen
+final ValueNotifier<bool> mediaHubBubbleTapNotifier = ValueNotifier(false);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -285,15 +291,23 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
               children: _pages,
             ),
           ),
-          bottomNavigationBar: SizedBox(
-            height: 88,
-            child: BottomPillNav(
-              currentIndex: _index,
-              onTap: (i) => setState(() => _index = i),
-            ),
+          bottomNavigationBar: ValueListenableBuilder<bool>(
+            valueListenable: mediaHubFullscreenNotifier,
+            builder: (_, isFullscreen, __) {
+              if (isFullscreen) {
+                return const SizedBox.shrink();
+              }
+              return SizedBox(
+                height: 88,
+                child: BottomPillNav(
+                  currentIndex: _index,
+                  onTap: (i) => setState(() => _index = i),
+                ),
+              );
+            },
           ),
         ),
-        const TrackingBubble(),
+        TrackingBubble(currentPageIndex: _index),
         const _OfflineAlertOverlay(),
       ],
     );

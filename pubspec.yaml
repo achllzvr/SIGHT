@@ -51,3 +51,4 @@ flutter:
     - assets/sight_model_ios.tflite
     - assets/labels.txt
     - assets/mascot/
+    - assets/media_hub/
