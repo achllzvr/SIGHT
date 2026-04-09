@@ -86,6 +86,7 @@ class MetricsService {
     blinkCountNotifier.value = blinkCountNotifier.value + 1;
     currentMinuteBlinkCountNotifier.value = currentMinuteBlinkCountNotifier.value + 1;
     blinkRatePerMinNotifier.value = _blinkTimestamps.length;
+    unawaited(GamificationService.instance.recordHealthyBlinkLogged());
     _refreshOfflineEngines();
     unawaited(
       LocalMetricsService.instance.logRawEvent(

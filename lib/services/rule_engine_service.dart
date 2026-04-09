@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../blink_test_screen.dart';
 import 'critical_overlay_service.dart';
 import 'guardian_preferences_service.dart';
 import 'offline_database_service.dart';
 import 'offline_models.dart';
-import '../screens/guardian_override_screen.dart';
 
 class RuleEngineService {
   RuleEngineService._private();
@@ -52,13 +52,17 @@ class RuleEngineService {
     final rules = _rules;
     AlertLevel alertLevel = AlertLevel.none;
     String reason = 'tracking stable';
+    final blinkSuppressed = faceDetected && blinkRatePerMin < 10;
 
     if (!faceDetected) {
       alertLevel = AlertLevel.blinkBubble;
       reason = 'face temporarily lost';
-    } else if (distanceCm <= rules.criticalDistanceCm || blinkRatePerMin <= rules.screenLockBlinkThresholdPerMin) {
+    } else if (blinkSuppressed) {
       alertLevel = AlertLevel.screenLock;
-      reason = 'critical proximity or eye fatigue';
+      reason = 'blink suppression detected';
+    } else if (distanceCm <= rules.criticalDistanceCm) {
+      alertLevel = AlertLevel.redOverlay;
+      reason = 'critical proximity detected';
     } else if (distanceCm < rules.warningDistanceCm || blinkRatePerMin < rules.healthyBlinkRatePerMin) {
       alertLevel = AlertLevel.redOverlay;
       reason = 'adjust distance or blink rhythm';
@@ -111,8 +115,11 @@ class RuleEngineService {
 
       await Navigator.of(context, rootNavigator: true).push<void>(
         MaterialPageRoute<void>(
-          builder: (_) => const GuardianOverrideScreen(),
-          fullscreenDialog: true,
+          builder: (_) => const BlinkTestScreen(
+            enforceCompletion: true,
+            requiredIntentionalBlinks: 15,
+          ),
+          fullscreenDialog: false,
         ),
       );
     } finally {

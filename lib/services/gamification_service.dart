@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'active_child_context_service.dart';
@@ -12,8 +14,21 @@ class GamificationService {
   final ValueNotifier<int> dailyStreakNotifier = ValueNotifier<int>(0);
   final ValueNotifier<PetMood> petMoodNotifier = ValueNotifier<PetMood>(PetMood.happy);
 
-  DateTime? _lastXpAwardAt;
   bool _initialized = false;
+  bool _isFlushingMinuteBuffer = false;
+
+  Timer? _minuteBufferTimer;
+  final List<double> _distanceSamples = <double>[];
+  final List<int> _blinkRateSamples = <int>[];
+  int _pendingHealthyBlinkXp = 0;
+  int _pendingBreakXp = 0;
+
+  static const int _safeDistanceAndBlinkXp = 1;
+  static const int _harmfulDistanceXp = -1;
+  static const int _healthyBlinkEventXp = 5;
+  static const int _blinkSuppressionXp = -5;
+  static const int _breakCompletedXp = 10;
+  static const int _minuteWindowSeconds = 60;
 
   Future<void> initialize() async {
     if (_initialized) {
@@ -25,7 +40,15 @@ class GamificationService {
     sessionXpNotifier.value = state.sessionXp;
     dailyStreakNotifier.value = state.dailyStreak;
     petMoodNotifier.value = state.petMood;
+    _startMinuteBufferTimer();
     _initialized = true;
+  }
+
+  void _startMinuteBufferTimer() {
+    _minuteBufferTimer?.cancel();
+    _minuteBufferTimer = Timer.periodic(const Duration(seconds: _minuteWindowSeconds), (_) {
+      unawaited(_flushMinuteBuffer());
+    });
   }
 
   Future<void> _persistState() async {
@@ -39,31 +62,21 @@ class GamificationService {
     );
   }
 
-  int calculateSessionXP({
-    required double distanceCm,
-    required int blinkRatePerMin,
-    required bool faceDetected,
-    Duration activeDuration = Duration.zero,
-  }) {
+  int _calculateMinuteXp({required double averageDistanceCm, required double averageBlinkRatePerMin}) {
     int xp = 0;
 
-    if (faceDetected) {
-      xp += 3;
+    if (averageDistanceCm > 30.0 && averageBlinkRatePerMin > 10.0) {
+      xp += _safeDistanceAndBlinkXp;
     }
 
-    if (distanceCm >= 30.0) {
-      xp += 5;
-    } else if (distanceCm >= 25.0) {
-      xp += 3;
+    if (averageDistanceCm >= 10.0 && averageDistanceCm <= 30.0) {
+      xp += _harmfulDistanceXp;
     }
 
-    if (blinkRatePerMin >= 10) {
-      xp += 4;
-    } else if (blinkRatePerMin >= 6) {
-      xp += 2;
+    if (averageBlinkRatePerMin < 10.0) {
+      xp += _blinkSuppressionXp;
     }
 
-    xp += activeDuration.inMinutes;
     return xp;
   }
 
@@ -84,20 +97,60 @@ class GamificationService {
   }) async {
     await initialize();
 
-    final now = DateTime.now();
-    if (_lastXpAwardAt != null && now.difference(_lastXpAwardAt!) < const Duration(seconds: 30)) {
+    if (!faceDetected) {
       return;
     }
 
-    _lastXpAwardAt = now;
-    final xp = calculateSessionXP(
-      distanceCm: distanceCm,
-      blinkRatePerMin: blinkRatePerMin,
-      faceDetected: faceDetected,
-      activeDuration: const Duration(minutes: 1),
-    );
-    sessionXpNotifier.value += xp;
-    await updatePetState(complianceScore: xp);
+    if (distanceCm > 0) {
+      _distanceSamples.add(distanceCm);
+    }
+    if (blinkRatePerMin >= 0) {
+      _blinkRateSamples.add(blinkRatePerMin);
+    }
+  }
+
+  Future<void> recordHealthyBlinkLogged() async {
+    await initialize();
+    _pendingHealthyBlinkXp += _healthyBlinkEventXp;
+  }
+
+  Future<void> recordBreakCompleted202020() async {
+    await initialize();
+    _pendingBreakXp += _breakCompletedXp;
+  }
+
+  Future<void> _flushMinuteBuffer() async {
+    if (_isFlushingMinuteBuffer) {
+      return;
+    }
+    _isFlushingMinuteBuffer = true;
+
+    try {
+      final averageDistance = _distanceSamples.isEmpty
+          ? 0.0
+          : _distanceSamples.reduce((a, b) => a + b) / _distanceSamples.length;
+      final averageBlinkRate = _blinkRateSamples.isEmpty
+          ? 0.0
+          : _blinkRateSamples.reduce((a, b) => a + b) / _blinkRateSamples.length;
+
+      int xp = _calculateMinuteXp(
+        averageDistanceCm: averageDistance,
+        averageBlinkRatePerMin: averageBlinkRate,
+      );
+      xp += _pendingHealthyBlinkXp;
+      xp += _pendingBreakXp;
+
+      sessionXpNotifier.value += xp;
+      await updatePetState(complianceScore: xp);
+      await _persistState();
+
+      _distanceSamples.clear();
+      _blinkRateSamples.clear();
+      _pendingHealthyBlinkXp = 0;
+      _pendingBreakXp = 0;
+    } finally {
+      _isFlushingMinuteBuffer = false;
+    }
   }
 
   Future<bool> processWalletTransaction({

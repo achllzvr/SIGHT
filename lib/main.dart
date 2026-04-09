@@ -312,6 +312,10 @@ class _OfflineAlertOverlay extends StatelessWidget {
     switch (raw) {
       case 'face temporarily lost':
         return 'Face not detected. Hold the device steady and look at the screen.';
+      case 'blink suppression detected':
+        return 'Blink rhythm dropped below healthy range. Complete the blink reset to continue.';
+      case 'critical proximity detected':
+        return 'You are too close to the screen. Please move the device farther away.';
       case 'critical proximity or eye fatigue':
         return 'Critical eye-strain threshold reached. Guardian override is required.';
       case 'adjust distance or blink rhythm':
