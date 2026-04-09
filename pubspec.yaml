@@ -33,6 +33,10 @@ dependencies:
   google_mlkit_face_detection: ^0.11.0 # Matched directly to TFLite requirements
   google_mlkit_face_mesh_detection: ^0.2.1
   flutter_background: ^1.0.2
+  
+  # --- WEBVIEW & BACKGROUND NOTIFICATIONS (PHASE 2) ---
+  webview_flutter: ^4.4.2
+  flutter_local_notifications: ^17.1.2
 
 dev_dependencies:
   flutter_test:

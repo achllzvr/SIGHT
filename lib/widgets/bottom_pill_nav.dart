@@ -29,12 +29,14 @@ class BottomPillNav extends StatelessWidget {
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: List.generate(3, (i) {
+              children: List.generate(4, (i) {
                 final icon = i == 0
                     ? Icons.home
                     : i == 1
-                        ? Icons.monitor_heart
-                        : Icons.list;
+                        ? Icons.video_library
+                        : i == 2
+                            ? Icons.monitor_heart
+                            : Icons.list;
                 final selected = i == currentIndex;
                 return Material(
                   color: Colors.transparent,

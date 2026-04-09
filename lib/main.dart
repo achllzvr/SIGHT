@@ -15,6 +15,7 @@ import 'screens/connect_with_doctor_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/tracking_screen.dart';
 import 'screens/tasks_screen.dart';
+import 'screens/media_hub_screen.dart';
 import 'screens/guardian_setup_screen.dart';
 import 'screens/guardian_control_center_screen.dart';
 import 'screens/welcome_screen.dart';
@@ -72,6 +73,7 @@ class SightFeasibilityApp extends StatelessWidget {
             '/add-child': (_) => const AddChildrenScreen(),
             '/child-dashboard': (_) => const ChildDashboardScreen(),
             '/connect-doctor': (_) => const ConnectWithDoctorScreen(),
+            '/media-hub': (_) => const MediaHubScreen(),
           },
           
           // --- LIGHT THEME (Apple Style) ---
@@ -188,6 +190,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
 
   final List<Widget> _pages = const [
     HomeScreen(),
+    MediaHubScreen(),
     TrackingScreen(),
     TasksScreen(),
   ];
@@ -341,6 +344,7 @@ class _OfflineAlertOverlay extends StatelessWidget {
           alertLevel,
         );
         final isDark = Theme.of(context).brightness == Brightness.dark;
+        final colorScheme = Theme.of(context).colorScheme;
 
         if (alertLevel == AlertLevel.blinkBubble) {
           return Positioned(
@@ -351,23 +355,45 @@ class _OfflineAlertOverlay extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFD9EE).withOpacity(0.96),
+                  color: isDark 
+                    ? const Color(0xFF2A3A2A).withValues(alpha: 0.96)
+                    : const Color(0xFFE3F1D6).withValues(alpha: 0.96),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
-                    BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
+                  border: Border.all(
+                    color: isDark ? Colors.white70 : Colors.black87,
+                    width: 1.2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFB9E3A4).withValues(alpha: 0.6),
+                      offset: const Offset(2, 2),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFFD5C2E8).withValues(alpha: 0.4),
+                      offset: const Offset(1, 1),
+                      blurRadius: 4,
+                    ),
                   ],
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.remove_red_eye_outlined, size: 20),
+                    Icon(
+                      Icons.remove_red_eye_outlined,
+                      size: 20,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         message,
                         textAlign: TextAlign.left,
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
                   ],
@@ -377,17 +403,34 @@ class _OfflineAlertOverlay extends StatelessWidget {
           );
         }
 
+        // For redOverlay and screenLock alerts
+        late Color accentColor;
+        late Color backgroundColor;
+        late IconData alertIcon;
+        late String alertTitle;
+
+        if (alertLevel == AlertLevel.redOverlay) {
+          accentColor = isDark ? const Color(0xFFFF6B6B) : const Color(0xFFFF3B30);
+          backgroundColor = isDark ? Colors.black87 : Colors.white;
+          alertIcon = Icons.warning_amber_rounded;
+          alertTitle = 'Distance Warning';
+        } else {
+          // screenLock alert
+          accentColor = isDark
+              ? const Color(0xFF0A84FF)
+              : const Color(0xFF007AFF);
+          backgroundColor = isDark ? Colors.black87 : Colors.white;
+          alertIcon = Icons.lock_outline_rounded;
+          alertTitle = 'Time for a Break';
+        }
+
         final overlayColor = alertLevel == AlertLevel.redOverlay
-            ? Colors.red.withOpacity(0.4)
-            : Colors.black.withOpacity(0.92);
-
-        final title = alertLevel == AlertLevel.redOverlay
-            ? 'Distance Warning'
-            : 'Rest Mode Active';
-
-        final icon = alertLevel == AlertLevel.redOverlay
-            ? Icons.warning_amber_rounded
-            : Icons.lock;
+            ? (isDark
+                ? Colors.red.withValues(alpha: 0.3)
+                : Colors.red.withValues(alpha: 0.2))
+            : (isDark
+                ? Colors.black.withValues(alpha: 0.92)
+                : Colors.black.withValues(alpha: 0.85));
 
         return Positioned.fill(
           child: IgnorePointer(
@@ -398,38 +441,62 @@ class _OfflineAlertOverlay extends StatelessWidget {
               child: Container(
                 width: double.infinity,
                 constraints: const BoxConstraints(maxWidth: 420),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFDFDFD),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.black87, width: 1),
-                  boxShadow: const [
-                    BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(3, 3), blurRadius: 0),
-                    BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
+                  color: backgroundColor,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                    color: accentColor.withValues(alpha: 0.5),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFB9E3A4).withValues(alpha: 0.4),
+                      offset: const Offset(3, 3),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFFD5C2E8).withValues(alpha: 0.3),
+                      offset: const Offset(1, 1),
+                      blurRadius: 6,
+                    ),
                   ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon, size: 34, color: Colors.black87),
-                    const SizedBox(height: 8),
-                    Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black87,
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Icon(
+                        alertIcon,
+                        size: 40,
+                        color: accentColor,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 16),
+                    Text(
+                      alertTitle,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Text(
                       message,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.black87,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                      style: TextStyle(
+                        color: isDark ? Colors.white70 : Colors.black54,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        height: 1.5,
                       ),
                     ),
                   ],
