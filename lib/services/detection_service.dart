@@ -301,6 +301,7 @@ class DetectionService {
   static const int _meshIntervalMs = 66;
   bool _isProcessing = false;
   int _lastFrameProcessedAt = 0;
+  static const int _freshFrameThresholdMs = 6000;
 
   int get millisSinceLastFrame {
     if (_lastFrameProcessedAt == 0) return 1 << 30;
@@ -309,7 +310,7 @@ class DetectionService {
 
   bool get hasReceivedAnyFrame => _lastFrameProcessedAt > 0;
 
-  bool get hasFreshFrames => millisSinceLastFrame < 2000;
+  bool get hasFreshFrames => millisSinceLastFrame < _freshFrameThresholdMs;
 
   Future<void> _processCameraImage(CameraImage image) async {
     final now = DateTime.now().millisecondsSinceEpoch;

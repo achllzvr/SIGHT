@@ -13,6 +13,9 @@ class AppLifecycleService {
 
   bool _backgroundServicesInitialized = false;
   Timer? _backgroundHeartbeat;
+  bool _isBackgroundMode = false;
+  Future<void> _transitionQueue = Future<void>.value();
+  DateTime? _lastHardRecoveryAt;
 
   /// Initialize background services (must be called during app startup)
   Future<void> initializeBackgroundServices() async {
@@ -39,9 +42,10 @@ class AppLifecycleService {
 
   Future<void> _runBackgroundHeartbeatTick() async {
     try {
-      await DetectionService.instance.ensureContinuousMonitoring();
+      await DetectionService.instance.ensureMonitoring();
 
       final hasFreshFrames = DetectionService.instance.hasFreshFrames;
+      final staleForMs = DetectionService.instance.millisSinceLastFrame;
       final distance = MetricsService.instance.distanceCmNotifier.value;
       final minuteBlinks = MetricsService.instance.currentMinuteBlinkCountNotifier.value;
       final status = hasFreshFrames ? 'active' : 'recovering';
@@ -58,7 +62,12 @@ class AppLifecycleService {
         isTracking: hasFreshFrames,
       );
 
-      if (!hasFreshFrames) {
+      final now = DateTime.now();
+      final canAttemptHardRecovery = _lastHardRecoveryAt == null ||
+          now.difference(_lastHardRecoveryAt!) >= const Duration(seconds: 15);
+
+      if (!hasFreshFrames && staleForMs > 12000 && canAttemptHardRecovery) {
+        _lastHardRecoveryAt = now;
         await DetectionService.instance.forceHardRestart();
       }
     } catch (e) {
@@ -85,12 +94,21 @@ class AppLifecycleService {
 
   /// Start background monitoring (called when app is backgrounded)
   Future<void> handleAppBackgrounded() async {
+    if (_isBackgroundMode) {
+      return;
+    }
+
+    _isBackgroundMode = true;
+
     try {
       // Enable wakelock to keep device awake during background monitoring
       await DetectionService.instance.enableWakelockForMonitoring();
 
       // Start the foreground service (Android) or configure background modes (iOS)
-      await BackgroundForegroundService.instance.startBackgroundMonitoring();
+      final started = await BackgroundForegroundService.instance.startBackgroundMonitoring();
+      if (!started && kDebugMode) {
+        debugPrint('[AppLifecycleService] Foreground service could not start. Check notification permission.');
+      }
 
       final canDrawOverlay = await BackgroundForegroundService.instance.canDrawOverlays();
       if (canDrawOverlay) {
@@ -117,6 +135,12 @@ class AppLifecycleService {
 
   /// Resume foreground monitoring (called when app is foregrounded)
   Future<void> handleAppForegrounded() async {
+    if (!_isBackgroundMode) {
+      return;
+    }
+
+    _isBackgroundMode = false;
+
     try {
       _stopBackgroundHeartbeat();
       await BackgroundForegroundService.instance.hideFloatingBubble();
@@ -124,7 +148,11 @@ class AppLifecycleService {
 
       // Force hard restart of detection to ensure fresh camera stream
       await DetectionService.instance.forceHardRestart();
-      await DetectionService.instance.ensureMonitoringWithRetry();
+      await Future.delayed(const Duration(milliseconds: 300));
+      await DetectionService.instance.ensureMonitoringWithRetry(
+        attempts: 6,
+        delay: const Duration(milliseconds: 500),
+      );
 
       // Attempt to sync any new data
       await LocalMetricsService.instance.attemptBackgroundSync();
@@ -141,17 +169,29 @@ class AppLifecycleService {
 
   /// Track app lifecycle state changes
   Future<void> trackScreenState(AppLifecycleState state) async {
-    switch (state) {
-      case AppLifecycleState.resumed:
-        await handleAppForegrounded();
-        break;
-      case AppLifecycleState.paused:
-      case AppLifecycleState.detached:
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.hidden:
-        await handleAppBackgrounded();
-        break;
-    }
+    _transitionQueue = _transitionQueue.then((_) async {
+      switch (state) {
+        case AppLifecycleState.resumed:
+          await handleAppForegrounded();
+          break;
+        case AppLifecycleState.paused:
+        case AppLifecycleState.hidden:
+          await handleAppBackgrounded();
+          break;
+        case AppLifecycleState.inactive:
+          // Ignore transient inactive events to avoid transition thrash.
+          break;
+        case AppLifecycleState.detached:
+          await handleAppBackgrounded();
+          break;
+      }
+    }).catchError((e) {
+      if (kDebugMode) {
+        debugPrint('[AppLifecycleService] Lifecycle transition failed: $e');
+      }
+    });
+
+    await _transitionQueue;
   }
 
   /// Cleanup and shutdown

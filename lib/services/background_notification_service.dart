@@ -29,15 +29,6 @@ class BackgroundNotificationService {
 
     await DetectionService.instance.enableWakelockForMonitoring();
 
-    if (!DetectionService.instance.hasFreshFrames) {
-      await DetectionService.instance.ensureMonitoringWithRetry();
-      // If still stale after retry, force hard restart
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (!DetectionService.instance.hasFreshFrames) {
-        await DetectionService.instance.forceHardRestart();
-      }
-    }
-
     final blinksPerMin = MetricsService.instance.blinkRatePerMinNotifier.value;
     final dist = MetricsService.instance.distanceCmNotifier.value;
     final title = 'SIGHT monitoring active';
