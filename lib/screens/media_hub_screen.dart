@@ -33,7 +33,6 @@ class MediaHubScreen extends StatefulWidget {
 
 class _MediaHubScreenState extends State<MediaHubScreen> {
   late WebViewController _webViewController;
-  bool _isWebViewReady = false;
   int _selectedMediaIndex = 0;
   bool _barsVisible = true;
 
@@ -85,20 +84,16 @@ class _MediaHubScreenState extends State<MediaHubScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
-            if (mounted) {
-              setState(() => _isWebViewReady = false);
-            }
+            // Page loading started
           },
           onPageFinished: (String url) {
-            if (mounted) {
-              setState(() => _isWebViewReady = true);
-            }
+            // Page finished loading
           },
           onWebResourceError: (WebResourceError error) {
             debugPrint('WebView error: ${error.description}');
           },
-          // Handle custom URL schemes (e.g., TikTok's snssdk1180://)
           onNavigationRequest: (NavigationRequest request) {
+            // Allow only http/https URLs
             if (request.url.startsWith('http://') ||
                 request.url.startsWith('https://')) {
               return NavigationDecision.navigate;
@@ -140,146 +135,120 @@ class _MediaHubScreenState extends State<MediaHubScreen> {
         appBar: _barsVisible
             ? AppBar(
                 title: const Text('Media Hub'),
-                elevation: 1,
+                elevation: 0,
+                toolbarHeight: 48,
               )
             : null,
-        body: Stack(
-          fit: StackFit.expand,
+        body: Column(
           children: [
-            Column(
-              children: [
-                // Media selector bar with controls - combined on one line
-                if (_barsVisible)
-                  Container(
-                    color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    height: 70,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // Media app selector buttons - scrollable
-                        Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            physics: const ClampingScrollPhysics(),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: List.generate(_mediaApps.length, (index) {
-                                final isSelected = index == _selectedMediaIndex;
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                                  child: GestureDetector(
-                                    onTap: () => _switchToMedia(index),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? (isDark
-                                                ? const Color(0xFF0A84FF)
-                                                : const Color(0xFF007AFF))
-                                            : (isDark
-                                                ? const Color(0xFF2A2A2E)
-                                                : Colors.white),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: isSelected
-                                              ? (isDark
-                                                  ? const Color(0xFF0A84FF)
-                                                  : const Color(0xFF007AFF))
-                                              : (isDark
-                                                  ? Colors.grey.shade700
-                                                  : Colors.grey.shade300),
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          SizedBox(
-                                            width: 22,
-                                            height: 22,
-                                            child: Image.asset(
-                                              _mediaApps[index].imagePath!,
-                                              fit: BoxFit.contain,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 1),
-                                          Text(
-                                            _mediaApps[index].name,
-                                            style: TextStyle(
-                                              fontSize: 6.5,
-                                              fontWeight: isSelected
-                                                  ? FontWeight.bold
-                                                  : FontWeight.normal,
-                                              color: isSelected
-                                                  ? Colors.white
-                                                  : (isDark
-                                                      ? Colors.white70
-                                                      : Colors.black87),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+            // Media selector bar with controls - combined on one line
+            if (_barsVisible)
+              SizedBox(
+                height: 66,
+                child: Container(
+                  color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Media app selector buttons
+                      Expanded(
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          physics: const ClampingScrollPhysics(),
+                          itemCount: _mediaApps.length,
+                          itemBuilder: (_, index) {
+                            final isSelected = index == _selectedMediaIndex;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 3),
+                              child: GestureDetector(
+                                onTap: () => _switchToMedia(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: isSelected
+                                        ? (isDark ? const Color(0xFF0A84FF) : const Color(0xFF007AFF))
+                                        : (isDark ? const Color(0xFF2A2A2E) : Colors.white),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? (isDark ? const Color(0xFF0A84FF) : const Color(0xFF007AFF))
+                                          : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+                                      width: 1,
                                     ),
                                   ),
-                                );
-                              }),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: Image.asset(
+                                          _mediaApps[index].imagePath!,
+                                          fit: BoxFit.contain,
+                                          cacheHeight: 40,
+                                          cacheWidth: 40,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 1),
+                                      Text(
+                                        _mediaApps[index].name,
+                                        style: TextStyle(
+                                          fontSize: 6,
+                                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                          color: isSelected
+                                              ? Colors.white
+                                              : (isDark ? Colors.white70 : Colors.black87),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      // Refresh and Back buttons
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          spacing: 2,
+                          children: [
+                            SizedBox(
+                              width: 26,
+                              height: 26,
+                              child: IconButton(
+                                icon: const Icon(Icons.refresh),
+                                iconSize: 14,
+                                padding: EdgeInsets.zero,
+                                onPressed: () => _webViewController.reload(),
+                              ),
                             ),
-                          ),
-                        ),
-                        // Refresh and Back buttons
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 2),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            spacing: 1,
-                            children: [
-                              SizedBox(
-                                width: 28,
-                                height: 28,
-                                child: IconButton(
-                                  icon: const Icon(Icons.refresh),
-                                  iconSize: 16,
-                                  padding: EdgeInsets.zero,
-                                  onPressed: () {
-                                    _webViewController.reload();
-                                  },
-                                ),
+                            SizedBox(
+                              width: 26,
+                              height: 26,
+                              child: IconButton(
+                                icon: const Icon(Icons.arrow_back),
+                                iconSize: 14,
+                                padding: EdgeInsets.zero,
+                                onPressed: () => _webViewController.goBack(),
                               ),
-                              SizedBox(
-                                width: 28,
-                                height: 28,
-                                child: IconButton(
-                                  icon: const Icon(Icons.arrow_back),
-                                  iconSize: 16,
-                                  padding: EdgeInsets.zero,
-                                  onPressed: () {
-                                    _webViewController.goBack();
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                // WebView content
-                Expanded(
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      if (_isWebViewReady)
-                        WebViewWidget(controller: _webViewController)
-                      else
-                        const Center(
-                          child: CircularProgressIndicator(),
-                        ),
+                      ),
                     ],
                   ),
                 ),
-              ],
+              ),
+            // WebView content - optimized
+            Expanded(
+              child: WebViewWidget(controller: _webViewController),
             ),
           ],
         ),

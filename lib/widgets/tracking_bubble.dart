@@ -109,10 +109,11 @@ class _TrackingBubbleState extends State<TrackingBubble> {
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final minuteProgress = ((_now.second + (_now.millisecond / 1000.0)) / 60.0).clamp(0.0, 1.0);
+    final padding = MediaQuery.of(context).padding;
 
-    // Make bubble sizes responsive to screen width
-    final responsiveCollapsedSize = (screenSize.width * 0.15).clamp(60.0, 80.0);
-    final responsiveExpandedSize = (screenSize.width * 0.35).clamp(140.0, 180.0);
+    // Make bubble sizes responsive to screen width - more aggressive constraints
+    final responsiveCollapsedSize = (screenSize.width * 0.14).clamp(56.0, 76.0);
+    final responsiveExpandedSize = (screenSize.width * 0.32).clamp(135.0, 165.0);
 
     return ValueListenableBuilder<int>(
       valueListenable: MetricsService.instance.currentMinuteBlinkCountNotifier,
@@ -128,8 +129,8 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                 final bubbleSize = _expanded ? responsiveExpandedSize : responsiveCollapsedSize;
 
                 return Positioned(
-                  left: _offset.dx,
-                  top: _offset.dy,
+                  left: _offset.dx.clamp(_margin, screenSize.width - bubbleSize - _margin),
+                  top: _offset.dy.clamp(padding.top + _margin, screenSize.height - bubbleSize - _margin),
                   child: GestureDetector(
                     onTap: _toggleExpanded,
                     onPanUpdate: (details) {
@@ -140,7 +141,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                             screenSize.width - bubbleSize - _margin,
                           ),
                           (_offset.dy + details.delta.dy).clamp(
-                            MediaQuery.of(context).padding.top + _margin,
+                            padding.top + _margin,
                             screenSize.height - bubbleSize - _margin,
                           ),
                         );

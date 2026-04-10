@@ -307,7 +307,8 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
             },
           ),
         ),
-        TrackingBubble(currentPageIndex: _index),
+        // Only show TrackingBubble if not on home screen (index 0)
+        if (_index != 0) TrackingBubble(currentPageIndex: _index),
         const _OfflineAlertOverlay(),
       ],
     );
