@@ -186,114 +186,83 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 150),
                               child: _expanded
-                                  ? SingleChildScrollView(
+                                  ? Padding(
                                       key: const ValueKey('bubble-expanded'),
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          SizedBox(
-                                            height: bubbleSize * 0.35,
-                                            width: bubbleSize * 0.75,
-                                            child: Stack(
-                                              clipBehavior: Clip.antiAlias,
-                                              alignment: Alignment.topCenter,
-                                              children: [
-                                                Positioned(
-                                                  top: -bubbleSize * 0.08,
-                                                  child: Image.asset(
-                                                    'assets/mascot/mascot_head_v1.png',
-                                                    width: bubbleSize * 0.73,
-                                                    fit: BoxFit.contain,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          SizedBox(height: bubbleSize * 0.08),
-                                          Text(
-                                            '$minuteBlinkCount',
-                                            style: TextStyle(
-                                              fontSize: bubbleSize * 0.2,
-                                              fontWeight: FontWeight.w900,
-                                              color: Colors.black87,
-                                              height: 1,
-                                            ),
-                                          ),
-                                          SizedBox(height: bubbleSize * 0.04),
-                                          Text(
-                                            'This Min',
-                                            style: TextStyle(
-                                              fontSize: bubbleSize * 0.12,
-                                              fontWeight: FontWeight.w700,
-                                              color: Colors.black87,
-                                            ),
-                                          ),
-                                          SizedBox(height: bubbleSize * 0.05),
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                                            child: Text(
-                                              '${distanceCm > 0 ? distanceCm.toStringAsFixed(1) : '--'} cm • $label',
+                                      padding: EdgeInsets.all(bubbleSize * 0.12),
+                                      child: SingleChildScrollView(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              '$minuteBlinkCount',
                                               style: TextStyle(
-                                                fontSize: bubbleSize * 0.065,
-                                                fontWeight: FontWeight.w800,
+                                                fontSize: bubbleSize * 0.22,
+                                                fontWeight: FontWeight.w900,
                                                 color: Colors.black87,
+                                                height: 1,
                                               ),
-                                              textAlign: TextAlign.center,
                                             ),
-                                          ),
-                                          SizedBox(height: bubbleSize * 0.04),
-                                        ],
+                                            SizedBox(height: bubbleSize * 0.06),
+                                            Text(
+                                              'blinks',
+                                              style: TextStyle(
+                                                fontSize: bubbleSize * 0.11,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.black54,
+                                              ),
+                                            ),
+                                            SizedBox(height: bubbleSize * 0.08),
+                                            Container(
+                                              padding: EdgeInsets.all(bubbleSize * 0.08),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withOpacity(0.05),
+                                                borderRadius: BorderRadius.circular(bubbleSize * 0.06),
+                                              ),
+                                              child: Text(
+                                                '${distanceCm > 0 ? distanceCm.toStringAsFixed(1) : '--'} cm',
+                                                style: TextStyle(
+                                                  fontSize: bubbleSize * 0.09,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: Colors.black87,
+                                                ),
+                                              ),
+                                            ),
+                                            SizedBox(height: bubbleSize * 0.06),
+                                            Text(
+                                              label,
+                                              style: TextStyle(
+                                                fontSize: bubbleSize * 0.08,
+                                                fontWeight: FontWeight.w600,
+                                                color: alertLevel == AlertLevel.screenLock || alertLevel == AlertLevel.redOverlay
+                                                    ? const Color(0xFFD74E4E)
+                                                    : const Color(0xFF91C77A),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     )
                                   : Column(
                                       key: const ValueKey('bubble-collapsed'),
                                       mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        SizedBox(
-                                          height: bubbleSize * 0.5,
-                                          width: bubbleSize * 0.8,
-                                          child: Stack(
-                                            clipBehavior: Clip.antiAlias,
-                                            alignment: Alignment.topCenter,
-                                            children: [
-                                              Positioned(
-                                                top: -bubbleSize * 0.25,
-                                                child: Image.asset(
-                                                  'assets/mascot/mascot_head_v1.png',
-                                                  width: bubbleSize * 0.9,
-                                                  fit: BoxFit.contain,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        SizedBox(height: bubbleSize * 0.03),
                                         Text(
                                           '$minuteBlinkCount',
                                           style: TextStyle(
-                                            fontSize: bubbleSize * 0.38,
+                                            fontSize: bubbleSize * 0.40,
                                             fontWeight: FontWeight.w900,
                                             color: Colors.black87,
                                             height: 1,
                                           ),
                                         ),
-                                        SizedBox(height: bubbleSize * 0.02),
                                         Text(
-                                          'This Min',
+                                          'blinks',
                                           style: TextStyle(
-                                            fontSize: bubbleSize * 0.16,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.black87,
-                                          ),
-                                        ),
-                                        SizedBox(height: bubbleSize * 0.03),
-                                        Text(
-                                          label,
-                                          style: TextStyle(
-                                            fontSize: bubbleSize * 0.15,
-                                            fontWeight: FontWeight.w800,
-                                            color: Colors.black87,
+                                            fontSize: bubbleSize * 0.12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.black54,
                                           ),
                                         ),
                                       ],
