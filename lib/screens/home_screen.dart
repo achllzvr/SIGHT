@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../services/cleanup_service.dart';
 import '../services/gamification_service.dart';
 import '../services/metrics_service.dart';
 import '../services/offline_models.dart';
+import '../services/feedback_service.dart';
+import '../services/guardian_auth_service.dart';
+import '../services/auth_session_service.dart';
+import 'auth/auth_options_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
 
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -22,7 +32,44 @@ class HomeScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const _TopBadge(),
-                  const _TopPill(label: 'Lumi Dress Up'),
+                  Row(
+                    children: [
+                      // Clothes icon (non-functional)
+                      Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
+                          boxShadow: const [
+                            BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
+                            BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
+                          ],
+                        ),
+                        child: const Icon(Icons.checkroom, size: 20),
+                      ),
+                      const SizedBox(width: 10),
+                      // Settings gear icon
+                      GestureDetector(
+                        onTap: () => _showSettingsDialog(context),
+                        child: Container(
+                          width: 46,
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
+                            boxShadow: const [
+                              BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
+                              BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
+                            ],
+                          ),
+                          child: const Icon(Icons.settings, size: 20),
+                        ),
+                      ),
+                    ],
+                  )
                 ],
               ),
             ),
@@ -111,6 +158,163 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _showSettingsDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[900] : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // Haptic Feedback Toggle
+            _SettingsTile(
+              title: 'Haptic Feedback',
+              subtitle: 'Vibrations and touches',
+              icon: Icons.vibration,
+              onTap: () {
+                final current = FeedbackService.instance.isHapticEnabled;
+                FeedbackService.instance.setHapticEnabled(!current);
+                setState(() {});
+              },
+              isEnabled: FeedbackService.instance.isHapticEnabled,
+            ),
+            const SizedBox(height: 12),
+            // Audio Feedback Toggle
+            _SettingsTile(
+              title: 'Audio Feedback',
+              subtitle: 'Sounds and beeps',
+              icon: Icons.volume_up,
+              onTap: () {
+                final current = FeedbackService.instance.isAudioEnabled;
+                FeedbackService.instance.setAudioEnabled(!current);
+                setState(() {});
+              },
+              isEnabled: FeedbackService.instance.isAudioEnabled,
+            ),
+            const SizedBox(height: 20),
+            const Divider(),
+            const SizedBox(height: 20),
+            // Logout Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _handleLogout(context),
+                icon: const Icon(Icons.logout),
+                label: const Text('Logout'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleLogout(BuildContext context) async {
+    // Try biometric authentication first
+    final canAuth = await GuardianAuthService.instance.canAuthenticate();
+    if (canAuth) {
+      final authenticated = await GuardianAuthService.instance.authenticateWithBiometrics();
+      if (authenticated) {
+        await _performLogout(context);
+        return;
+      }
+    }
+
+    // Fall back to PIN entry
+    if (!mounted) return;
+    _showPinEntryDialog(context);
+  }
+
+  void _showPinEntryDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pinController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Guardian Verification'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter guardian passcode to logout'),
+            const SizedBox(height: 20),
+            TextField(
+              controller: pinController,
+              keyboardType: TextInputType.number,
+              obscureText: true,
+              maxLength: 4,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 24, letterSpacing: 4),
+              decoration: InputDecoration(
+                hintText: '••••',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final storedPin = await GuardianAuthService.instance.loadFallbackPin();
+              if (storedPin != null && GuardianAuthService.instance.verifyFallbackPin(pinController.text, storedPin)) {
+                if (!mounted) return;
+                Navigator.pop(context); // Close PIN dialog
+                await _performLogout(context);
+              } else {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Incorrect passcode')),
+                );
+              }
+            },
+            child: const Text('Verify'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _performLogout(BuildContext context) async {
+    // Perform complete service cleanup (stop camera, cancel timers, clear metrics)
+    await CleanupService.instance.performCompleteCleanup();
+
+    // Clear auth session
+    await AuthSessionService.instance.clearSession();
+
+    if (!mounted) return;
+    // Navigate back to auth screen
+    Navigator.of(context).pushNamedAndRemoveUntil('/auth', (route) => false);
   }
 }
 
@@ -205,6 +409,78 @@ class _TopPill extends StatelessWidget {
         ],
       ),
       child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool isEnabled;
+
+  const _SettingsTile({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+    required this.isEnabled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isEnabled
+                ? const Color(0xFF7FC86D)
+                : (isDark ? Colors.white24 : Colors.black12),
+            width: isEnabled ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 24, color: isEnabled ? const Color(0xFF7FC86D) : (isDark ? Colors.white60 : Colors.black54)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54)),
+                ],
+              ),
+            ),
+            Container(
+              width: 50,
+              height: 28,
+              decoration: BoxDecoration(
+                color: isEnabled ? const Color(0xFF7FC86D) : (isDark ? Colors.white10 : Colors.grey.withOpacity(0.2)),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Center(
+                child: Text(
+                  isEnabled ? 'ON' : 'OFF',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: isEnabled ? Colors.white : (isDark ? Colors.white60 : Colors.black54),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'task_models.dart';
 import 'gamification_service.dart';
+import 'feedback_service.dart';
 
 class TaskService {
   TaskService._private();
@@ -191,6 +192,7 @@ class TaskService {
       if (task.category == 'xp-goal') {
         final isNowCompleted = currentXp >= (task.targetValue ?? 0);
         if (isNowCompleted && task.status != TaskStatus.completed) {
+          FeedbackService.instance.taskCompleted();
           return task.copyWith(
             status: TaskStatus.completed,
             currentValue: currentXp,
@@ -204,6 +206,7 @@ class TaskService {
       if (task.category == 'streak') {
         final isNowCompleted = currentStreak >= (task.targetValue ?? 0);
         if (isNowCompleted && task.status != TaskStatus.completed) {
+          FeedbackService.instance.taskCompleted();
           return task.copyWith(
             status: TaskStatus.completed,
             currentValue: currentStreak,
@@ -240,6 +243,9 @@ class TaskService {
 
       tasksNotifier.value = List.from(tasks);
       _updateCompletedCount();
+
+      // Provide haptic and audio feedback
+      await FeedbackService.instance.taskCompleted();
 
       if (kDebugMode) {
         debugPrint('[TaskService] Completed task: $taskId');

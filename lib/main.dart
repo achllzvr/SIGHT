@@ -30,6 +30,7 @@ import 'services/guardian_setup_service.dart';
 import 'services/local_metrics_service.dart';
 import 'services/offline_models.dart';
 import 'services/rule_engine_service.dart';
+import 'services/feedback_service.dart';
 
 // Global Camera List
 List<CameraDescription> cameras = [];
@@ -48,6 +49,9 @@ Future<void> main() async {
   
   // Set preferred orientation to portrait for a consistent test lab
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
+  // Initialize feedback service
+  await FeedbackService.instance.initialize();
 
   try {
     cameras = await availableCameras();

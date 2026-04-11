@@ -126,4 +126,20 @@ class MetricsService {
     _ensureMinuteCounterInitialized();
     _rollMinuteWindow(DateTime.now());
   }
+
+  /// Clear all metrics and reset notifiers (used on logout)
+  void clearAllMetrics() {
+    _blinkTimestamps.clear();
+    _minuteResetTimer?.cancel();
+    _minuteResetTimer = null;
+    
+    blinkCountNotifier.value = 0;
+    blinkRatePerMinNotifier.value = 0;
+    currentMinuteBlinkCountNotifier.value = 0;
+    distanceCmNotifier.value = 0.0;
+    faceDetectedNotifier.value = false;
+    calibratedNotifier.value = false;
+    
+    _currentMinuteStamp = _minuteStamp(DateTime.now());
+  }
 }

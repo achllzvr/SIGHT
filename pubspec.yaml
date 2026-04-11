@@ -37,6 +37,10 @@ dependencies:
   # --- WEBVIEW & BACKGROUND NOTIFICATIONS (PHASE 2) ---
   webview_flutter: ^4.4.2
   flutter_local_notifications: ^17.1.2
+  
+  # --- HAPTIC & AUDIO FEEDBACK ---
+  vibration: ^1.8.3
+  just_audio: ^0.9.36
 
 dev_dependencies:
   flutter_test:

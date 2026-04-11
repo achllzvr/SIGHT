@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'active_child_context_service.dart';
 import 'offline_database_service.dart';
 import 'offline_models.dart';
+import 'feedback_service.dart';
 
 class GamificationService {
   GamificationService._private();
@@ -112,11 +113,15 @@ class GamificationService {
   Future<void> recordHealthyBlinkLogged() async {
     await initialize();
     _pendingHealthyBlinkXp += _healthyBlinkEventXp;
+    // Provide subtle feedback for blink event
+    FeedbackService.instance.blinkDetected();
   }
 
   Future<void> recordBreakCompleted202020() async {
     await initialize();
     _pendingBreakXp += _breakCompletedXp;
+    // Provide success feedback for exercise completion
+    FeedbackService.instance.exerciseCompleted();
   }
 
   Future<void> _flushMinuteBuffer() async {
@@ -139,6 +144,11 @@ class GamificationService {
       );
       xp += _pendingHealthyBlinkXp;
       xp += _pendingBreakXp;
+
+      // Provide feedback based on XP outcome
+      if (xp < 0) {
+        FeedbackService.instance.interventionTriggered();
+      }
 
       sessionXpNotifier.value += xp;
       await updatePetState(complianceScore: xp);

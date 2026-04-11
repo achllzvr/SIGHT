@@ -5,6 +5,7 @@ import 'critical_overlay_service.dart';
 import 'guardian_preferences_service.dart';
 import 'offline_database_service.dart';
 import 'offline_models.dart';
+import 'feedback_service.dart';
 
 class RuleEngineService {
   RuleEngineService._private();
@@ -55,17 +56,21 @@ class RuleEngineService {
     final blinkSuppressed = faceDetected && blinkRatePerMin < 10;
 
     if (!faceDetected) {
-      alertLevel = AlertLevel.blinkBubble;
-      reason = 'face temporarily lost';
+      alertLevel = AlertLevel.redOverlay;
+      reason = 'face not detected - critical tracking state';
+      FeedbackService.instance.interventionTriggered();
     } else if (blinkSuppressed) {
       alertLevel = AlertLevel.screenLock;
       reason = 'blink suppression detected';
+      FeedbackService.instance.interventionTriggered();
     } else if (distanceCm <= rules.criticalDistanceCm) {
       alertLevel = AlertLevel.redOverlay;
       reason = 'critical proximity detected';
+      FeedbackService.instance.interventionTriggered();
     } else if (distanceCm < rules.warningDistanceCm || blinkRatePerMin < rules.healthyBlinkRatePerMin) {
       alertLevel = AlertLevel.redOverlay;
       reason = 'adjust distance or blink rhythm';
+      FeedbackService.instance.interventionTriggered();
     } else if (distanceCm < rules.safeDistanceCm || blinkRatePerMin <= rules.blinkBubbleThresholdPerMin) {
       alertLevel = AlertLevel.blinkBubble;
       reason = 'minor correction needed';
@@ -103,6 +108,10 @@ class RuleEngineService {
     }
 
     _criticalLockActive = true;
+    
+    // Provide strong feedback for critical intervention
+    FeedbackService.instance.interventionTriggered();
+    
     try {
       if (!context.mounted) {
         return;

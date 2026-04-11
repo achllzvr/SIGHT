@@ -38,4 +38,9 @@ class ActiveChildContextService {
 
     await _storage.write(key: _activeChildIdKey, value: childId.toString());
   }
+
+  /// Clear active child context (used on logout)
+  Future<void> clearActiveChild() async {
+    await setActiveChildId(null);
+  }
 }
