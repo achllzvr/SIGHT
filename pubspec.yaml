@@ -39,7 +39,7 @@ dependencies:
   flutter_local_notifications: ^17.1.2
   
   # --- HAPTIC & AUDIO FEEDBACK ---
-  vibration: ^1.8.3
+  vibration: ^3.0.0
   just_audio: ^0.9.36
 
 dev_dependencies:
