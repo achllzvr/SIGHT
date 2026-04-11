@@ -1,5 +1,5 @@
-name: sight_feasibility_lab
-description: "SIGHT Feasibility Study App"
+name: lumi
+description: "LUMI - Eye Health Monitoring App"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -52,3 +52,4 @@ flutter:
     - assets/labels.txt
     - assets/mascot/
     - assets/media_hub/
+    - assets/app_icons/

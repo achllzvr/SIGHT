@@ -3,19 +3,19 @@
 <plist version="1.0">
 <dict>
 	<key>NSLocalNetworkUsageDescription</key>
-    <string>SIGHT needs to access your local network to connect to the debugger.</string>
+    <string>LUMI needs to access your local network to connect to the debugger.</string>
     <key>NSBonjourServices</key>
     <array>
         <string>_dartobservatory._tcp</string>
     </array>
     <key>NSCameraUsageDescription</key>
-    <string>SIGHT needs camera access to screen your eyes.</string>
+    <string>LUMI needs camera access to monitor your eye health.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>SIGHT uses Face ID to let a guardian unlock the app.</string>
+	<string>LUMI uses Face ID to let a guardian unlock the app.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Sight Feasibility Lab</string>
+	<string>LUMI</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -23,7 +23,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>sight_feasibility_lab</string>
+	<string>lumi</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
