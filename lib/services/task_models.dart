@@ -9,6 +9,50 @@ enum TaskStatus {
   completed,
 }
 
+enum TimePeriod {
+  morning,   // 5:00 - 11:59
+  afternoon, // 12:00 - 17:59
+  evening,   // 18:00 - 23:59
+}
+
+extension TimePeriodX on TimePeriod {
+  String get displayName {
+    switch (this) {
+      case TimePeriod.morning:
+        return 'Morning Tasks';
+      case TimePeriod.afternoon:
+        return 'Afternoon Tasks';
+      case TimePeriod.evening:
+        return 'Evening Tasks';
+    }
+  }
+
+  /// Determine current time period
+  static TimePeriod getCurrentPeriod() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return TimePeriod.morning;
+    } else if (hour < 18) {
+      return TimePeriod.afternoon;
+    } else {
+      return TimePeriod.evening;
+    }
+  }
+
+  /// Check if a task should show in given period
+  static TimePeriod getTaskPeriod(String taskId) {
+    if (taskId.contains('morning') || taskId.contains('blink-exercise')) {
+      return TimePeriod.morning;
+    } else if (taskId.contains('afternoon')) {
+      return TimePeriod.afternoon;
+    } else if (taskId.contains('evening')) {
+      return TimePeriod.evening;
+    }
+    // Default: show in morning for most tasks
+    return TimePeriod.morning;
+  }
+}
+
 class Task {
   final String id;
   final String title;
@@ -21,6 +65,7 @@ class Task {
   final DateTime? completedAt;
   final String? category; // "eye-exercise", "xp-goal", "streak", etc.
   final int? rewardXp;
+  final TimePeriod timePeriod; // Morning, Afternoon, or Evening
 
   Task({
     required this.id,
@@ -34,6 +79,7 @@ class Task {
     this.completedAt,
     this.category,
     this.rewardXp,
+    this.timePeriod = TimePeriod.morning,
   });
 
   bool get isCompleted => status == TaskStatus.completed;
@@ -71,6 +117,7 @@ class Task {
     DateTime? completedAt,
     String? category,
     int? rewardXp,
+    TimePeriod? timePeriod,
   }) {
     return Task(
       id: id ?? this.id,
@@ -84,6 +131,7 @@ class Task {
       completedAt: completedAt ?? this.completedAt,
       category: category ?? this.category,
       rewardXp: rewardXp ?? this.rewardXp,
+      timePeriod: timePeriod ?? this.timePeriod,
     );
   }
 
@@ -99,6 +147,7 @@ class Task {
     'completedAt': completedAt?.toIso8601String(),
     'category': category,
     'rewardXp': rewardXp,
+    'timePeriod': timePeriod.name,
   };
 
   factory Task.fromJson(Map<String, dynamic> json) => Task(
@@ -113,5 +162,8 @@ class Task {
     completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt'] as String) : null,
     category: json['category'] as String?,
     rewardXp: json['rewardXp'] as int?,
+    timePeriod: json['timePeriod'] != null 
+      ? TimePeriod.values.firstWhere((e) => e.name == (json['timePeriod'] as String), orElse: () => TimePeriod.morning)
+      : TimePeriod.morning,
   );
 }

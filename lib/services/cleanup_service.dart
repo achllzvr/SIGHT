@@ -9,6 +9,7 @@ import 'metrics_service.dart';
 import 'offline_models.dart';
 import 'rule_engine_service.dart';
 import 'task_service.dart';
+import 'twenty_twenty_twenty_service.dart';
 
 /// Orchestrates complete cleanup of all tracking and monitoring services
 class CleanupService {
@@ -47,26 +48,32 @@ class CleanupService {
         debugPrint('[CleanupService] ✓ TaskService disposed');
       }
 
-      // 5. Clear gamification notifiers
+      // 5. Stop 20-20-20 break service
+      TwentyTwentyBreakService.instance.dispose();
+      if (kDebugMode) {
+        debugPrint('[CleanupService] ✓ TwentyTwentyBreakService disposed');
+      }
+
+      // 6. Clear gamification notifiers
       GamificationService.instance.sessionXpNotifier.value = 0;
       GamificationService.instance.dailyStreakNotifier.value = 0;
       if (kDebugMode) {
         debugPrint('[CleanupService] ✓ GamificationService cleared');
       }
 
-      // 6. Clear metrics notifiers
+      // 7. Clear metrics notifiers
       MetricsService.instance.clearAllMetrics();
       if (kDebugMode) {
         debugPrint('[CleanupService] ✓ MetricsService cleared');
       }
 
-      // 7. Clear active child context
+      // 8. Clear active child context
       await ActiveChildContextService.instance.clearActiveChild();
       if (kDebugMode) {
         debugPrint('[CleanupService] ✓ ActiveChildContextService cleared');
       }
 
-      // 8. Reset rule engine state
+      // 9. Reset rule engine state
       RuleEngineService.instance.triggerOverlay(AlertLevel.none, 'session cleared');
       if (kDebugMode) {
         debugPrint('[CleanupService] ✓ RuleEngineService reset');

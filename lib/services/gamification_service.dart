@@ -113,8 +113,7 @@ class GamificationService {
   Future<void> recordHealthyBlinkLogged() async {
     await initialize();
     _pendingHealthyBlinkXp += _healthyBlinkEventXp;
-    // Provide subtle feedback for blink event
-    FeedbackService.instance.blinkDetected();
+    // Note: No feedback on individual blinks to avoid overwhelming vibrations
   }
 
   Future<void> recordBreakCompleted202020() async {

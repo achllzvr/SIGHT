@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../blink_test_screen.dart';
 import 'critical_overlay_service.dart';
@@ -102,8 +103,16 @@ class RuleEngineService {
     await saveCachedRules(updatedRules);
   }
 
-  Future<void> triggerCriticalLock(BuildContext context) async {
+  Future<void> triggerCriticalLock(BuildContext context, {bool skipIfJustCompleted = false}) async {
     if (_criticalLockActive) {
+      return;
+    }
+
+    // Skip if 20-20-20 break was just completed (prevents overlapping interventions)
+    if (skipIfJustCompleted) {
+      if (kDebugMode) {
+        debugPrint('[RuleEngine] Skipping blink recovery after 20-20-20 break');
+      }
       return;
     }
 

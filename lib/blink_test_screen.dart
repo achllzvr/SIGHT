@@ -6,6 +6,7 @@ import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detectio
 
 import 'services/detection_service.dart';
 import 'services/metrics_service.dart';
+import 'services/task_service.dart';
 import 'widgets/rounded_card.dart';
 
 class BlinkTestScreen extends StatefulWidget {
@@ -13,10 +14,12 @@ class BlinkTestScreen extends StatefulWidget {
     super.key,
     this.enforceCompletion = false,
     this.requiredIntentionalBlinks = 15,
+    this.taskIdToComplete,
   });
 
   final bool enforceCompletion;
   final int requiredIntentionalBlinks;
+  final String? taskIdToComplete; // Task ID to mark complete on success
 
   @override
   State<BlinkTestScreen> createState() => _BlinkTestScreenState();
@@ -49,11 +52,20 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
   }
 
   void _handleBlinkProgress() {
-    if (!widget.enforceCompletion || _unlockHandled || !_isUnlockComplete || !mounted) {
+    if (!widget.enforceCompletion && widget.taskIdToComplete == null) {
+      return;
+    }
+    if (_unlockHandled || !_isUnlockComplete || !mounted) {
       return;
     }
 
     _unlockHandled = true;
+
+    // Mark task as complete if this was launched from a task
+    if (widget.taskIdToComplete != null) {
+      TaskService.instance.completeTask(widget.taskIdToComplete!);
+    }
+
     Navigator.of(context).pop();
   }
 

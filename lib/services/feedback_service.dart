@@ -19,6 +19,7 @@ class FeedbackService {
   bool _enabled = true;
   bool _hapticEnabled = true;
   bool _audioEnabled = true;
+  double _vibrationIntensity = 1.0; // 0.0 to 1.0, default is full intensity
 
   Future<void> initialize() async {
     // Test if haptic feedback is available
@@ -35,28 +36,31 @@ class FeedbackService {
     if (!_enabled || !_hapticEnabled) return;
 
     try {
+      // Apply intensity multiplier to vibration duration
+      final intensityMultiplier = _vibrationIntensity.clamp(0.0, 1.0);
+      
       switch (type) {
         case FeedbackType.success:
           // Double tap - successful completion
-          await Vibration.vibrate(duration: 50);
+          await Vibration.vibrate(duration: (50 * intensityMultiplier).toInt());
           await Future.delayed(const Duration(milliseconds: 100));
-          await Vibration.vibrate(duration: 50);
+          await Vibration.vibrate(duration: (50 * intensityMultiplier).toInt());
           break;
         case FeedbackType.warning:
           // Medium vibration - warning/attention
-          await Vibration.vibrate(duration: 100);
+          await Vibration.vibrate(duration: (100 * intensityMultiplier).toInt());
           break;
         case FeedbackType.error:
           // Long vibration - error
-          await Vibration.vibrate(duration: 150);
+          await Vibration.vibrate(duration: (150 * intensityMultiplier).toInt());
           break;
         case FeedbackType.info:
           // Short vibration - info
-          await Vibration.vibrate(duration: 30);
+          await Vibration.vibrate(duration: (30 * intensityMultiplier).toInt());
           break;
         case FeedbackType.blink:
           // Very short - blink event
-          await Vibration.vibrate(duration: 20);
+          await Vibration.vibrate(duration: (20 * intensityMultiplier).toInt());
           break;
       }
     } catch (e) {
@@ -164,9 +168,15 @@ class FeedbackService {
     _audioEnabled = enabled;
   }
 
+  /// Set vibration intensity (0.0 to 1.0, where 1.0 is full intensity)
+  void setVibrationIntensity(double intensity) {
+    _vibrationIntensity = intensity.clamp(0.0, 1.0);
+  }
+
   bool get isEnabled => _enabled;
   bool get isHapticEnabled => _hapticEnabled;
   bool get isAudioEnabled => _audioEnabled;
+  double get vibrationIntensity => _vibrationIntensity;
 
   void dispose() {
     _audioPlayer.dispose();

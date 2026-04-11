@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../blink_test_screen.dart';
 import '../services/gamification_service.dart';
 import '../services/task_service.dart';
 import '../services/task_models.dart';
 import '../widgets/rounded_card.dart';
-import 'guardian_access_screen.dart';
+
 
 class TasksScreen extends StatefulWidget {
   const TasksScreen({Key? key}) : super(key: key);
@@ -23,6 +24,61 @@ class _TasksScreenState extends State<TasksScreen> {
   @override
   void dispose() {
     super.dispose();
+  }
+
+  /// Build task list grouped by time period with separators
+  List<Widget> _buildGroupedTasks(BuildContext context, List<Task> tasks) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final List<Widget> widgets = [];
+    
+    // Group tasks by time period
+    final Map<TimePeriod, List<Task>> groupedTasks = {};
+    for (final task in tasks) {
+      if (!groupedTasks.containsKey(task.timePeriod)) {
+        groupedTasks[task.timePeriod] = [];
+      }
+      groupedTasks[task.timePeriod]!.add(task);
+    }
+
+    // Display groups in order: Morning, Afternoon, Evening
+    final periods = [TimePeriod.morning, TimePeriod.afternoon, TimePeriod.evening];
+    
+    for (final period in periods) {
+      final periodTasks = groupedTasks[period];
+      if (periodTasks == null || periodTasks.isEmpty) {
+        continue; // Skip if no tasks for this period
+      }
+
+      // Add separator header
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                period.displayName,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF7FC86D),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      );
+
+      // Add tasks for this period
+      for (final task in periodTasks) {
+        widgets.add(Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _taskCard(context, task),
+        ));
+      }
+    }
+
+    return widgets;
   }
 
   Widget _taskCard(BuildContext context, Task task) {
@@ -160,15 +216,35 @@ class _TasksScreenState extends State<TasksScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () async {
-                    await TaskService.instance.completeTask(task.id);
-                    Navigator.pop(context);
+                    if (task.id == 'blink-exercise') {
+                      // Launch Blink Exercise with task completion
+                      if (!context.mounted) return;
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => BlinkTestScreen(
+                            enforceCompletion: false,
+                            requiredIntentionalBlinks: 15,
+                            taskIdToComplete: task.id,
+                          ),
+                        ),
+                      );
+                      if (!context.mounted) return;
+                      Navigator.pop(context); // Close task details modal
+                    } else {
+                      // For other tasks, just mark as complete
+                      await TaskService.instance.completeTask(task.id);
+                      Navigator.pop(context);
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF7FC86D),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Mark as Complete', style: TextStyle(color: Colors.white)),
+                  child: Text(
+                    task.id == 'blink-exercise' ? 'Start Blink Exercise' : 'Mark as Complete',
+                    style: const TextStyle(color: Colors.white),
+                  ),
                 ),
               )
             else
@@ -184,6 +260,130 @@ class _TasksScreenState extends State<TasksScreen> {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStreakDisplay(BuildContext context, int streak, bool isDark) {
+    return GestureDetector(
+      onTap: () => _showStreakCalendar(context, streak, isDark),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFF6B6B).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFFF6B6B), width: 0.8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('🔥', style: TextStyle(fontSize: 14)),
+            const SizedBox(width: 4),
+            Text(
+              '$streak days',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFFF6B6B)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showStreakCalendar(BuildContext context, int streak, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[900] : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Your Streak',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: Column(
+                children: [
+                  const Text('🔥', style: TextStyle(fontSize: 48)),
+                  const SizedBox(height: 12),
+                  Text(
+                    '$streak',
+                    style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Color(0xFFFF6B6B)),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'day${streak == 1 ? '' : 's'} in a row',
+                    style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.black54),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white10 : Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Last 30 Days Activity',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.white70 : Colors.black54),
+                  ),
+                  const SizedBox(height: 12),
+                  GridView.count(
+                    crossAxisCount: 7,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 4,
+                    crossAxisSpacing: 4,
+                    children: List.generate(28, (index) {
+                      final daysAgo = 27 - index;
+                      final isRecent = daysAgo <= streak;
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: isRecent ? const Color(0xFF7FC86D) : (isDark ? Colors.white10 : Colors.white),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: isRecent ? const Color(0xFF7FC86D) : (isDark ? Colors.white24 : Colors.black12),
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            isRecent ? '✓' : '',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          ),
         ),
       ),
     );
@@ -223,15 +423,7 @@ class _TasksScreenState extends State<TasksScreen> {
                                     const Text("Today's Tasks", style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
                                     Row(
                                       children: [
-                                        IconButton(
-                                          onPressed: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(builder: (_) => const GuardianAccessScreen()),
-                                            );
-                                          },
-                                          icon: const Icon(Icons.shield_outlined),
-                                          tooltip: 'Guardian Access',
-                                        ),
+
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                                           decoration: BoxDecoration(
@@ -246,10 +438,16 @@ class _TasksScreenState extends State<TasksScreen> {
                                     )
                                   ],
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Session XP: $xp • Streak: $streak',
-                                  style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54),
+                                const SizedBox(height: 10),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      "Today's XP: $xp",
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.white70 : Colors.black54),
+                                    ),
+                                    _buildStreakDisplay(context, streak, isDark),
+                                  ],
                                 ),
                                 const SizedBox(height: 14),
                                 ClipRRect(
@@ -284,10 +482,7 @@ class _TasksScreenState extends State<TasksScreen> {
                                         ),
                                       )
                                     else
-                                      ...tasks.map((task) => Padding(
-                                            padding: const EdgeInsets.only(bottom: 12),
-                                            child: _taskCard(context, task),
-                                          )),
+                                      ..._buildGroupedTasks(context, tasks),
                                     const SizedBox(height: 12),
                                   ],
                                 ),

@@ -7,7 +7,6 @@ import '../services/offline_models.dart';
 import '../services/feedback_service.dart';
 import '../services/guardian_auth_service.dart';
 import '../services/auth_session_service.dart';
-import 'auth/auth_options_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -17,6 +16,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _showMetrics = true; // Track whether metrics container is expanded
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -74,12 +74,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Mascot area
+            // Mascot area - animated based on metrics visibility
             Expanded(
               child: Center(
                 child: SizedBox(
                   width: 270,
-                  height: 340,
+                  height: _showMetrics ? 340 : 360,
                   child: ValueListenableBuilder<int>(
                     valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
                     builder: (_, blinkRate, __) {
@@ -105,12 +105,24 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text('^', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+            // Collapsible metrics container with arrow toggle
+            GestureDetector(
+              onTap: () => setState(() => _showMetrics = !_showMetrics),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: AnimatedRotation(
+                  turns: _showMetrics ? 0 : 0.5,
+                  duration: const Duration(milliseconds: 300),
+                  child: Text('^', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: isDark ? Colors.white70 : Colors.black54)),
+                ),
+              ),
             ),
 
-            Container(
+            AnimatedSize(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              child: _showMetrics
+                  ? Container(
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF5F5F7),
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -153,6 +165,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
+                    )
+                  : const SizedBox.shrink(),
             )
           ],
         ),
@@ -165,16 +179,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) => Container(
         decoration: BoxDecoration(
           color: isDark ? Colors.grey[900] : Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -197,6 +218,71 @@ class _HomeScreenState extends State<HomeScreen> {
                 setState(() {});
               },
               isEnabled: FeedbackService.instance.isHapticEnabled,
+            ),
+            const SizedBox(height: 12),
+            // Vibration Intensity Preset Buttons
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Vibration Duration',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      '${(FeedbackService.instance.vibrationIntensity * 100).toStringAsFixed(0)}%',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF7FC86D)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [0, 25, 50, 75, 100].map((percent) {
+                    final value = percent / 100.0;
+                    final isSelected = (FeedbackService.instance.vibrationIntensity * 100).round() == percent;
+                    return Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: GestureDetector(
+                          onTap: () {
+                            FeedbackService.instance.setVibrationIntensity(value);
+                            FeedbackService.instance.provideFeedback(FeedbackType.info);
+                            setState(() {});
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected ? const Color(0xFF7FC86D) : (isDark ? Colors.white10 : Colors.grey[200]),
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF7FC86D) : (isDark ? Colors.white24 : Colors.black12),
+                                width: isSelected ? 2 : 1,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '$percent%',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black54),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Tap a level to adjust vibration duration',
+                  style: TextStyle(fontSize: 11, color: isDark ? Colors.white60 : Colors.black54),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
             // Audio Feedback Toggle
@@ -230,7 +316,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 12),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );

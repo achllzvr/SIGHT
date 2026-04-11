@@ -90,6 +90,7 @@ class TaskService {
         category: 'eye-exercise',
         rewardXp: 10,
         createdAt: now,
+        timePeriod: TimePeriod.morning,
       ),
       Task(
         id: 'blink-exercise',
@@ -100,6 +101,7 @@ class TaskService {
         category: 'eye-exercise',
         rewardXp: 5,
         createdAt: now,
+        timePeriod: TimePeriod.morning,
       ),
       Task(
         id: 'eye-break-afternoon',
@@ -110,6 +112,7 @@ class TaskService {
         category: 'eye-exercise',
         rewardXp: 10,
         createdAt: now,
+        timePeriod: TimePeriod.afternoon,
       ),
       Task(
         id: 'healthy-distance-session',
@@ -122,6 +125,7 @@ class TaskService {
         category: 'eye-exercise',
         rewardXp: 15,
         createdAt: now,
+        timePeriod: TimePeriod.afternoon,
       ),
     ];
   }
@@ -143,6 +147,7 @@ class TaskService {
         rewardXp: 25,
         createdAt: now,
         completedAt: currentXp >= 25 ? now : null,
+        timePeriod: TimePeriod.morning,
       ),
       Task(
         id: 'xp-goal-medium',
@@ -156,6 +161,7 @@ class TaskService {
         rewardXp: 50,
         createdAt: now,
         completedAt: currentXp >= 50 ? now : null,
+        timePeriod: TimePeriod.afternoon,
       ),
       Task(
         id: 'streak-goal',
@@ -169,6 +175,7 @@ class TaskService {
         rewardXp: 30,
         createdAt: now,
         completedAt: currentStreak >= 3 ? now : null,
+        timePeriod: TimePeriod.afternoon,
       ),
     ];
   }

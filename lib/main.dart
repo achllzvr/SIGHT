@@ -28,6 +28,7 @@ import 'services/gamification_service.dart';
 import 'services/guardian_preferences_service.dart';
 import 'services/guardian_setup_service.dart';
 import 'services/local_metrics_service.dart';
+import 'services/twenty_twenty_twenty_service.dart';
 import 'services/offline_models.dart';
 import 'services/rule_engine_service.dart';
 import 'services/feedback_service.dart';
@@ -52,6 +53,9 @@ Future<void> main() async {
 
   // Initialize feedback service
   await FeedbackService.instance.initialize();
+
+  // Initialize 20-20-20 break service
+  await TwentyTwentyBreakService.instance.initialize();
 
   try {
     cameras = await availableCameras();
@@ -260,7 +264,10 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
         }
 
         if (RuleEngineService.instance.alertLevelNotifier.value == AlertLevel.screenLock) {
-          await RuleEngineService.instance.triggerCriticalLock(context);
+          await RuleEngineService.instance.triggerCriticalLock(
+            context,
+            skipIfJustCompleted: TwentyTwentyBreakService.instance.breakJustCompleted,
+          );
         }
       } finally {
         _pendingCriticalLockCheck = false;
