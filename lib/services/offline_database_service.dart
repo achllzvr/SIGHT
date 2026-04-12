@@ -226,6 +226,18 @@ class OfflineDatabaseService {
     return rows.map(CuratedMetricBatch.fromMap).toList(growable: false);
   }
 
+  /// Load curated batches for a specific child within a date range
+  Future<List<CuratedMetricBatch>> loadBatchesForChild(int childId, DateTime start, DateTime end) async {
+    await initialize();
+    final rows = await _db.query(
+      'curated_batches',
+      where: 'childId = ? AND windowEnd >= ? AND windowStart <= ?',
+      whereArgs: [childId, start.millisecondsSinceEpoch, end.millisecondsSinceEpoch],
+      orderBy: 'windowEnd ASC',
+    );
+    return rows.map(CuratedMetricBatch.fromMap).toList(growable: false);
+  }
+
   Future<int> markBatchSynced(int id, {String? remoteId}) async {
     await initialize();
     return _db.update(

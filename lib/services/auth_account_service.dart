@@ -39,6 +39,7 @@ class ChildAccount {
   final String guardianEmail;
   final int? childId;
   final DateTime createdAt;
+  final DateTime? birthdate;
 
   const ChildAccount({
     required this.loginCode,
@@ -47,6 +48,7 @@ class ChildAccount {
     required this.guardianEmail,
     required this.childId,
     required this.createdAt,
+    this.birthdate,
   });
 
   Map<String, dynamic> toJson() {
@@ -57,6 +59,7 @@ class ChildAccount {
       'guardianEmail': guardianEmail,
       'childId': childId,
       'createdAt': createdAt.toIso8601String(),
+      'birthdate': birthdate?.toIso8601String(),
     };
   }
 
@@ -68,6 +71,7 @@ class ChildAccount {
       guardianEmail: (json['guardianEmail'] as String? ?? '').toLowerCase(),
       childId: (json['childId'] as num?)?.toInt(),
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      birthdate: json['birthdate'] != null ? DateTime.tryParse(json['birthdate'] as String) : null,
     );
   }
 }

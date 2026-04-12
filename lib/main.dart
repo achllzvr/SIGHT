@@ -18,6 +18,9 @@ import 'screens/tasks_screen.dart';
 import 'screens/media_hub_screen.dart';
 import 'screens/guardian_setup_screen.dart';
 import 'screens/guardian_control_center_screen.dart';
+import 'screens/guardian_dashboard_screen.dart';
+import 'screens/guardian_child_dashboard_screen.dart';
+import 'screens/doctor_connection_modal.dart';
 import 'screens/welcome_screen.dart';
 import 'services/app_lifecycle_service.dart';
 import 'services/active_child_context_service.dart';
@@ -82,7 +85,8 @@ class SightFeasibilityApp extends StatelessWidget {
             '/welcome': (_) => const WelcomeScreen(),
             '/auth': (_) => const AuthOptionsScreen(),
             '/child': (_) => const RootApp(),
-            '/guardian': (_) => const GuardianControlCenterScreen(),
+            '/guardian': (_) => const GuardianDashboardScreen(),
+            '/guardian/child-dashboard': (_) => const GuardianChildDashboardScreen(),
             '/guardian-setup': (_) => const GuardianSetupScreen(mandatory: true),
             '/add-child': (_) => const AddChildrenScreen(),
             '/child-dashboard': (_) => const ChildDashboardScreen(),
