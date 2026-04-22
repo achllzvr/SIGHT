@@ -692,7 +692,7 @@ class _GuardianControlCenterScreenState extends State<GuardianControlCenterScree
                                   color: Theme.of(context).brightness == Brightness.dark
                                       ? Colors.white10
                                       : Colors.black.withOpacity(0.04),
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(18),
                                 ),
                                 child: Row(
                                   children: [
@@ -712,7 +712,7 @@ class _GuardianControlCenterScreenState extends State<GuardianControlCenterScree
                                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFEAF4E3),
-                                        borderRadius: BorderRadius.circular(16),
+                                        borderRadius: BorderRadius.circular(18),
                                       ),
                                       child: Text('Code: ${account.loginCode}'),
                                     ),

@@ -57,9 +57,6 @@ Future<void> main() async {
   // Initialize feedback service
   await FeedbackService.instance.initialize();
 
-  // Initialize 20-20-20 break service
-  await TwentyTwentyBreakService.instance.initialize();
-
   try {
     cameras = await availableCameras();
   } catch (e) {
@@ -85,7 +82,7 @@ class SightFeasibilityApp extends StatelessWidget {
             '/welcome': (_) => const WelcomeScreen(),
             '/auth': (_) => const AuthOptionsScreen(),
             '/child': (_) => const RootApp(),
-            '/guardian': (_) => const GuardianDashboardScreen(),
+            '/guardian': (_) => const GuardianControlCenterScreen(),
             '/guardian/child-dashboard': (_) => const GuardianChildDashboardScreen(),
             '/guardian-setup': (_) => const GuardianSetupScreen(mandatory: true),
             '/add-child': (_) => const AddChildrenScreen(),
@@ -228,10 +225,11 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
 
     Permission.notification.request();
 
+    // Initialize tracking services (only for child users - DetectionService initialized here)
     try {
-      DetectionService.instance.initialize();
+      unawaited(TwentyTwentyBreakService.instance.initialize());
     } catch (e) {
-      debugPrint('DetectionService init error: $e');
+      debugPrint('TwentyTwentyBreakService init error: $e');
     }
 
     // Start background notification service (it will only enable background

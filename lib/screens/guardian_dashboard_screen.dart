@@ -202,7 +202,7 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
             Container(
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(
                   color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
                 ),
@@ -228,20 +228,19 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      ElevatedButton.icon(
+                      FilledButton.icon(
                         onPressed: _addChild,
                         icon: const Icon(Icons.add, size: 20),
                         label: const Text('Add Child'),
-                        style: ElevatedButton.styleFrom(
+                        style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFFD5C2E8),
                           foregroundColor: Colors.black87,
-                          elevation: 0,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 12,
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(18),
                           ),
                         ),
                       ),
@@ -275,7 +274,7 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                               color: isSelected
                                   ? const Color(0xFFD5C2E8).withOpacity(0.3)
                                   : (isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF9F9FB)),
-                              borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(18),
                               border: Border.all(
                                 color: isSelected
                                     ? const Color(0xFFD5C2E8)
@@ -295,7 +294,7 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                                   height: 50,
                                   decoration: BoxDecoration(
                                     color: const Color(0xFFD5C2E8),
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(18),
                                   ),
                                   child: const Icon(
                                     Icons.pets,
@@ -358,15 +357,16 @@ class AddChildModal extends StatefulWidget {
 class _AddChildModalState extends State<AddChildModal> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _ageController = TextEditingController();
+  final _birthdateController = TextEditingController();
   final _passwordController = TextEditingController();
+  DateTime? _selectedBirthdate;
   bool _isLoading = false;
   String? _generatedLoginCode;
 
   @override
   void dispose() {
     _nameController.dispose();
-    _ageController.dispose();
+    _birthdateController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -493,7 +493,7 @@ class _AddChildModalState extends State<AddChildModal> {
                       filled: true,
                       fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(18),
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -505,21 +505,36 @@ class _AddChildModalState extends State<AddChildModal> {
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
-                    controller: _ageController,
-                    keyboardType: TextInputType.number,
+                    controller: _birthdateController,
+                    readOnly: true,
+                    onTap: () async {
+                      final pickedDate = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedBirthdate ?? DateTime.now().subtract(const Duration(days: 365 * 10)),
+                        firstDate: DateTime(1990),
+                        lastDate: DateTime.now(),
+                      );
+                      if (pickedDate != null) {
+                        setState(() {
+                          _selectedBirthdate = pickedDate;
+                          _birthdateController.text = '${pickedDate.day}/${pickedDate.month}/${pickedDate.year}';
+                        });
+                      }
+                    },
                     decoration: InputDecoration(
-                      hintText: 'Age',
+                      hintText: 'Birthdate (DD/MM/YYYY)',
                       filled: true,
                       fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(18),
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      suffixIcon: const Icon(Icons.calendar_today),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Age is required';
-                      if (int.tryParse(value) == null) return 'Please enter a valid age';
+                      if (value == null || value.isEmpty) return 'Birthdate is required';
+                      if (_selectedBirthdate == null) return 'Please select a valid birthdate';
                       return null;
                     },
                   ),
@@ -532,7 +547,7 @@ class _AddChildModalState extends State<AddChildModal> {
                       filled: true,
                       fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(18),
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -547,14 +562,13 @@ class _AddChildModalState extends State<AddChildModal> {
                   SizedBox(
                     width: double.infinity,
                     height: 48,
-                    child: ElevatedButton(
+                    child: FilledButton(
                       onPressed: _isLoading ? null : _submitForm,
-                      style: ElevatedButton.styleFrom(
+                      style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFFD5C2E8),
                         foregroundColor: Colors.white,
-                        elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(18),
                         ),
                         disabledBackgroundColor: const Color(0xFFD5C2E8).withOpacity(0.5),
                       ),

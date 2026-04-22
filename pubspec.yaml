@@ -41,6 +41,9 @@ dependencies:
   # --- HAPTIC & AUDIO FEEDBACK ---
   vibration: ^3.0.0
   just_audio: ^0.9.36
+  
+  # --- CHARTS & VISUALIZATION ---
+  fl_chart: ^0.68.0
 
 dev_dependencies:
   flutter_test:

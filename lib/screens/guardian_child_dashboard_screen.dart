@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 import '../services/active_child_context_service.dart';
+import '../services/auth_session_service.dart';
 import '../services/guardian_preferences_service.dart';
 import '../services/offline_database_service.dart';
 import '../services/local_metrics_service.dart';
@@ -198,11 +200,36 @@ class _OverviewTabState extends State<OverviewTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Welcome Greeting
+          Padding(
+            padding: const EdgeInsets.only(bottom: 24),
+            child: FutureBuilder<UserSession?>(
+              future: AuthSessionService.instance.loadUserSession(),
+              builder: (context, snapshot) {
+                String greeting = 'Welcome back! 👋';
+                if (snapshot.hasData && snapshot.data != null) {
+                  final session = snapshot.data!;
+                  if (session.guardianEmail != null && session.guardianEmail!.isNotEmpty) {
+                    final emailName = session.guardianEmail!.split('@').first;
+                    greeting = 'Welcome back, ${emailName.replaceAll('.', ' ')}! 👋';
+                  }
+                }
+                return Text(
+                  greeting,
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                  ),
+                );
+              },
+            ),
+          ),
           // Eye Health Score Card
           Container(
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
               ),
@@ -309,7 +336,7 @@ class _OverviewTabState extends State<OverviewTab> {
           Container(
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
               ),
@@ -342,7 +369,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 ),
                 const SizedBox(height: 12),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(18),
                   child: LinearProgressIndicator(
                     value: 0.5,
                     minHeight: 8,
@@ -356,7 +383,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFFB9E3A4).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   child: const Text(
@@ -377,7 +404,7 @@ class _OverviewTabState extends State<OverviewTab> {
           Container(
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
               ),
@@ -441,7 +468,7 @@ class _OverviewTabState extends State<OverviewTab> {
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFFE3F2FD),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
             ),
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -493,6 +520,8 @@ class AnalyticsTab extends StatefulWidget {
 class _AnalyticsTabState extends State<AnalyticsTab> {
   String _selectedPeriod = '7 days';
   Map<String, dynamic>? _analyticsData;
+  List<CuratedMetricBatch> _batches = [];
+  Map<DateTime, List<CuratedMetricBatch>> _batchesByDay = {};
   bool _loading = true;
 
   @override
@@ -579,6 +608,8 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
 
       if (mounted) {
         setState(() {
+          _batches = batches;
+          _batchesByDay = batchesByDay;
           _analyticsData = {
             'avg_screen_time': avgScreenTime,
             'avg_blink_rate': avgBlinkRate,
@@ -612,7 +643,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
           Container(
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
               ),
@@ -688,7 +719,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
           Container(
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
               ),
@@ -712,20 +743,164 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                SizedBox(
-                  height: 150,
-                  child: Placeholder(
+                if (_batches.isNotEmpty)
+                  SizedBox(
+                    height: 180,
+                    child: WeeklyScreenTimeChart(
+                      batches: _batches,
+                      batchesByDay: _batchesByDay,
+                    ),
+                  )
+                else
+                  SizedBox(
+                    height: 150,
                     child: Center(
                       child: Text(
-                        'Chart Placeholder\n(Integrate fl_chart or similar)',
+                        'No data available',
                         style: TextStyle(
                           color: isDark ? Colors.white54 : Colors.black54,
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Blink Rate Trends
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+              ),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Blink Rate Trends',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
+                const SizedBox(height: 16),
+                if (_batches.isNotEmpty)
+                  SizedBox(
+                    height: 180,
+                    child: BlinkRateTrendsChart(
+                      batches: _batches,
+                      batchesByDay: _batchesByDay,
+                    ),
+                  )
+                else
+                  SizedBox(
+                    height: 150,
+                    child: Center(
+                      child: Text(
+                        'No data available',
+                        style: TextStyle(
+                          color: isDark ? Colors.white54 : Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Viewing Distance Trends
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+              ),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Viewing Distance Trends',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_batches.isNotEmpty)
+                  SizedBox(
+                    height: 180,
+                    child: ViewingDistanceTrendsChart(
+                      batches: _batches,
+                      batchesByDay: _batchesByDay,
+                    ),
+                  )
+                else
+                  SizedBox(
+                    height: 150,
+                    child: Center(
+                      child: Text(
+                        'No data available',
+                        style: TextStyle(
+                          color: isDark ? Colors.white54 : Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Daily Usage Pattern
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+              ),
+            ),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Daily Usage Pattern (Today)',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_batches.isNotEmpty)
+                  SizedBox(
+                    height: 180,
+                    child: DailyUsagePatternChart(
+                      batches: _batches,
+                      batchesByDay: _batchesByDay,
+                    ),
+                  )
+                else
+                  SizedBox(
+                    height: 150,
+                    child: Center(
+                      child: Text(
+                        'No data available',
+                        style: TextStyle(
+                          color: isDark ? Colors.white54 : Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -735,7 +910,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
           Container(
             decoration: BoxDecoration(
               color: const Color(0xFFE3F2FD),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
             ),
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -855,7 +1030,7 @@ class _ControlsTabState extends State<ControlsTab> {
           Container(
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
               ),
@@ -947,7 +1122,7 @@ class _ControlsTabState extends State<ControlsTab> {
           Container(
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
               ),
@@ -1046,7 +1221,7 @@ class _ControlsTabState extends State<ControlsTab> {
           Container(
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
               ),
@@ -1215,7 +1390,7 @@ class _ControlsTabState extends State<ControlsTab> {
           Container(
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
                 color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
               ),
@@ -1267,7 +1442,7 @@ class _ControlsTabState extends State<ControlsTab> {
                 foregroundColor: Colors.white,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(18),
                 ),
                 disabledBackgroundColor: const Color(0xFF00ACC1).withOpacity(0.5),
               ),
@@ -1311,7 +1486,7 @@ class _MetricCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
         ),
@@ -1324,7 +1499,7 @@ class _MetricCard extends StatelessWidget {
             height: 40,
             decoration: BoxDecoration(
               color: const Color(0xFFB9E3A4),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(18),
             ),
             child: Icon(icon, color: Colors.white, size: 20),
           ),
@@ -1468,7 +1643,7 @@ class _AnalyticsMetricCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
         ),
@@ -1552,7 +1727,7 @@ class _ModeButton extends StatelessWidget {
             color: isSelected
                 ? const Color(0xFF00ACC1).withOpacity(0.15)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: isSelected
                   ? const Color(0xFF00ACC1)
@@ -1639,6 +1814,816 @@ class _ToggleSetting extends StatelessWidget {
           activeColor: const Color(0xFF00ACC1),
         ),
       ],
+    );
+  }
+}
+
+// ==================== CHART WIDGETS ====================
+
+/// Weekly Screen Time Bar Chart
+/// Displays Actual Usage (blue) vs Recommended (green) for each day of the week
+class WeeklyScreenTimeChart extends StatelessWidget {
+  final List<CuratedMetricBatch> batches;
+  final Map<DateTime, List<CuratedMetricBatch>> batchesByDay;
+
+  const WeeklyScreenTimeChart({
+    super.key,
+    required this.batches,
+    required this.batchesByDay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Build 7-day data starting from 6 days ago
+    final chartData = <({int dayIndex, String label, int actualMinutes, int recommendedMinutes})>[];
+    const recommendedMinutes = 110;
+
+    for (int i = 6; i >= 0; i--) {
+      final dayDate = today.subtract(Duration(days: i));
+      final batchesForDay = batchesByDay[dayDate] ?? [];
+      final totalScreenTime = batchesForDay.fold<int>(0, (sum, b) => sum + b.screenTimeMinutes);
+
+      chartData.add((
+        dayIndex: i,
+        label: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayDate.weekday % 7],
+        actualMinutes: totalScreenTime,
+        recommendedMinutes: recommendedMinutes,
+      ));
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Weekly Screen Time',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Actual vs Recommended Usage',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? Colors.white54 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: 200,
+                barTouchData: BarTouchData(
+                  enabled: true,
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipColor: (_) =>
+                        isDark ? const Color(0xFF2A2A2C) : Colors.grey[800]!,
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles:
+                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles:
+                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          '${value.toInt()}m',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color:
+                                isDark ? Colors.white38 : Colors.black38,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          chartData[value.toInt()].label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color:
+                                isDark ? Colors.white54 : Colors.black54,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 50,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+                      strokeWidth: 1,
+                    );
+                  },
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: List.generate(
+                  chartData.length,
+                  (index) => BarChartGroupData(
+                    x: index,
+                    barRods: [
+                      BarChartRodData(
+                        toY: chartData[index].actualMinutes.toDouble(),
+                        color: const Color(0xFF007AFF),
+                        width: 8,
+                        borderRadius: const BorderRadius.all(Radius.circular(4)),
+                      ),
+                      BarChartRodData(
+                        toY: chartData[index].recommendedMinutes.toDouble(),
+                        color: const Color(0xFF34C759),
+                        width: 8,
+                        borderRadius: const BorderRadius.all(Radius.circular(4)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007AFF),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text('Actual Usage', style: TextStyle(fontSize: 12)),
+              const SizedBox(width: 20),
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF34C759),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text('Recommended', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Blink Rate Trends Line Chart
+/// Shows daily average blink rates with warning banner if below 15/min threshold
+class BlinkRateTrendsChart extends StatelessWidget {
+  final List<CuratedMetricBatch> batches;
+  final Map<DateTime, List<CuratedMetricBatch>> batchesByDay;
+
+  const BlinkRateTrendsChart({
+    super.key,
+    required this.batches,
+    required this.batchesByDay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    const blinkThreshold = 15.0;
+
+    // Build 7-day data
+    final chartData = <({int dayIndex, String label, double blinkRate})>[];
+    bool hasWarning = false;
+
+    for (int i = 6; i >= 0; i--) {
+      final dayDate = today.subtract(Duration(days: i));
+      final batchesForDay = batchesByDay[dayDate] ?? [];
+
+      double totalBlinkRate = 0;
+      int count = 0;
+      for (final batch in batchesForDay) {
+        if (batch.averageBlinkRate != null) {
+          totalBlinkRate += batch.averageBlinkRate!;
+          count++;
+        }
+      }
+
+      final avgBlinkRate = count > 0 ? totalBlinkRate / count : 0.0;
+      if (avgBlinkRate < blinkThreshold && avgBlinkRate > 0) {
+        hasWarning = true;
+      }
+
+      chartData.add((
+        dayIndex: i,
+        label: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayDate.weekday % 7],
+        blinkRate: avgBlinkRate,
+      ));
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Blink Rate Trends',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Daily average blinks per minute',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? Colors.white54 : Colors.black54,
+            ),
+          ),
+          if (hasWarning) ...[
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF3B30).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFFF3B30).withOpacity(0.3),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.warning_rounded,
+                    size: 16,
+                    color: Color(0xFFFF3B30),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Blink rate below healthy threshold (15/min)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFFFF3B30),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: LineChart(
+              LineChartData(
+                maxY: 25,
+                minY: 0,
+                lineTouchData: LineTouchData(
+                  enabled: true,
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipColor: (_) =>
+                        isDark ? const Color(0xFF2A2A2C) : Colors.grey[800]!,
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles:
+                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles:
+                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          '${value.toInt()}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color:
+                                isDark ? Colors.white38 : Colors.black38,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          chartData[value.toInt()].label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color:
+                                isDark ? Colors.white54 : Colors.black54,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 5,
+                  getDrawingHorizontalLine: (value) {
+                    if (value == blinkThreshold) {
+                      return FlLine(
+                        color: const Color(0xFFFF3B30).withOpacity(0.3),
+                        strokeWidth: 2,
+                        dashArray: [5, 5],
+                      );
+                    }
+                    return FlLine(
+                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+                      strokeWidth: 1,
+                    );
+                  },
+                ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: List.generate(
+                      chartData.length,
+                      (i) => FlSpot(i.toDouble(), chartData[i].blinkRate),
+                    ),
+                    isCurved: true,
+                    color: const Color(0xFF00ACC1),
+                    barWidth: 3,
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, percent, barData, index) {
+                        return FlDotCirclePainter(
+                          radius: 5,
+                          color: const Color(0xFF00ACC1),
+                          strokeWidth: 2,
+                          strokeColor: isDark
+                              ? const Color(0xFF2A2A2C)
+                              : Colors.white,
+                        );
+                      },
+                    ),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: const Color(0xFF00ACC1).withOpacity(0.1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Viewing Distance Trends Line Chart
+/// Shows daily average viewing distances with warning banner if below 40cm threshold
+class ViewingDistanceTrendsChart extends StatelessWidget {
+  final List<CuratedMetricBatch> batches;
+  final Map<DateTime, List<CuratedMetricBatch>> batchesByDay;
+
+  const ViewingDistanceTrendsChart({
+    super.key,
+    required this.batches,
+    required this.batchesByDay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    const distanceThreshold = 40.0;
+
+    // Build 7-day data
+    final chartData = <({int dayIndex, String label, double distance})>[];
+    bool hasWarning = false;
+
+    for (int i = 6; i >= 0; i--) {
+      final dayDate = today.subtract(Duration(days: i));
+      final batchesForDay = batchesByDay[dayDate] ?? [];
+
+      double totalDistance = 0;
+      int count = 0;
+      for (final batch in batchesForDay) {
+        if (batch.averageDistanceCm != null) {
+          totalDistance += batch.averageDistanceCm!;
+          count++;
+        }
+      }
+
+      final avgDistance = count > 0 ? totalDistance / count : 0.0;
+      if (avgDistance < distanceThreshold && avgDistance > 0) {
+        hasWarning = true;
+      }
+
+      chartData.add((
+        dayIndex: i,
+        label: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayDate.weekday % 7],
+        distance: avgDistance,
+      ));
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Viewing Distance Trends',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Daily average distance in centimeters',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? Colors.white54 : Colors.black54,
+            ),
+          ),
+          if (hasWarning) ...[
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF3B30).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFFF3B30).withOpacity(0.3),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.warning_rounded,
+                    size: 16,
+                    color: Color(0xFFFF3B30),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Viewing distance too close (below 40cm)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFFFF3B30),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: LineChart(
+              LineChartData(
+                maxY: 80,
+                minY: 0,
+                lineTouchData: LineTouchData(
+                  enabled: true,
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipColor: (_) =>
+                        isDark ? const Color(0xFF2A2A2C) : Colors.grey[800]!,
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles:
+                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles:
+                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          '${value.toInt()}cm',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color:
+                                isDark ? Colors.white38 : Colors.black38,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          chartData[value.toInt()].label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color:
+                                isDark ? Colors.white54 : Colors.black54,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 10,
+                  getDrawingHorizontalLine: (value) {
+                    if (value == distanceThreshold) {
+                      return FlLine(
+                        color: const Color(0xFFFF3B30).withOpacity(0.3),
+                        strokeWidth: 2,
+                        dashArray: [5, 5],
+                      );
+                    }
+                    return FlLine(
+                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+                      strokeWidth: 1,
+                    );
+                  },
+                ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: List.generate(
+                      chartData.length,
+                      (i) => FlSpot(i.toDouble(), chartData[i].distance),
+                    ),
+                    isCurved: true,
+                    color: const Color(0xFF34C759),
+                    barWidth: 3,
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, percent, barData, index) {
+                        return FlDotCirclePainter(
+                          radius: 5,
+                          color: const Color(0xFF34C759),
+                          strokeWidth: 2,
+                          strokeColor: isDark
+                              ? const Color(0xFF2A2A2C)
+                              : Colors.white,
+                        );
+                      },
+                    ),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: const Color(0xFF34C759).withOpacity(0.1),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Daily Usage Pattern Bar Chart
+/// Shows hourly breakdown for today (2-hour intervals from 8AM to 8PM)
+class DailyUsagePatternChart extends StatelessWidget {
+  final List<CuratedMetricBatch> batches;
+  final Map<DateTime, List<CuratedMetricBatch>> batchesByDay;
+
+  const DailyUsagePatternChart({
+    super.key,
+    required this.batches,
+    required this.batchesByDay,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Build hourly data for today (8AM to 8PM)
+    final chartData = <({int hour, String label, int screenTimeMinutes})>[];
+    final todayBatches = batchesByDay[today] ?? [];
+
+    final hourBlockLabels = [
+      (hour: 8, label: '8AM'),
+      (hour: 10, label: '10AM'),
+      (hour: 12, label: '12PM'),
+      (hour: 14, label: '2PM'),
+      (hour: 16, label: '4PM'),
+      (hour: 18, label: '6PM'),
+      (hour: 20, label: '8PM'),
+    ];
+
+    for (final timeSlot in hourBlockLabels) {
+      final blockStart = DateTime(today.year, today.month, today.day, timeSlot.hour);
+      final blockEnd = blockStart.add(const Duration(hours: 2));
+
+      int totalScreenTime = 0;
+      for (final batch in todayBatches) {
+        if (batch.windowStart.isBefore(blockEnd) && batch.windowEnd.isAfter(blockStart)) {
+          totalScreenTime += batch.screenTimeMinutes;
+        }
+      }
+
+      chartData.add((
+        hour: timeSlot.hour,
+        label: timeSlot.label,
+        screenTimeMinutes: totalScreenTime,
+      ));
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Today\'s Usage Pattern',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Screen time by 2-hour blocks',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? Colors.white54 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: 60,
+                barTouchData: BarTouchData(
+                  enabled: true,
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipColor: (_) =>
+                        isDark ? const Color(0xFF2A2A2C) : Colors.grey[800]!,
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles:
+                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles:
+                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          '${value.toInt()}m',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color:
+                                isDark ? Colors.white38 : Colors.black38,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          chartData[value.toInt()].label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color:
+                                isDark ? Colors.white54 : Colors.black54,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 10,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+                      strokeWidth: 1,
+                    );
+                  },
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: List.generate(
+                  chartData.length,
+                  (index) => BarChartGroupData(
+                    x: index,
+                    barRods: [
+                      BarChartRodData(
+                        toY: chartData[index].screenTimeMinutes.toDouble(),
+                        color: const Color(0xFF007AFF),
+                        width: 14,
+                        borderRadius: const BorderRadius.all(Radius.circular(4)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007AFF),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text('Screen Time (minutes)', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
