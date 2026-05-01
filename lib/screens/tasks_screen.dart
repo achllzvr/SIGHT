@@ -403,8 +403,8 @@ class _TasksScreenState extends State<TasksScreen> {
               builder: (_, tasks, __) => ValueListenableBuilder<int>(
                 valueListenable: TaskService.instance.completedCountNotifier,
                 builder: (_, completedCount, __) => ValueListenableBuilder<int>(
-                  valueListenable: GamificationService.instance.sessionXpNotifier,
-                  builder: (_, xp, ___) => ValueListenableBuilder<int>(
+                  valueListenable: GamificationService.instance.coinsNotifier,
+                  builder: (_, coins, ___) => ValueListenableBuilder<int>(
                     valueListenable: GamificationService.instance.dailyStreakNotifier,
                     builder: (_, streak, ____) {
                       final progress = tasks.isEmpty ? 0.0 : completedCount / tasks.length;
@@ -443,7 +443,7 @@ class _TasksScreenState extends State<TasksScreen> {
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      "Today's XP: $xp",
+                                      "Today's Coins: $coins",
                                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? Colors.white70 : Colors.black54),
                                     ),
                                     _buildStreakDisplay(context, streak, isDark),

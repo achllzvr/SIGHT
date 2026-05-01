@@ -448,11 +448,11 @@ class _TopBadge extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return SizedBox(
-      width: 66,
+      width: 76,
       height: 46,
       child: ValueListenableBuilder<int>(
-        valueListenable: GamificationService.instance.sessionXpNotifier,
-        builder: (_, xp, __) {
+        valueListenable: GamificationService.instance.coinsNotifier,
+        builder: (_, coins, __) {
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
@@ -466,9 +466,9 @@ class _TopBadge extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('$xp', style: const TextStyle(fontWeight: FontWeight.bold, height: 1)),
+                Text('$coins', style: const TextStyle(fontWeight: FontWeight.bold, height: 1)),
                 const SizedBox(height: 2),
-                const Text('XP', style: TextStyle(fontSize: 9.5, height: 1)),
+                const Text('COINS', style: TextStyle(fontSize: 8.5, height: 1, fontWeight: FontWeight.bold)),
               ],
             ),
           );

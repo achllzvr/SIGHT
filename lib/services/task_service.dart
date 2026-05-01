@@ -34,7 +34,7 @@ class TaskService {
 
   void _setupListeners() {
     // Listen to gamification changes to update task progress
-    GamificationService.instance.sessionXpNotifier.addListener(_onXpChanged);
+    GamificationService.instance.coinsNotifier.addListener(_onXpChanged);
     GamificationService.instance.dailyStreakNotifier.addListener(_onStreakChanged);
   }
 
@@ -131,7 +131,7 @@ class TaskService {
   }
 
   List<Task> _generateGamificationTasks(DateTime now) {
-    final currentXp = GamificationService.instance.sessionXpNotifier.value;
+    final currentXp = GamificationService.instance.coinsNotifier.value;
     final currentStreak = GamificationService.instance.dailyStreakNotifier.value;
 
     return [
@@ -189,7 +189,7 @@ class TaskService {
   }
 
   void _updateTaskProgress() {
-    final currentXp = GamificationService.instance.sessionXpNotifier.value;
+    final currentXp = GamificationService.instance.coinsNotifier.value;
     final currentStreak = GamificationService.instance.dailyStreakNotifier.value;
     
     final updatedTasks = tasksNotifier.value.map((task) {
@@ -288,7 +288,7 @@ class TaskService {
   void dispose() {
     _dailyResetTimer?.cancel();
     _periodicUpdateTimer?.cancel();
-    GamificationService.instance.sessionXpNotifier.removeListener(_onXpChanged);
+    GamificationService.instance.coinsNotifier.removeListener(_onXpChanged);
     GamificationService.instance.dailyStreakNotifier.removeListener(_onStreakChanged);
   }
 }

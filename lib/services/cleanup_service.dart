@@ -55,7 +55,8 @@ class CleanupService {
       }
 
       // 6. Clear gamification notifiers
-      GamificationService.instance.sessionXpNotifier.value = 0;
+      GamificationService.instance.healthScoreNotifier.value = 100;
+      GamificationService.instance.coinsNotifier.value = 0;
       GamificationService.instance.dailyStreakNotifier.value = 0;
       if (kDebugMode) {
         debugPrint('[CleanupService] ✓ GamificationService cleared');
@@ -103,7 +104,8 @@ class CleanupService {
 
       // Clear metrics and gamification
       MetricsService.instance.clearAllMetrics();
-      GamificationService.instance.sessionXpNotifier.value = 0;
+      GamificationService.instance.healthScoreNotifier.value = 100;
+      GamificationService.instance.coinsNotifier.value = 0;
       GamificationService.instance.dailyStreakNotifier.value = 0;
 
       // Clear active child context

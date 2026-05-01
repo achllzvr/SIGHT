@@ -223,27 +223,31 @@ class CuratedMetricBatch {
 }
 
 class GamificationState {
-  final int sessionXp;
+  final int healthScore; 
+  final int coins;       
   final int dailyStreak;
   final PetMood petMood;
   final String lastComplianceDateIso;
 
   const GamificationState({
-    required this.sessionXp,
+    required this.healthScore,
+    required this.coins,
     required this.dailyStreak,
     required this.petMood,
     required this.lastComplianceDateIso,
   });
 
   const GamificationState.defaults()
-      : sessionXp = 0,
+      : healthScore = 100, // Max health by default
+        coins = 0,
         dailyStreak = 0,
         petMood = PetMood.happy,
         lastComplianceDateIso = '';
 
   Map<String, dynamic> toJson() {
     return {
-      'sessionXp': sessionXp,
+      'healthScore': healthScore,
+      'coins': coins,
       'dailyStreak': dailyStreak,
       'petMood': petMood.key,
       'lastComplianceDateIso': lastComplianceDateIso,
@@ -252,7 +256,9 @@ class GamificationState {
 
   factory GamificationState.fromJson(Map<String, dynamic> json) {
     return GamificationState(
-      sessionXp: (json['sessionXp'] as num?)?.toInt() ?? 0,
+      // Fallback to sessionXp if migrating from old version, otherwise default to 100
+      healthScore: (json['healthScore'] as num?)?.toInt() ?? (json['sessionXp'] as num?)?.toInt() ?? 100,
+      coins: (json['coins'] as num?)?.toInt() ?? 0,
       dailyStreak: (json['dailyStreak'] as num?)?.toInt() ?? 0,
       petMood: PetMoodX.fromKey(json['petMood'] as String?),
       lastComplianceDateIso: json['lastComplianceDateIso'] as String? ?? '',
