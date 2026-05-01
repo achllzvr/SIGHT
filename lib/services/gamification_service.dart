@@ -18,6 +18,31 @@ class GamificationService {
   final ValueNotifier<int> dailyStreakNotifier = ValueNotifier<int>(0);
   final ValueNotifier<PetMood> petMoodNotifier = ValueNotifier<PetMood>(PetMood.happy);
 
+  final ValueNotifier<String> mascotNameNotifier = ValueNotifier<String>('LUMI');
+
+  Timer? _faceLossTimer;
+
+  // Improvement #3: Deduct 0.2 HP per second when face is lost
+  void startFaceLossPenalty() {
+    _faceLossTimer?.cancel();
+    _faceLossTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      double newHp = healthScoreNotifier.value - 0.2;
+      healthScoreNotifier.value = newHp.clamp(0, 100).toInt();
+      if (newHp <= 0) timer.cancel();
+      _persistState();
+    });
+  }
+
+  void stopFaceLossPenalty() {
+    _faceLossTimer?.cancel();
+  }
+
+  // Improvement #5: Rename Mascot
+  void renameMascot(String newName) {
+    mascotNameNotifier.value = newName;
+    _persistState();
+  }
+
   bool _initialized = false;
   bool _isFlushingMinuteBuffer = false;
   Timer? _minuteBufferTimer;
@@ -58,6 +83,7 @@ class GamificationService {
     coinsNotifier.value = state.coins;
     dailyStreakNotifier.value = state.dailyStreak;
     petMoodNotifier.value = state.petMood;
+    mascotNameNotifier.value = state.mascotName;
 
     _startMinuteBufferTimer();
     _initialized = true;
@@ -78,6 +104,7 @@ class GamificationService {
         dailyStreak: dailyStreakNotifier.value,
         petMood: petMoodNotifier.value,
         lastComplianceDateIso: DateTime.now().toIso8601String(),
+        mascotName: mascotNameNotifier.value,
       ),
     );
   }

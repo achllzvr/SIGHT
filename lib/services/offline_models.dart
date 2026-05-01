@@ -1,3 +1,4 @@
+// ignore: unused_import
 import 'dart:convert';
 
 enum AlertLevel { none, blinkBubble, redOverlay, screenLock }
@@ -231,11 +232,12 @@ class CuratedMetricBatch {
 }
 
 class GamificationState {
-  final int healthScore; 
-  final int coins;       
+  final int healthScore;
+  final int coins;
   final int dailyStreak;
   final PetMood petMood;
   final String lastComplianceDateIso;
+  final String mascotName; // ADDED
 
   const GamificationState({
     required this.healthScore,
@@ -243,14 +245,16 @@ class GamificationState {
     required this.dailyStreak,
     required this.petMood,
     required this.lastComplianceDateIso,
+    this.mascotName = 'LUMI', // ADDED
   });
 
   const GamificationState.defaults()
-      : healthScore = 100, // Max health by default
+      : healthScore = 100,
         coins = 0,
         dailyStreak = 0,
         petMood = PetMood.happy,
-        lastComplianceDateIso = '';
+        lastComplianceDateIso = '',
+        mascotName = 'LUMI'; // ADDED
 
   Map<String, dynamic> toJson() {
     return {
@@ -259,22 +263,20 @@ class GamificationState {
       'dailyStreak': dailyStreak,
       'petMood': petMood.key,
       'lastComplianceDateIso': lastComplianceDateIso,
+      'mascotName': mascotName, // ADDED
     };
   }
 
   factory GamificationState.fromJson(Map<String, dynamic> json) {
     return GamificationState(
-      // Fallback to sessionXp if migrating from old version, otherwise default to 100
-      healthScore: (json['healthScore'] as num?)?.toInt() ?? (json['sessionXp'] as num?)?.toInt() ?? 100,
+      healthScore: (json['healthScore'] as num?)?.toInt() ?? 100,
       coins: (json['coins'] as num?)?.toInt() ?? 0,
       dailyStreak: (json['dailyStreak'] as num?)?.toInt() ?? 0,
       petMood: PetMoodX.fromKey(json['petMood'] as String?),
       lastComplianceDateIso: json['lastComplianceDateIso'] as String? ?? '',
+      mascotName: json['mascotName'] as String? ?? 'LUMI', // ADDED
     );
   }
-
-  @override
-  String toString() => jsonEncode(toJson());
 }
 
 class RuleEvaluationResult {

@@ -114,6 +114,13 @@ class MetricsService {
 
   void setFaceDetected(bool v) {
     faceDetectedNotifier.value = v;
+    
+    if (!v) {
+      GamificationService.instance.startFaceLossPenalty();
+    } else {
+      GamificationService.instance.stopFaceLossPenalty();
+    }
+    
     _refreshOfflineEngines();
   }
 

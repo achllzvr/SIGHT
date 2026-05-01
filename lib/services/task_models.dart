@@ -9,47 +9,14 @@ enum TaskStatus {
   completed,
 }
 
-enum TimePeriod {
-  morning,   // 5:00 - 11:59
-  afternoon, // 12:00 - 17:59
-  evening,   // 18:00 - 23:59
-}
+enum TimePeriod { daily, weekly } // Changed from morning/afternoon/evening
 
 extension TimePeriodX on TimePeriod {
   String get displayName {
     switch (this) {
-      case TimePeriod.morning:
-        return 'Morning Tasks';
-      case TimePeriod.afternoon:
-        return 'Afternoon Tasks';
-      case TimePeriod.evening:
-        return 'Evening Tasks';
+      case TimePeriod.daily: return 'Daily Tasks';
+      case TimePeriod.weekly: return 'Weekly Challenges';
     }
-  }
-
-  /// Determine current time period
-  static TimePeriod getCurrentPeriod() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) {
-      return TimePeriod.morning;
-    } else if (hour < 18) {
-      return TimePeriod.afternoon;
-    } else {
-      return TimePeriod.evening;
-    }
-  }
-
-  /// Check if a task should show in given period
-  static TimePeriod getTaskPeriod(String taskId) {
-    if (taskId.contains('morning') || taskId.contains('blink-exercise')) {
-      return TimePeriod.morning;
-    } else if (taskId.contains('afternoon')) {
-      return TimePeriod.afternoon;
-    } else if (taskId.contains('evening')) {
-      return TimePeriod.evening;
-    }
-    // Default: show in morning for most tasks
-    return TimePeriod.morning;
   }
 }
 
@@ -79,7 +46,7 @@ class Task {
     this.completedAt,
     this.category,
     this.rewardXp,
-    this.timePeriod = TimePeriod.morning,
+    required this.timePeriod,
   });
 
   bool get isCompleted => status == TaskStatus.completed;
@@ -101,8 +68,11 @@ class Task {
     return '${((progress * 100).toStringAsFixed(0))}%';
   }
 
+  // Inside the Task class[cite: 18]
   String get scoreBadgeText {
-    return '${rewardXp ?? 0} XP';
+    // If it's a health-only task, show HP, else show Coins
+    if (category == 'health-restore') return '${rewardXp ?? 0} HP'; 
+    return '${rewardXp ?? 0} Coins'; // renamed conceptually[cite: 18]
   }
 
   Task copyWith({
@@ -162,8 +132,6 @@ class Task {
     completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt'] as String) : null,
     category: json['category'] as String?,
     rewardXp: json['rewardXp'] as int?,
-    timePeriod: json['timePeriod'] != null 
-      ? TimePeriod.values.firstWhere((e) => e.name == (json['timePeriod'] as String), orElse: () => TimePeriod.morning)
-      : TimePeriod.morning,
+    timePeriod: TimePeriod.values.firstWhere((e) => e.name == (json['timePeriod'] as String)),
   );
 }

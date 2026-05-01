@@ -38,11 +38,8 @@ class _TasksScreenState extends State<TasksScreen> {
       }
       groupedTasks[task.timePeriod]!.add(task);
     }
-
-    // Display groups in order: Morning, Afternoon, Evening
-    final periods = [TimePeriod.morning, TimePeriod.afternoon, TimePeriod.evening];
     
-    for (final period in periods) {
+    for (final period in groupedTasks.keys) {
       final periodTasks = groupedTasks[period];
       if (periodTasks == null || periodTasks.isEmpty) {
         continue; // Skip if no tasks for this period
@@ -498,6 +495,18 @@ class _TasksScreenState extends State<TasksScreen> {
             ),
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          // Demo: Complete first available daily task[cite: 18]
+          final dailyTasks = TaskService.instance.getDailyTasks();
+          if (dailyTasks.isNotEmpty) {
+            TaskService.instance.completeTask(dailyTasks.first.id);
+          }
+        },
+        backgroundColor: const Color(0xFF7FC86D),
+        label: const Text("DEMO: COMPLETE TASK"),
+        icon: const Icon(Icons.bolt),
       ),
     );
   }

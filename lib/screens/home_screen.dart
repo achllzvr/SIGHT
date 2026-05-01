@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../services/cleanup_service.dart';
 import '../services/gamification_service.dart';
 import '../services/metrics_service.dart';
+import '../services/session_timer_service.dart';
+import '../widgets/rounded_card.dart';
 // ignore: unused_import
 import '../services/offline_models.dart';
 import '../services/feedback_service.dart';
@@ -60,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           const SizedBox(width: 10),
+                          const _SessionTimeBadge(),
                           // Settings gear icon
                           GestureDetector(
                             onTap: () => _showSettingsDialog(context),
@@ -83,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   const SizedBox(height: 18),
-                  const _HealthBar(), // <-- The new Health Bar!
+                  const _HealthBar(),
                 ],
               ),
             ),
@@ -479,6 +482,7 @@ class _TopBadge extends StatelessWidget {
         },
       ),
     );
+
   }
 }
 
@@ -556,78 +560,71 @@ class _SettingsTile extends StatelessWidget {
 
 class _HealthBar extends StatelessWidget {
   const _HealthBar();
-
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     return ValueListenableBuilder<int>(
       valueListenable: GamificationService.instance.healthScoreNotifier,
-      builder: (context, hp, child) {
-        // Dynamic color based on thresholds
-        Color barColor = const Color(0xFF9DE18A); // Healthy (70-100)
-        if (hp < 30) {
-          barColor = const Color(0xFFFF6B6B); // Critical (0-29)
-        } else if (hp < 70) {
-          barColor = const Color(0xFFE9C37F); // Warning (30-69)
-        }
-
-        return Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Mascot Health', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: isDark ? Colors.white70 : Colors.black87)),
-                Text('$hp / 100', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: barColor)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return Stack(
-                  children: [
-                    // Background track
-                    Container(
-                      height: 18,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(10),
+      builder: (context, hp, _) {
+        Color barColor = hp < 30 ? const Color(0xFFFF6B6B) : (hp < 70 ? const Color(0xFFE9C37F) : const Color(0xFF9DE18A));
+        return RoundedCard(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  ValueListenableBuilder<String>(
+                    valueListenable: GamificationService.instance.mascotNameNotifier,
+                    builder: (_, name, __) => GestureDetector(
+                      onTap: () => _showRenameDialog(context, name),
+                      child: Row(
+                        children: [
+                          Text('$name\'S HEALTH', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.edit, size: 12, color: Colors.black54),
+                        ],
                       ),
                     ),
-                    // Animated health fill
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 800),
-                      curve: Curves.easeOutCubic,
-                      height: 18,
-                      width: constraints.maxWidth * (hp / 100.0),
-                      decoration: BoxDecoration(
-                        color: barColor,
-                        borderRadius: BorderRadius.circular(10),
-                        boxShadow: [
-                          BoxShadow(color: barColor.withValues(alpha: 0.4), blurRadius: 6, offset: const Offset(0, 2)),
-                        ]
-                      ),
-                    ),
-                    // Visual Separator 1 (30%)
-                    Positioned(
-                      left: constraints.maxWidth * 0.3,
-                      top: 0, bottom: 0,
-                      child: Container(width: 2, color: Theme.of(context).scaffoldBackgroundColor),
-                    ),
-                    // Visual Separator 2 (70%)
-                    Positioned(
-                      left: constraints.maxWidth * 0.7,
-                      top: 0, bottom: 0,
-                      child: Container(width: 2, color: Theme.of(context).scaffoldBackgroundColor),
-                    ),
-                  ],
-                );
-              }
-            ),
-          ],
+                  ),
+                  Text('$hp / 100', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: barColor)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: LinearProgressIndicator(
+                  value: hp / 100,
+                  minHeight: 10,
+                  backgroundColor: Colors.black12,
+                  valueColor: AlwaysStoppedAnimation<Color>(barColor),
+                ),
+              ),
+            ],
+          ),
         );
       }
+    );
+  }
+  
+  void _showRenameDialog(BuildContext context, String currentName) {
+    final controller = TextEditingController(text: currentName);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Rename Mascot"),
+        content: TextField(controller: controller, decoration: const InputDecoration(hintText: "Enter new name")),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () {
+              GamificationService.instance.renameMascot(controller.text.trim());
+              Navigator.pop(ctx);
+            },
+            child: const Text("Save"),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -646,5 +643,33 @@ String _resolveMascotAsset({
     return 'assets/mascot/mascot_good_v1.png'; // Warning/Tired
   } else {
     return 'assets/mascot/mascot_bad_v1.png'; // Critical/Sad
+  }
+}
+
+class _SessionTimeBadge extends StatelessWidget {
+  const _SessionTimeBadge();
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: SessionTimerService.instance.remainingSecondsNotifier,
+      builder: (_, seconds, __) {
+        final mins = (seconds / 60).floor();
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFD5C2E8),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.black87, width: 1),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.timer_outlined, size: 16),
+              const SizedBox(width: 4),
+              Text('$mins m', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

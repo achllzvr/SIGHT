@@ -14,6 +14,9 @@ class SessionTimerService {
   // Triggers the "Time's Up" lock screen
   final ValueNotifier<bool> isTimeUpNotifier = ValueNotifier<bool>(false);
 
+  // Resume
+  final ValueNotifier<bool> isPausedNotifier = ValueNotifier<bool>(false);
+
   Timer? _ticker;
   bool _initialized = false;
   bool _isRunning = false;

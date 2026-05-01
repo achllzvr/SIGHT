@@ -7,6 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'widgets/bottom_pill_nav.dart';
 import 'widgets/tracking_bubble.dart';
+import 'widgets/rounded_card.dart';
 
 import 'screens/auth/auth_options_screen.dart';
 import 'screens/add_children_screen.dart';
@@ -21,7 +22,6 @@ import 'screens/guardian_child_dashboard_screen.dart';
 import 'screens/store_screen.dart';
 
 import 'screens/welcome_screen.dart';
-import 'services/app_lifecycle_service.dart';
 import 'services/active_child_context_service.dart';
 import 'services/auth_session_service.dart';
 import 'services/session_timer_service.dart';
@@ -140,6 +140,33 @@ class SightFeasibilityApp extends StatelessWidget {
           home: const _SessionRouter(),
         );
       },
+    );
+  }
+  
+}
+
+class _ManualResumeOverlay extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black87,
+        child: Center(
+          child: RoundedCard(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text("Session Paused", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => SessionTimerService.instance.startTracking(), // Manual resume[cite: 18]
+                  child: const Text("RESUME SESSION"),
+                )
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -279,19 +306,12 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
   }
 
   @override
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    debugPrint('AppLifecycleState changed: $state');
-    try {
-      unawaited(AppLifecycleService.instance.trackScreenState(state));
-      
-      // Pause timer when app is hidden, resume when active
-      if (state == AppLifecycleState.resumed) {
-        SessionTimerService.instance.startTracking();
-      } else if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.detached) {
-        SessionTimerService.instance.pauseTracking();
-      }
-    } catch (e) {
-      debugPrint('App lifecycle tracking error: $e');
+    if (state == AppLifecycleState.resumed) {
+      SessionTimerService.instance.isPausedNotifier.value = true; // Improvement #6[cite: 18]
+    } else if (state == AppLifecycleState.paused) {
+      SessionTimerService.instance.pauseTracking();
     }
   }
 
@@ -327,6 +347,10 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
         if (_index != 0) TrackingBubble(currentPageIndex: _index),
         const _OfflineAlertOverlay(),
         const _TimeLimitOverlay(),
+        ValueListenableBuilder<bool>(
+          valueListenable: SessionTimerService.instance.isPausedNotifier,
+          builder: (_, isPaused, __) => isPaused ? _ManualResumeOverlay() : const SizedBox.shrink(),
+        ),
       ],
     );
   }
@@ -352,7 +376,7 @@ class _OfflineAlertOverlay extends StatelessWidget {
       case 'critical proximity detected':
         return 'You are too close to the screen. Please move the device farther away.';
       case 'critical proximity or eye fatigue':
-        return 'Critical eye-strain threshold reached. Guardian override is required.';
+        return 'Critical eye-strain threshold reached. Please take a rest.';
       case 'adjust distance or blink rhythm':
         return 'Move the screen farther and blink naturally.';
       case 'minor correction needed':

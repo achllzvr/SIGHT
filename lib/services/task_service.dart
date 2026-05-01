@@ -82,15 +82,15 @@ class TaskService {
   List<Task> _generateEyeHealthTasks(DateTime now) {
     return [
       Task(
-        id: 'eye-break-morning',
-        title: '20-20-20 Morning Break',
-        description: 'Complete 1 eye break by looking 20 feet away for 20 seconds',
+        id: 'blink-exercise',
+        title: 'Blink Reset',
+        description: 'Complete 15 blinks to restore health.',
         type: TaskType.eyeHealth,
         status: TaskStatus.notStarted,
-        category: 'eye-exercise',
-        rewardXp: 10,
+        category: 'health-restore', // Only rewards Health[cite: 18]
+        rewardXp: 10, // This represents HP for this category
         createdAt: now,
-        timePeriod: TimePeriod.morning,
+        timePeriod: TimePeriod.daily,
       ),
       Task(
         id: 'blink-exercise',
@@ -101,7 +101,7 @@ class TaskService {
         category: 'eye-exercise',
         rewardXp: 5,
         createdAt: now,
-        timePeriod: TimePeriod.morning,
+        timePeriod: TimePeriod.daily,
       ),
       Task(
         id: 'eye-break-afternoon',
@@ -112,7 +112,7 @@ class TaskService {
         category: 'eye-exercise',
         rewardXp: 10,
         createdAt: now,
-        timePeriod: TimePeriod.afternoon,
+        timePeriod: TimePeriod.daily,
       ),
       Task(
         id: 'healthy-distance-session',
@@ -125,7 +125,7 @@ class TaskService {
         category: 'eye-exercise',
         rewardXp: 15,
         createdAt: now,
-        timePeriod: TimePeriod.afternoon,
+        timePeriod: TimePeriod.daily,
       ),
     ];
   }
@@ -147,7 +147,7 @@ class TaskService {
         rewardXp: 25, 
         createdAt: now,
         completedAt: currentCoins >= 25 ? now : null,
-        timePeriod: TimePeriod.morning,
+        timePeriod: TimePeriod.daily,
       ),
       
       Task(
@@ -162,7 +162,7 @@ class TaskService {
         rewardXp: 50,
         createdAt: now,
         completedAt: currentCoins >= 50 ? now : null,
-        timePeriod: TimePeriod.afternoon,
+        timePeriod: TimePeriod.daily,
       ),
       
       Task(
@@ -177,7 +177,7 @@ class TaskService {
         rewardXp: 30, // Can rename to rewardCoins later
         createdAt: now,
         completedAt: currentStreak >= 3 ? now : null,
-        timePeriod: TimePeriod.afternoon,
+        timePeriod: TimePeriod.daily,
       ),
     ];
   }
@@ -244,6 +244,15 @@ class TaskService {
 
     if (taskIndex != -1) {
       final task = tasks[taskIndex];
+
+      if (task.category == 'health-restore') {
+        GamificationService.instance.healthScoreNotifier.value = 
+            (GamificationService.instance.healthScoreNotifier.value + (task.rewardXp ?? 0)).clamp(0, 100);
+      } else {
+        // Normal coin reward
+        GamificationService.instance.coinsNotifier.value += (task.rewardXp ?? 0);
+      }
+
       tasks[taskIndex] = task.copyWith(
         status: TaskStatus.completed,
         currentValue: task.targetValue,
