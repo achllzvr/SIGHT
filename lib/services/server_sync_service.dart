@@ -37,6 +37,8 @@ class ServerSyncService {
           'strain_events': batch.strainEvents,
           'timestamp': batch.windowEnd.toIso8601String(),
           'screen_time_minutes': batch.screenTimeMinutes,
+          'health_score': batch.healthScore,
+          'coins': batch.coins,             
         },
       );
 

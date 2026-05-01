@@ -84,6 +84,7 @@ class SightFeasibilityApp extends StatelessWidget {
             '/add-child': (_) => const AddChildrenScreen(),
             '/child-dashboard': (_) => const ChildDashboardScreen(),
             '/media-hub': (_) => const MediaHubScreen(),
+            '/store': (_) => const Scaffold(body: Center(child: Text('Store Coming Soon'))), // Temporary placeholder
           },
           
           // --- LIGHT THEME (Apple Style) ---

@@ -8,6 +8,7 @@ import 'active_child_context_service.dart';
 import 'offline_database_service.dart';
 import 'offline_models.dart';
 import 'server_sync_service.dart';
+import 'gamification_service.dart';
 
 class LocalMetricsService {
   LocalMetricsService._private();
@@ -87,6 +88,8 @@ class LocalMetricsService {
       averageDistanceCm: averageFor('distanceCm'),
       strainEvents: strainEvents,
       screenTimeMinutes: screenTimeMinutes,
+      healthScore: GamificationService.instance.healthScoreNotifier.value,
+      coins: GamificationService.instance.coinsNotifier.value,             
       eventCount: events.length,
       syncState: SyncState.pending,
     );
@@ -141,6 +144,8 @@ class LocalMetricsService {
       averageDistanceCm: averageFor('distanceCm'),
       strainEvents: strainEvents,
       screenTimeMinutes: screenTimeMinutes,
+      healthScore: GamificationService.instance.healthScoreNotifier.value,
+      coins: GamificationService.instance.coinsNotifier.value,             
       eventCount: events.length,
       syncState: SyncState.pending,
     );

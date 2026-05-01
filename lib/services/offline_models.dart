@@ -151,6 +151,8 @@ class CuratedMetricBatch {
   final double? averageDistanceCm;
   final int strainEvents;
   final int screenTimeMinutes;
+  final int? healthScore; // ADDED
+  final int? coins;       // ADDED
   final int eventCount;
   final SyncState syncState;
   final int retryCount;
@@ -167,6 +169,8 @@ class CuratedMetricBatch {
     required this.averageDistanceCm,
     this.strainEvents = 0,
     this.screenTimeMinutes = 0,
+    this.healthScore,     // ADDED
+    this.coins,           // ADDED
     required this.eventCount,
     this.syncState = SyncState.pending,
     this.retryCount = 0,
@@ -187,6 +191,8 @@ class CuratedMetricBatch {
       'averageDistanceCm': averageDistanceCm,
       'strainEvents': strainEvents,
       'screenTimeMinutes': screenTimeMinutes,
+      'healthScore': healthScore, // ADDED
+      'coins': coins,             // ADDED
       'eventCount': eventCount,
       'synced': synced ? 1 : 0,
       'syncState': syncState.key,
@@ -208,6 +214,8 @@ class CuratedMetricBatch {
       averageDistanceCm: (map['averageDistanceCm'] as num?)?.toDouble(),
       strainEvents: (map['strainEvents'] as num?)?.toInt() ?? 0,
       screenTimeMinutes: (map['screenTimeMinutes'] as num?)?.toInt() ?? 0,
+      healthScore: (map['healthScore'] as num?)?.toInt(), // ADDED
+      coins: (map['coins'] as num?)?.toInt(),             // ADDED
       eventCount: (map['eventCount'] as num?)?.toInt() ?? 0,
       syncState: map['syncState'] == null
           ? (fallbackSynced ? SyncState.synced : SyncState.pending)

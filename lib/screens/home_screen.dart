@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/cleanup_service.dart';
 import '../services/gamification_service.dart';
 import '../services/metrics_service.dart';
+// ignore: unused_import
 import '../services/offline_models.dart';
 import '../services/feedback_service.dart';
 import '../services/guardian_auth_service.dart';
@@ -28,75 +29,82 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
                 children: [
-                  const _TopBadge(),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // Clothes icon (non-functional)
-                      Container(
-                        width: 46,
-                        height: 46,
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
-                          boxShadow: const [
-                            BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
-                            BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
-                          ],
-                        ),
-                        child: const Icon(Icons.checkroom, size: 20),
-                      ),
-                      const SizedBox(width: 10),
-                      // Settings gear icon
-                      GestureDetector(
-                        onTap: () => _showSettingsDialog(context),
-                        child: Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
-                            boxShadow: const [
-                              BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
-                              BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
-                            ],
+                      const _TopBadge(), // Your Coin Badge
+                      Row(
+                        children: [
+                          // Clothes icon (Store)
+                          GestureDetector(
+                            onTap: () {
+                              if (!context.mounted) return;
+                              // TODO: Implement actual store screen and navigation
+                              Navigator.pushNamed(context, '/store');
+                            },
+                            child: Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
+                                boxShadow: const [
+                                  BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
+                                  BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
+                                ],
+                              ),
+                              child: const Icon(Icons.checkroom, size: 20),
+                            ),
                           ),
-                          child: const Icon(Icons.settings, size: 20),
-                        ),
-                      ),
+                          const SizedBox(width: 10),
+                          // Settings gear icon
+                          GestureDetector(
+                            onTap: () => _showSettingsDialog(context),
+                            child: Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
+                                boxShadow: const [
+                                  BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
+                                  BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
+                                ],
+                              ),
+                              child: const Icon(Icons.settings, size: 20),
+                            ),
+                          ),
+                        ],
+                      )
                     ],
-                  )
+                  ),
+                  const SizedBox(height: 18),
+                  const _HealthBar(), // <-- The new Health Bar!
                 ],
               ),
             ),
 
-            // Mascot area - animated based on metrics visibility
+            // Mascot area - animated based on Health Score
             Expanded(
               child: Center(
                 child: SizedBox(
                   width: 270,
                   height: _showMetrics ? 340 : 360,
-                  child: ValueListenableBuilder<int>(
-                    valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
-                    builder: (_, blinkRate, __) {
-                      return ValueListenableBuilder<double>(
-                        valueListenable: MetricsService.instance.distanceCmNotifier,
-                        builder: (_, distance, __) {
-                          return ValueListenableBuilder<bool>(
-                            valueListenable: MetricsService.instance.faceDetectedNotifier,
-                            builder: (_, faceDetected, __) {
-                              final mascotPath = _resolveMascotAsset(
-                                blinkRate: blinkRate,
-                                distance: distance,
-                                faceDetected: faceDetected,
-                              );
-                              return Image.asset(mascotPath, fit: BoxFit.contain);
-                            },
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: MetricsService.instance.faceDetectedNotifier,
+                    builder: (_, faceDetected, __) {
+                      return ValueListenableBuilder<int>(
+                        valueListenable: GamificationService.instance.healthScoreNotifier,
+                        builder: (_, hp, __) {
+                          final mascotPath = _resolveMascotAsset(
+                            faceDetected: faceDetected,
+                            hp: hp,
                           );
+                          return Image.asset(mascotPath, fit: BoxFit.contain);
                         },
                       );
                     },
@@ -146,10 +154,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ValueListenableBuilder<double>(
                         valueListenable: MetricsService.instance.distanceCmNotifier,
                         builder: (_, value, __) => _MetricChip(label: value > 0 ? '${value.toStringAsFixed(1)} cm' : '--', caption: 'Distance'),
-                      ),
-                      ValueListenableBuilder<PetMood>(
-                        valueListenable: GamificationService.instance.petMoodNotifier,
-                        builder: (_, mood, __) => _MetricChip(label: _petMoodLabel(mood), caption: 'Pet Mood'),
                       ),
                     ],
                   ),
@@ -550,36 +554,97 @@ class _SettingsTile extends StatelessWidget {
   }
 }
 
+class _HealthBar extends StatelessWidget {
+  const _HealthBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return ValueListenableBuilder<int>(
+      valueListenable: GamificationService.instance.healthScoreNotifier,
+      builder: (context, hp, child) {
+        // Dynamic color based on thresholds
+        Color barColor = const Color(0xFF9DE18A); // Healthy (70-100)
+        if (hp < 30) {
+          barColor = const Color(0xFFFF6B6B); // Critical (0-29)
+        } else if (hp < 70) {
+          barColor = const Color(0xFFE9C37F); // Warning (30-69)
+        }
+
+        return Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Mascot Health', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: isDark ? Colors.white70 : Colors.black87)),
+                Text('$hp / 100', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: barColor)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                return Stack(
+                  children: [
+                    // Background track
+                    Container(
+                      height: 18,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    // Animated health fill
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 800),
+                      curve: Curves.easeOutCubic,
+                      height: 18,
+                      width: constraints.maxWidth * (hp / 100.0),
+                      decoration: BoxDecoration(
+                        color: barColor,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(color: barColor.withValues(alpha: 0.4), blurRadius: 6, offset: const Offset(0, 2)),
+                        ]
+                      ),
+                    ),
+                    // Visual Separator 1 (30%)
+                    Positioned(
+                      left: constraints.maxWidth * 0.3,
+                      top: 0, bottom: 0,
+                      child: Container(width: 2, color: Theme.of(context).scaffoldBackgroundColor),
+                    ),
+                    // Visual Separator 2 (70%)
+                    Positioned(
+                      left: constraints.maxWidth * 0.7,
+                      top: 0, bottom: 0,
+                      child: Container(width: 2, color: Theme.of(context).scaffoldBackgroundColor),
+                    ),
+                  ],
+                );
+              }
+            ),
+          ],
+        );
+      }
+    );
+  }
+}
+
 String _resolveMascotAsset({
-  required int blinkRate,
-  required double distance,
   required bool faceDetected,
+  required int hp,
 }) {
-  if (!faceDetected || distance <= 0) {
+  if (!faceDetected) {
     return 'assets/mascot/mascot_head_v1.png';
   }
 
-  final isGreat = distance >= 30.0 && blinkRate >= 12;
-  final isGood = distance >= 25.0 && blinkRate >= 8;
-
-  if (isGreat) {
-    return blinkRate.isEven ? 'assets/mascot/mascot_great_v1.png' : 'assets/mascot/mascot_good_v2.png';
-  }
-
-  if (isGood) {
-    return blinkRate.isEven ? 'assets/mascot/mascot_good_v1.png' : 'assets/mascot/mascot_good_v2.png';
-  }
-
-  return blinkRate.isEven ? 'assets/mascot/mascot_bad_v1.png' : 'assets/mascot/mascot_bad_v2.png';
-}
-
-String _petMoodLabel(PetMood mood) {
-  switch (mood) {
-    case PetMood.happy:
-      return 'Happy';
-    case PetMood.sad:
-      return 'Sad';
-    case PetMood.sleeping:
-      return 'Sleep';
+  if (hp >= 70) {
+    return 'assets/mascot/mascot_great_v1.png'; // Happy
+  } else if (hp >= 30) {
+    return 'assets/mascot/mascot_good_v1.png'; // Warning/Tired
+  } else {
+    return 'assets/mascot/mascot_bad_v1.png'; // Critical/Sad
   }
 }

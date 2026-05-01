@@ -131,38 +131,40 @@ class TaskService {
   }
 
   List<Task> _generateGamificationTasks(DateTime now) {
-    final currentXp = GamificationService.instance.coinsNotifier.value;
+    final currentCoins = GamificationService.instance.coinsNotifier.value; 
     final currentStreak = GamificationService.instance.dailyStreakNotifier.value;
 
     return [
       Task(
-        id: 'xp-goal-easy',
-        title: 'Earn 25 XP',
-        description: 'Maintain good eye health to earn 25 XP points',
+        id: 'coin-goal-easy',
+        title: 'Earn 25 Coins',
+        description: 'Maintain good eye health to earn 25 Coins',
         type: TaskType.gamification,
-        status: currentXp >= 25 ? TaskStatus.completed : TaskStatus.inProgress,
+        status: currentCoins >= 25 ? TaskStatus.completed : TaskStatus.inProgress,
         targetValue: 25,
-        currentValue: currentXp,
-        category: 'xp-goal',
-        rewardXp: 25,
+        currentValue: currentCoins,
+        category: 'coin-goal',
+        rewardXp: 25, 
         createdAt: now,
-        completedAt: currentXp >= 25 ? now : null,
+        completedAt: currentCoins >= 25 ? now : null,
         timePeriod: TimePeriod.morning,
       ),
+      
       Task(
-        id: 'xp-goal-medium',
-        title: 'Earn 50 XP',
-        description: 'Maintain excellent compliance to earn 50 XP points',
+        id: 'coin-goal-medium',
+        title: 'Earn 50 Coins',
+        description: 'Maintain excellent compliance to earn 50 Coins',
         type: TaskType.gamification,
-        status: currentXp >= 50 ? TaskStatus.completed : TaskStatus.inProgress,
+        status: currentCoins >= 50 ? TaskStatus.completed : TaskStatus.inProgress,
         targetValue: 50,
-        currentValue: currentXp,
-        category: 'xp-goal',
+        currentValue: currentCoins,
+        category: 'coin-goal',
         rewardXp: 50,
         createdAt: now,
-        completedAt: currentXp >= 50 ? now : null,
+        completedAt: currentCoins >= 50 ? now : null,
         timePeriod: TimePeriod.afternoon,
       ),
+      
       Task(
         id: 'streak-goal',
         title: 'Maintain 3-Day Streak',
@@ -172,7 +174,7 @@ class TaskService {
         targetValue: 3,
         currentValue: currentStreak,
         category: 'streak',
-        rewardXp: 30,
+        rewardXp: 30, // Can rename to rewardCoins later
         createdAt: now,
         completedAt: currentStreak >= 3 ? now : null,
         timePeriod: TimePeriod.afternoon,
@@ -196,7 +198,7 @@ class TaskService {
       if (task.isCompleted) return task;
 
       // Update XP goal tasks
-      if (task.category == 'xp-goal') {
+      if (task.category == 'coin-goal') {
         final isNowCompleted = currentXp >= (task.targetValue ?? 0);
         if (isNowCompleted && task.status != TaskStatus.completed) {
           FeedbackService.instance.taskCompleted();
