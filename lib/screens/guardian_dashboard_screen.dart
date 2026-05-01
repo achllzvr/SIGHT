@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/active_child_context_service.dart';
 import '../services/auth_account_service.dart';
 import '../services/auth_session_service.dart';
 import '../services/cleanup_service.dart';
+import '../services/guardian_setup_service.dart'; 
 import 'guardian_child_dashboard_screen.dart';
+import '../widgets/rounded_card.dart';
 
 /// Model for child with basic info and login code
 class ChildInfo {
@@ -50,9 +53,7 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
       if (_guardianEmail != null) {
         final childAccounts = await AuthAccountService.instance.listChildrenForGuardian(_guardianEmail!);
 
-        // Convert to ChildInfo
         final children = childAccounts.map((child) {
-          // Calculate age from birthdate, fallback to 0 if not available
           int age = 0;
           if (child.birthdate != null) {
             age = _calculateAge(child.birthdate!);
@@ -67,7 +68,6 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
           );
         }).toList();
 
-        // Load active child ID
         await ActiveChildContextService.instance.initialize();
         final activeChildId = await ActiveChildContextService.instance.getActiveChildId();
 
@@ -104,7 +104,6 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
     setState(() => _selectedChildId = childId);
     ActiveChildContextService.instance.setActiveChildId(childId);
     
-    // Navigate to child dashboard
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => GuardianChildDashboardScreen(childId: childId),
@@ -124,8 +123,234 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
     }
   }
 
+  Future<void> _showChangePinDialog() async {
+    final currentController = TextEditingController();
+    final newController = TextEditingController();
+    final confirmController = TextEditingController();
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          String? error;
+          bool inProgress = false;
+
+          return StatefulBuilder(
+            builder: (_, setDialogState) {
+              return AlertDialog(
+                title: const Text('Change Guardian PIN'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: currentController,
+                      obscureText: true,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      maxLength: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Current PIN',
+                        border: OutlineInputBorder(),
+                        counterText: '',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: newController,
+                      obscureText: true,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      maxLength: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'New PIN',
+                        border: OutlineInputBorder(),
+                        counterText: '',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: confirmController,
+                      obscureText: true,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      maxLength: 4,
+                      decoration: InputDecoration(
+                        labelText: 'Confirm New PIN',
+                        border: const OutlineInputBorder(),
+                        counterText: '',
+                        errorText: error,
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: inProgress ? null : () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: inProgress
+                        ? null
+                        : () async {
+                            setDialogState(() {
+                              inProgress = true;
+                              error = null;
+                            });
+
+                            final result = await GuardianSetupService.instance.changeGuardianPin(
+                              currentPin: currentController.text.trim(),
+                              newPin: newController.text.trim(),
+                              confirmNewPin: confirmController.text.trim(),
+                            );
+
+                            if (!mounted) return;
+
+                            if (result.success) {
+                              if (!dialogContext.mounted) return;
+                              Navigator.of(dialogContext).pop();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(result.message)),
+                              );
+                              return;
+                            }
+
+                            setDialogState(() {
+                              inProgress = false;
+                              error = result.message;
+                            });
+                          },
+                    child: inProgress
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Update PIN'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      currentController.dispose();
+      newController.dispose();
+      confirmController.dispose();
+    }
+  }
+
+  // IMPROVEMENT #2: Parent Account Password Reset
+  Future<void> _showParentChangePasswordDialog() async {
+    final currentController = TextEditingController();
+    final newController = TextEditingController();
+    final confirmController = TextEditingController();
+
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          String? error;
+          bool inProgress = false;
+
+          return StatefulBuilder(
+            builder: (_, setDialogState) {
+              return AlertDialog(
+                title: const Text('Change Account Password'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: currentController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Current Password',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: newController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'New Password',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: confirmController,
+                      obscureText: true,
+                      decoration: InputDecoration(
+                        labelText: 'Confirm New Password',
+                        border: const OutlineInputBorder(),
+                        errorText: error,
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: inProgress ? null : () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: inProgress
+                        ? null
+                        : () async {
+                            setDialogState(() {
+                              inProgress = true;
+                              error = null;
+                            });
+
+                            if (newController.text != confirmController.text) {
+                              setDialogState(() {
+                                inProgress = false;
+                                error = 'New passwords do not match.';
+                              });
+                              return;
+                            }
+
+                            // 1. Verify current password
+                            final isValid = await AuthAccountService.instance.authenticateGuardian(
+                              email: _guardianEmail!, 
+                              password: currentController.text
+                            );
+
+                            if (!isValid) {
+                              setDialogState(() {
+                                inProgress = false;
+                                error = 'Current password is incorrect.';
+                              });
+                              return;
+                            }
+
+                            // 2. TODO: Implement actual database password change here in the future
+                            await Future.delayed(const Duration(milliseconds: 800)); // Simulate network
+
+                            if (!dialogContext.mounted) return;
+                            Navigator.of(dialogContext).pop();
+                            // ignore: use_build_context_synchronously
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Parent password updated successfully. (TODO: Link to Backend)')),
+                            );
+                          },
+                    child: inProgress
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Update Password'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+    } finally {
+      currentController.dispose();
+      newController.dispose();
+      confirmController.dispose();
+    }
+  }
+
   Future<void> _logout() async {
-    // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -146,15 +371,11 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
 
     if (confirmed == true) {
       try {
-        // Stop all tracking services
         await CleanupService.instance.performCompleteCleanup();
-        
-        // Clear session
         await AuthSessionService.instance.clearUserSession();
         await ActiveChildContextService.instance.clearActiveChild();
 
         if (mounted) {
-          // Navigate to welcome/login screen
           Navigator.of(context).pushNamedAndRemoveUntil('/welcome', (route) => false);
         }
       } catch (e) {
@@ -288,7 +509,6 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                             ),
                             child: Row(
                               children: [
-                                // Mascot avatar placeholder
                                 Container(
                                   width: 50,
                                   height: 50,
@@ -340,6 +560,78 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 20),
+            
+            // Guardian Security Card
+            RoundedCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Guardian Security', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Update your guardian PIN used for strict lock override and guardian access.',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _showChangePinDialog,
+                      icon: const Icon(Icons.pin),
+                      label: const Text('Change Guardian PIN'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // IMPROVEMENT #2: Parent Account Management
+            RoundedCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Parent Account Management', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Icon(Icons.email_outlined, size: 20, color: Colors.grey),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _guardianEmail ?? 'Loading...',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Verification email sent to your inbox. (TODO)')),
+                        );
+                      },
+                      icon: const Icon(Icons.mark_email_read_outlined),
+                      label: const Text('Verify Email Address'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _showParentChangePasswordDialog,
+                      icon: const Icon(Icons.password),
+                      label: const Text('Reset Parent Password'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -359,78 +651,75 @@ class _AddChildModalState extends State<AddChildModal> {
   final _nameController = TextEditingController();
   final _birthdateController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _childIdController = TextEditingController(); 
   DateTime? _selectedBirthdate;
   bool _isLoading = false;
-  String? _generatedLoginCode;
 
   @override
   void dispose() {
     _nameController.dispose();
     _birthdateController.dispose();
     _passwordController.dispose();
+    _childIdController.dispose();
     super.dispose();
   }
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
-
+    
     try {
-      // TODO: Call API to create child account
-      // This should sync with the database
-      final loginCode = _generateLoginCode();
+      final session = await AuthSessionService.instance.loadUserSession();
+      final guardianEmail = session?.guardianEmail ?? '';
 
-      setState(() {
-        _generatedLoginCode = loginCode;
-      });
+      final childIdRaw = _childIdController.text.trim();
+      final parsedChildId = childIdRaw.isEmpty ? null : int.tryParse(childIdRaw);
+      
+      if (childIdRaw.isNotEmpty && parsedChildId == null) {
+        setState(() => _isLoading = false);
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Server Child ID must be numeric.')));
+        return;
+      }
 
-      // Show success message
+      final result = await AuthAccountService.instance.createChildAccount(
+        guardianEmail: guardianEmail,
+        displayName: _nameController.text.trim(),
+        password: _passwordController.text,
+        childId: parsedChildId, 
+      );
+
       if (mounted) {
         setState(() => _isLoading = false);
-        await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Account Created!'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Child account has been successfully created.'),
-                const SizedBox(height: 16),
-                Text(
-                  'Login Code: $_generatedLoginCode',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF00ACC1),
-                  ),
+        if (result.success) {
+          await showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Account Created!'),
+              content: Text('Login Code: ${result.account?.loginCode}'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).pop(true); 
+                  },
+                  child: const Text('Done'),
                 ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pop(true);
-                },
-                child: const Text('Done'),
-              ),
-            ],
-          ),
-        );
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message)),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
-  }
-
-  String _generateLoginCode() {
-    return List.generate(6, (index) => (DateTime.now().microsecond.hashCode * index).abs() % 10).join();
   }
 
   @override
@@ -440,7 +729,7 @@ class _AddChildModalState extends State<AddChildModal> {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.circular(24),
       ),
       padding: EdgeInsets.only(
         left: 20,
@@ -457,7 +746,7 @@ class _AddChildModalState extends State<AddChildModal> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
-                  'Add Children',
+                  'Add Child',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -477,15 +766,6 @@ class _AddChildModalState extends State<AddChildModal> {
               key: _formKey,
               child: Column(
                 children: [
-                  Text(
-                    'Child 1',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _nameController,
                     decoration: InputDecoration(
@@ -558,6 +838,22 @@ class _AddChildModalState extends State<AddChildModal> {
                       return null;
                     },
                   ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _childIdController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: InputDecoration(
+                      hintText: 'Server Child ID (Optional)',
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(18),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
@@ -566,7 +862,7 @@ class _AddChildModalState extends State<AddChildModal> {
                       onPressed: _isLoading ? null : _submitForm,
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0xFFD5C2E8),
-                        foregroundColor: Colors.white,
+                        foregroundColor: Colors.black87,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(18),
                         ),
@@ -575,7 +871,7 @@ class _AddChildModalState extends State<AddChildModal> {
                       child: _isLoading
                           ? const CircularProgressIndicator()
                           : const Text(
-                              'Add Child',
+                              'Save Child',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,

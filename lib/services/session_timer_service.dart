@@ -32,23 +32,26 @@ class SessionTimerService {
   }
 
   void startTracking() {
+    // Hide the overlay immediately when this is called, 
+    // even if the timer is already technically running.
+    isPausedNotifier.value = false; 
+
+    // Now check if we actually need to start a new ticker
     if (_isRunning || isTimeUpNotifier.value) return;
     
     _isRunning = true;
+    
     _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (remainingSecondsNotifier.value > 0) {
         remainingSecondsNotifier.value--;
         
-        // 2-Minute Wrap-Up Warning
         if (remainingSecondsNotifier.value == 120) {
           FeedbackService.instance.interventionTriggered();
-          if (kDebugMode) debugPrint('[SessionTimer] 2 minutes remaining!');
         }
       } else {
-        // Time's Up!
         isTimeUpNotifier.value = true;
         pauseTracking();
-        FeedbackService.instance.negativeAction(); // Long vibration
+        FeedbackService.instance.negativeAction(); 
       }
     });
   }
@@ -56,6 +59,7 @@ class SessionTimerService {
   void pauseTracking() {
     _ticker?.cancel();
     _isRunning = false;
+    isPausedNotifier.value = true;
   }
 
   void dispose() {

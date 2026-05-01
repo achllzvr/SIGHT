@@ -43,7 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           GestureDetector(
                             onTap: () {
                               if (!context.mounted) return;
-                              // TODO: Implement actual store screen and navigation
                               Navigator.pushNamed(context, '/store');
                             },
                             child: Container(
@@ -62,7 +61,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           const SizedBox(width: 10),
+                          // Timer icon
                           const _SessionTimeBadge(),
+                          const SizedBox(width: 10),
                           // Settings gear icon
                           GestureDetector(
                             onTap: () => _showSettingsDialog(context),

@@ -496,18 +496,6 @@ class _TasksScreenState extends State<TasksScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // Demo: Complete first available daily task[cite: 18]
-          final dailyTasks = TaskService.instance.getDailyTasks();
-          if (dailyTasks.isNotEmpty) {
-            TaskService.instance.completeTask(dailyTasks.first.id);
-          }
-        },
-        backgroundColor: const Color(0xFF7FC86D),
-        label: const Text("DEMO: COMPLETE TASK"),
-        icon: const Icon(Icons.bolt),
-      ),
     );
   }
 }

@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../services/guardian_setup_service.dart';
 import '../widgets/rounded_card.dart';
-import 'guardian_control_center_screen.dart';
+import 'guardian_dashboard_screen.dart';
 
 class GuardianSetupScreen extends StatefulWidget {
   final bool mandatory;
@@ -57,7 +57,7 @@ class _GuardianSetupScreenState extends State<GuardianSetupScreen> {
     FocusManager.instance.primaryFocus?.unfocus();
 
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const GuardianControlCenterScreen()),
+      MaterialPageRoute(builder: (_) => const GuardianDashboardScreen()),
     );
   }
 

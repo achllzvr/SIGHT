@@ -17,7 +17,7 @@ import 'screens/tracking_screen.dart';
 import 'screens/tasks_screen.dart';
 import 'screens/media_hub_screen.dart';
 import 'screens/guardian_setup_screen.dart';
-import 'screens/guardian_control_center_screen.dart';
+import 'screens/guardian_dashboard_screen.dart';
 import 'screens/guardian_child_dashboard_screen.dart';
 import 'screens/store_screen.dart';
 
@@ -33,6 +33,7 @@ import 'services/twenty_twenty_twenty_service.dart';
 import 'services/offline_models.dart';
 import 'services/rule_engine_service.dart';
 import 'services/feedback_service.dart';
+import 'services/app_lifecycle_service.dart';
 
 // Global Camera List
 List<CameraDescription> cameras = [];
@@ -80,7 +81,7 @@ class SightFeasibilityApp extends StatelessWidget {
             '/welcome': (_) => const WelcomeScreen(),
             '/auth': (_) => const AuthOptionsScreen(),
             '/child': (_) => const RootApp(),
-            '/guardian': (_) => const GuardianControlCenterScreen(),
+            '/guardian': (_) => const GuardianDashboardScreen(),
             '/guardian/child-dashboard': (_) => const GuardianChildDashboardScreen(),
             '/guardian-setup': (_) => const GuardianSetupScreen(mandatory: true),
             '/add-child': (_) => const AddChildrenScreen(),
@@ -159,8 +160,8 @@ class _ManualResumeOverlay extends StatelessWidget {
                 const Text("Session Paused", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () => SessionTimerService.instance.startTracking(), // Manual resume[cite: 18]
-                  child: const Text("RESUME SESSION"),
+                  onPressed: () => SessionTimerService.instance.startTracking(),
+                  child: const Text("Resume using LUMI"),
                 )
               ],
             ),
@@ -190,7 +191,7 @@ class _SessionRouterState extends State<_SessionRouter> {
     if (session.role == AppUserRole.guardian) {
       final hasPin = await GuardianSetupService.instance.hasGuardianPin();
       return hasPin
-          ? const GuardianControlCenterScreen()
+          ? const GuardianDashboardScreen()
           : const GuardianSetupScreen(mandatory: true);
     }
 
@@ -306,12 +307,22 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
   }
 
   @override
-  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      SessionTimerService.instance.isPausedNotifier.value = true; // Improvement #6[cite: 18]
-    } else if (state == AppLifecycleState.paused) {
-      SessionTimerService.instance.pauseTracking();
+    debugPrint('AppLifecycleState changed: $state');
+    try {
+      unawaited(AppLifecycleService.instance.trackScreenState(state));
+      
+      if (state == AppLifecycleState.resumed) {
+        // Show the manual resume overlay
+        SessionTimerService.instance.isPausedNotifier.value = true; 
+      } else if (state == AppLifecycleState.inactive || 
+                 state == AppLifecycleState.paused || 
+                 state == AppLifecycleState.hidden) {
+        // Ensure the timer is actually stopped in the service
+        SessionTimerService.instance.pauseTracking(); 
+      }
+    } catch (e) {
+      debugPrint('App lifecycle tracking error: $e');
     }
   }
 
