@@ -22,7 +22,7 @@ import 'screens/welcome_screen.dart';
 import 'services/app_lifecycle_service.dart';
 import 'services/active_child_context_service.dart';
 import 'services/auth_session_service.dart';
-// Background notification service removed (deprecated)
+import 'services/session_timer_service.dart';
 import 'services/gamification_service.dart';
 import 'services/guardian_preferences_service.dart';
 import 'services/guardian_setup_service.dart';
@@ -214,6 +214,12 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     unawaited(RuleEngineService.instance.initialize());
     unawaited(GamificationService.instance.initialize());
     unawaited(ActiveChildContextService.instance.initialize());
+
+    // Initialize and start the session timer
+    unawaited(SessionTimerService.instance.initialize().then((_) {
+      SessionTimerService.instance.startTracking();
+    }));
+
     unawaited(_initializeGuardianPolicyState());
 
     Permission.notification.request();
@@ -274,6 +280,13 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     debugPrint('AppLifecycleState changed: $state');
     try {
       unawaited(AppLifecycleService.instance.trackScreenState(state));
+      
+      // Pause timer when app is hidden, resume when active
+      if (state == AppLifecycleState.resumed) {
+        SessionTimerService.instance.startTracking();
+      } else if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden || state == AppLifecycleState.detached) {
+        SessionTimerService.instance.pauseTracking();
+      }
     } catch (e) {
       debugPrint('App lifecycle tracking error: $e');
     }
@@ -310,6 +323,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
         // Only show TrackingBubble if not on home screen (index 0)
         if (_index != 0) TrackingBubble(currentPageIndex: _index),
         const _OfflineAlertOverlay(),
+        const _TimeLimitOverlay(),
       ],
     );
   }
@@ -516,6 +530,54 @@ class _OfflineAlertOverlay extends StatelessWidget {
                   ],
                 ),
               ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TimeLimitOverlay extends StatelessWidget {
+  const _TimeLimitOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: SessionTimerService.instance.isTimeUpNotifier,
+      builder: (_, isTimeUp, __) {
+        if (!isTimeUp) return const SizedBox.shrink();
+
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        
+        return Positioned.fill(
+          child: Container(
+            color: isDark ? Colors.black.withValues(alpha: 0.95) : Colors.white.withValues(alpha: 0.95),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.timer_off_outlined, size: 80, color: Color(0xFF8F5A88)),
+                const SizedBox(height: 24),
+                Text(
+                  "Time's Up!",
+                  style: TextStyle(
+                    fontSize: 32, 
+                    fontWeight: FontWeight.w900,
+                    color: isDark ? Colors.white : Colors.black87
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "You've reached your daily screen limit.\nGreat job protecting your eyes today!",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16, 
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                    height: 1.5,
+                  ),
+                ),
+              ],
             ),
           ),
         );
