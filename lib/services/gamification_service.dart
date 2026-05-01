@@ -29,12 +29,20 @@ class GamificationService {
   int _pendingCoins = 0;
 
   // === Clinical Multipliers ===
+  // TODO: Tune Dioptric Multiplier (M1) if distance penalty is too harsh/weak
   static const double _m1DioptricMultiplier = 2.0;
+  
+  // TODO: Tune Blink Multiplier (M2) if blink suppression penalty is too harsh/weak
   static const double _m2BlinkMultiplier = 1.5;
 
   // === Recovery & Rewards ===
+  // TODO: Adjust HP recovered after completing a 20-20-20 break
   static const int _breakCompletedHpReward = 10;
+  
+  // TODO: Adjust HP recovered after completing a Blink Reset exercise
   static const int _blinkExerciseHpReward = 5;
+  
+  // TODO: Adjust Coins earned per 1 minute of completely safe viewing
   static const int _safeMinuteCoinReward = 1;
 
   static const int _minuteWindowSeconds = 60;
