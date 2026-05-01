@@ -18,6 +18,8 @@ import 'screens/media_hub_screen.dart';
 import 'screens/guardian_setup_screen.dart';
 import 'screens/guardian_control_center_screen.dart';
 import 'screens/guardian_child_dashboard_screen.dart';
+import 'screens/store_screen.dart';
+
 import 'screens/welcome_screen.dart';
 import 'services/app_lifecycle_service.dart';
 import 'services/active_child_context_service.dart';
@@ -84,7 +86,7 @@ class SightFeasibilityApp extends StatelessWidget {
             '/add-child': (_) => const AddChildrenScreen(),
             '/child-dashboard': (_) => const ChildDashboardScreen(),
             '/media-hub': (_) => const MediaHubScreen(),
-            '/store': (_) => const Scaffold(body: Center(child: Text('Store Coming Soon'))), // Temporary placeholder
+            '/store': (_) => const StoreScreen(),
           },
           
           // --- LIGHT THEME (Apple Style) ---
