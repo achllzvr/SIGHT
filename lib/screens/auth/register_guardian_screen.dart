@@ -13,6 +13,9 @@ class RegisterGuardianScreen extends StatefulWidget {
 }
 
 class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
+
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
@@ -33,6 +36,8 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
       return;
     }
 
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     final confirm = _confirmController.text;
@@ -50,6 +55,8 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
     });
 
     final result = await AuthAccountService.instance.registerGuardian(
+      firstName: firstName,
+      lastName: lastName,
       email: email,
       password: password,
     );
@@ -108,6 +115,24 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
                         style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
                       ),
                       const SizedBox(height: 12),
+                      TextField(
+                        controller: _firstNameController,
+                        keyboardType: TextInputType.name,
+                        decoration: const InputDecoration(
+                          labelText: 'First Name',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _lastNameController,
+                        keyboardType: TextInputType.name,
+                        decoration: const InputDecoration(
+                          labelText: 'Last Name',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       TextField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,

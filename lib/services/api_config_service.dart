@@ -1,6 +1,12 @@
 class ApiConfigService {
   ApiConfigService._();
 
+  static const String registerGuardianEndpoint = '/api/mobile/guardian/register';
+  static const String registerChildEndpoint = '/api/mobile/child/register';
+  static const String verifyEmailEndpoint = '/api/mobile/guardian/verify-email';
+  static const String resetPasswordEndpoint = '/api/mobile/guardian/reset-password';
+  static const String loginChildEndpoint = '/api/mobile/child/login';
+
   static const String baseUrl = String.fromEnvironment('SIGHT_API_BASE_URL', defaultValue: '');
   static const String metricsEndpoint = String.fromEnvironment(
     'SIGHT_METRICS_ENDPOINT',

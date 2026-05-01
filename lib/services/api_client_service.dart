@@ -29,6 +29,7 @@ class ApiClientService {
     final token = await AuthSessionService.instance.loadAccessToken();
     return {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
   }

@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-
 import '../services/auth_account_service.dart';
 import '../services/auth_session_service.dart';
 import '../widgets/lumi_shell.dart';
@@ -13,72 +11,91 @@ class AddChildrenScreen extends StatefulWidget {
 }
 
 class _AddChildrenScreenState extends State<AddChildrenScreen> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _childIdController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _birthdateController = TextEditingController();
+  final _passwordController = TextEditingController();
 
-  bool _saving = false;
+  DateTime? _selectedBirthdate;
+  bool _isLoading = false;
   String? _error;
+  // ignore: unused_field
   String? _resultCode;
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _birthdateController.dispose();
     _passwordController.dispose();
-    _childIdController.dispose();
     super.dispose();
   }
 
-  Future<void> _createChild() async {
-    if (_saving) return;
-
+  Future<void> _submitForm() async {
+    if (!_formKey.currentState!.validate()) return;
     setState(() {
-      _saving = true;
+      _isLoading = true;
       _error = null;
       _resultCode = null;
     });
+    
+    try {
+      final session = await AuthSessionService.instance.loadUserSession();
+      final guardianEmail = session?.guardianEmail ?? '';
 
-    final session = await AuthSessionService.instance.loadUserSession();
-    final guardianEmail = session?.guardianEmail;
-    if (guardianEmail == null || guardianEmail.isEmpty) {
-      if (!mounted) return;
-      setState(() {
-        _saving = false;
-        _error = 'Guardian session required.';
-      });
-      return;
-    }
-
-    final childIdRaw = _childIdController.text.trim();
-    final childId = childIdRaw.isEmpty ? null : int.tryParse(childIdRaw);
-    if (childIdRaw.isNotEmpty && childId == null) {
-      setState(() {
-        _saving = false;
-        _error = 'Child ID must be numeric.';
-      });
-      return;
-    }
-
-    final result = await AuthAccountService.instance.createChildAccount(
-      guardianEmail: guardianEmail,
-      displayName: _nameController.text.trim(),
-      password: _passwordController.text,
-      childId: childId,
-    );
-
-    if (!mounted) return;
-
-    setState(() {
-      _saving = false;
-      if (result.success) {
-        _resultCode = result.account?.loginCode;
-        _nameController.clear();
-        _passwordController.clear();
-        _childIdController.clear();
-      } else {
-        _error = result.message;
+      if (guardianEmail.isEmpty) {
+        setState(() {
+          _isLoading = false;
+          _error = 'Guardian session required.';
+        });
+        return;
       }
-    });
+
+      final result = await AuthAccountService.instance.createChildAccount(
+        guardianEmail: guardianEmail,
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      if (mounted) {
+        setState(() => _isLoading = false);
+        if (result.success) {
+          _resultCode = result.account?.loginCode;
+          _firstNameController.clear();
+          _lastNameController.clear();
+          _passwordController.clear();
+          
+          await showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Account Created!'),
+              content: Text('Login Code: ${result.account?.loginCode}'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).pop(true); 
+                  },
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+          );
+        } else {
+          _error = result.message;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(result.message)),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
   }
 
   @override
@@ -108,45 +125,75 @@ class _AddChildrenScreenState extends State<AddChildrenScreen> {
                   children: [
                     const Text('Add Child Account', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(labelText: 'Child Name', border: OutlineInputBorder()),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(labelText: 'Child Password', border: OutlineInputBorder()),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _childIdController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(labelText: 'Server Child ID (optional)', border: OutlineInputBorder()),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 8),
-                      Text(_error!, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
-                    ],
-                    if (_resultCode != null) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        'Child created. Login code: $_resultCode',
-                        style: const TextStyle(color: Color(0xFF2E7D32), fontWeight: FontWeight.w800),
+                    Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          TextFormField(
+                            controller: _firstNameController,
+                            decoration: const InputDecoration(labelText: 'First Name', border: OutlineInputBorder()),
+                            validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _lastNameController,
+                            decoration: const InputDecoration(labelText: 'Last Name (Optional)', border: OutlineInputBorder()),
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _birthdateController,
+                            readOnly: true,
+                            onTap: () async {
+                              final pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: _selectedBirthdate ?? DateTime.now().subtract(const Duration(days: 365 * 10)),
+                                firstDate: DateTime(1990),
+                                lastDate: DateTime.now(),
+                              );
+                              if (pickedDate != null) {
+                                setState(() {
+                                  _selectedBirthdate = pickedDate;
+                                  _birthdateController.text = '${pickedDate.month}/${pickedDate.day}/${pickedDate.year}';
+                                });
+                              }
+                            },
+                            decoration: const InputDecoration(
+                              labelText: 'Birthdate',
+                              border: OutlineInputBorder(),
+                              suffixIcon: Icon(Icons.calendar_today),
+                            ),
+                            validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            decoration: const InputDecoration(labelText: 'Child Password', border: OutlineInputBorder()),
+                            validator: (value) => value == null || value.length < 4 ? 'Min 4 characters' : null,
+                          ),
+                          
+                          if (_error != null) ...[
+                            const SizedBox(height: 8),
+                            Text(_error!, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
+                          ],
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _submitForm,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF7EC48C),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Text('Create Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: _saving ? null : _createChild,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF7EC48C),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      child: _saving
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Create Child Account'),
                     ),
                   ],
                 ),

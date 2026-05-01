@@ -646,7 +646,7 @@ class _ChildAccountTabState extends State<ChildAccountTab> {
     final newPasswordController = TextEditingController();
 
     try {
-      await showDialog<void>(
+      final success = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) {
@@ -702,15 +702,11 @@ class _ChildAccountTabState extends State<ChildAccountTab> {
                               return;
                             }
 
-                            // 2. TODO: Call backend or local DB to update the child password here.
-                            await Future.delayed(const Duration(milliseconds: 800)); // Simulate save
+                            // 2. TODO: Call backend to update the child password here.
+                            await Future.delayed(const Duration(milliseconds: 500)); 
 
                             if (!dialogContext.mounted) return;
-                            Navigator.of(dialogContext).pop();
-                            // ignore: use_build_context_synchronously
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Child password updated successfully. (TODO: Link to DB)')),
-                            );
+                            Navigator.of(dialogContext).pop(true); // Return success
                           },
                     child: inProgress
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -722,6 +718,14 @@ class _ChildAccountTabState extends State<ChildAccountTab> {
           );
         },
       );
+
+      // Handle the success message outside the dialog context to prevent the crash
+      if (success == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Child password updated successfully. (TODO: Link to DB)')),
+        );
+      }
+
     } finally {
       guardianPasswordController.dispose();
       newPasswordController.dispose();

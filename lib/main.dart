@@ -408,7 +408,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
             );
           },
         ),
-        
+
         ValueListenableBuilder<bool>(
           valueListenable: SessionTimerService.instance.isPausedNotifier,
           builder: (_, isPaused, __) => isPaused ? _ManualResumeOverlay() : const SizedBox.shrink(),
@@ -627,6 +627,7 @@ class _OfflineAlertOverlay extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _TimeLimitOverlay extends StatelessWidget {
   const _TimeLimitOverlay();
 

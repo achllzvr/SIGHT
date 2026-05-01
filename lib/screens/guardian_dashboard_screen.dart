@@ -237,14 +237,14 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
     }
   }
 
-  // IMPROVEMENT #2: Parent Account Password Reset
+  // IMPROVEMENT #2: Parent Account Password Reset (Crash Fixed)
   Future<void> _showParentChangePasswordDialog() async {
     final currentController = TextEditingController();
     final newController = TextEditingController();
     final confirmController = TextEditingController();
 
     try {
-      await showDialog<void>(
+      final successMsg = await showDialog<String>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) {
@@ -309,29 +309,22 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                               return;
                             }
 
-                            // 1. Verify current password
-                            final isValid = await AuthAccountService.instance.authenticateGuardian(
-                              email: _guardianEmail!, 
-                              password: currentController.text
+                            final result = await AuthAccountService.instance.resetParentPassword(
+                              _guardianEmail!,
+                              currentController.text,
+                              newController.text,
                             );
-
-                            if (!isValid) {
-                              setDialogState(() {
-                                inProgress = false;
-                                error = 'Current password is incorrect.';
-                              });
-                              return;
-                            }
-
-                            // 2. TODO: Implement actual database password change here in the future
-                            await Future.delayed(const Duration(milliseconds: 800)); // Simulate network
 
                             if (!dialogContext.mounted) return;
-                            Navigator.of(dialogContext).pop();
-                            // ignore: use_build_context_synchronously
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Parent password updated successfully. (TODO: Link to Backend)')),
-                            );
+
+                            if (result.success) {
+                               Navigator.of(dialogContext).pop(result.message); // Pass success message back
+                            } else {
+                               setDialogState(() {
+                                inProgress = false;
+                                error = result.message;
+                              });
+                            }
                           },
                     child: inProgress
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -343,6 +336,12 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
           );
         },
       );
+
+      // Handle the success message outside the dialog context to prevent the crash
+      if (successMsg != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(successMsg)));
+      }
+
     } finally {
       currentController.dispose();
       newController.dispose();
@@ -610,10 +609,11 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Verification email sent to your inbox. (TODO)')),
-                        );
+                      onPressed: () async {
+                        final res = await AuthAccountService.instance.verifyEmail(_guardianEmail!);
+                        if (context.mounted) {
+                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res.message)));
+                        }
                       },
                       icon: const Icon(Icons.mark_email_read_outlined),
                       label: const Text('Verify Email Address'),
@@ -684,9 +684,9 @@ class _AddChildModalState extends State<AddChildModal> {
 
       final result = await AuthAccountService.instance.createChildAccount(
         guardianEmail: guardianEmail,
-        displayName: _nameController.text.trim(),
+        firstName: _nameController.text.trim(),
+        lastName: _nameController.text.trim(),
         password: _passwordController.text,
-        childId: parsedChildId, 
       );
 
       if (mounted) {
