@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class BottomPillNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int>? onTap;
-  const BottomPillNav({Key? key, this.currentIndex = 0, this.onTap}) : super(key: key);
+  const BottomPillNav({super.key, this.currentIndex = 0, this.onTap});
 
   @override
   Widget build(BuildContext context) {

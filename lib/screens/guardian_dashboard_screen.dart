@@ -204,11 +204,11 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                 color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                  color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -272,13 +272,13 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                           child: Container(
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? const Color(0xFFD5C2E8).withOpacity(0.3)
+                                  ? const Color(0xFFD5C2E8).withValues(alpha: 0.3)
                                   : (isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF9F9FB)),
                             borderRadius: BorderRadius.circular(18),
                               border: Border.all(
                                 color: isSelected
                                     ? const Color(0xFFD5C2E8)
-                                    : (isDark ? Colors.white12 : Colors.black.withOpacity(0.05)),
+                                    : (isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.05)),
                                 width: isSelected ? 2 : 1,
                               ),
                             ),
@@ -570,7 +570,7 @@ class _AddChildModalState extends State<AddChildModal> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(18),
                         ),
-                        disabledBackgroundColor: const Color(0xFFD5C2E8).withOpacity(0.5),
+                        disabledBackgroundColor: const Color(0xFFD5C2E8).withValues(alpha: 0.5),
                       ),
                       child: _isLoading
                           ? const CircularProgressIndicator()

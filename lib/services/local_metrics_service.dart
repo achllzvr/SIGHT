@@ -77,7 +77,7 @@ class LocalMetricsService {
     }
 
     final strainEvents = events.where((event) => event.type == 'strainEvent').length;
-    final screenTimeMinutes = 1;
+    const screenTimeMinutes = 1;
 
     final batch = CuratedMetricBatch(
       childId: childId,

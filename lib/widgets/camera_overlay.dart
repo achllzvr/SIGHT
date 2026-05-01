@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 
 class EyeCameraOverlay extends StatelessWidget {
+  const EyeCameraOverlay({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -10,13 +12,13 @@ class EyeCameraOverlay extends StatelessWidget {
         // 1. The Darkened Background (Focus effect)
         ColorFiltered(
           colorFilter: ColorFilter.mode(
-            Colors.black.withOpacity(0.5), 
+            Colors.black.withValues(alpha: 0.5), 
             BlendMode.srcOut
           ),
           child: Stack(
             children: [
               Container(
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: Colors.transparent,
                   backgroundBlendMode: BlendMode.dstOut,
                 ),
@@ -55,13 +57,13 @@ class EyeCameraOverlay extends StatelessWidget {
         Positioned(
           top: MediaQuery.of(context).size.height / 2 - 80, 
           left: 40,
-          child: Text("YOUR RIGHT EYE", 
+          child: const Text("YOUR RIGHT EYE", 
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
         Positioned(
           top: MediaQuery.of(context).size.height / 2 - 80, 
           right: 40,
-          child: Text("YOUR LEFT EYE", 
+          child: const Text("YOUR LEFT EYE", 
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         ),
       ],

@@ -9,7 +9,7 @@ import '../services/guardian_auth_service.dart';
 import '../services/auth_session_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -22,7 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: SafeArea(
         child: Column(
           children: [
@@ -141,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       ValueListenableBuilder<int>(
                         valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
-                        builder: (_, value, __) => _MetricChip(label: '${value}/min', caption: 'Blink Rate'),
+                        builder: (_, value, __) => _MetricChip(label: '$value/min', caption: 'Blink Rate'),
                       ),
                       ValueListenableBuilder<double>(
                         valueListenable: MetricsService.instance.distanceCmNotifier,
@@ -157,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.08),
+                      color: isDark ? Colors.white10 : Colors.grey.withValues(alpha: 0.08),
                       border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -330,23 +330,23 @@ class _HomeScreenState extends State<HomeScreen> {
     if (canAuth) {
       final authenticated = await GuardianAuthService.instance.authenticateWithBiometrics();
       if (authenticated) {
+        if (!context.mounted) return; // Added context check
         await _performLogout(context);
         return;
       }
     }
 
     // Fall back to PIN entry
-    if (!mounted) return;
+    if (!context.mounted) return; // Swapped to context.mounted
     _showPinEntryDialog(context);
   }
 
   void _showPinEntryDialog(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final pinController = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Guardian Verification'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -369,19 +369,21 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () async {
               final storedPin = await GuardianAuthService.instance.loadFallbackPin();
               if (storedPin != null && GuardianAuthService.instance.verifyFallbackPin(pinController.text, storedPin)) {
-                if (!mounted) return;
-                Navigator.pop(context); // Close PIN dialog
+                if (!dialogContext.mounted) return; // Swapped to context check
+                Navigator.pop(dialogContext); // Close PIN dialog
+                
+                if (!context.mounted) return;
                 await _performLogout(context);
               } else {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
+                if (!dialogContext.mounted) return; // Swapped to context check
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
                   const SnackBar(content: Text('Incorrect passcode')),
                 );
               }
@@ -400,7 +402,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Clear auth session
     await AuthSessionService.instance.clearSession();
 
-    if (!mounted) return;
+    if (!context.mounted) return; // Swapped to context.mounted
     // Navigate back to auth screen
     Navigator.of(context).pushNamedAndRemoveUntil('/auth', (route) => false);
   }
@@ -409,7 +411,7 @@ class _HomeScreenState extends State<HomeScreen> {
 class _MetricChip extends StatelessWidget {
   final String label;
   final String caption;
-  const _MetricChip({Key? key, required this.label, required this.caption}) : super(key: key);
+  const _MetricChip({required this.label, required this.caption});
 
   @override
   Widget build(BuildContext context) {
@@ -476,31 +478,6 @@ class _TopBadge extends StatelessWidget {
   }
 }
 
-class _TopPill extends StatelessWidget {
-  final String label;
-  const _TopPill({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      constraints: const BoxConstraints(minWidth: 126),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
-        boxShadow: const [
-          BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
-          BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
-        ],
-      ),
-      child: Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isDark ? Colors.white : Colors.black87)),
-    );
-  }
-}
-
 class _SettingsTile extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -525,7 +502,7 @@ class _SettingsTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white10 : Colors.grey.withOpacity(0.1),
+          color: isDark ? Colors.white10 : Colors.grey.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isEnabled
@@ -552,7 +529,7 @@ class _SettingsTile extends StatelessWidget {
               width: 50,
               height: 28,
               decoration: BoxDecoration(
-                color: isEnabled ? const Color(0xFF7FC86D) : (isDark ? Colors.white10 : Colors.grey.withOpacity(0.2)),
+                color: isEnabled ? const Color(0xFF7FC86D) : (isDark ? Colors.white10 : Colors.grey.withValues(alpha: 0.2)),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Center(

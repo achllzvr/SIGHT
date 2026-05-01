@@ -8,7 +8,7 @@ import '../widgets/rounded_card.dart';
 
 
 class TasksScreen extends StatefulWidget {
-  const TasksScreen({Key? key}) : super(key: key);
+  const TasksScreen({super.key});
 
   @override
   State<TasksScreen> createState() => _TasksScreenState();
@@ -28,7 +28,6 @@ class _TasksScreenState extends State<TasksScreen> {
 
   /// Build task list grouped by time period with separators
   List<Widget> _buildGroupedTasks(BuildContext context, List<Task> tasks) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final List<Widget> widgets = [];
     
     // Group tasks by time period
@@ -233,6 +232,7 @@ class _TasksScreenState extends State<TasksScreen> {
                     } else {
                       // For other tasks, just mark as complete
                       await TaskService.instance.completeTask(task.id);
+                      if (!context.mounted) return;
                       Navigator.pop(context);
                     }
                   },
@@ -271,7 +271,7 @@ class _TasksScreenState extends State<TasksScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFFFF6B6B).withOpacity(0.1),
+          color: const Color(0xFFFF6B6B).withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFFF6B6B), width: 0.8),
         ),

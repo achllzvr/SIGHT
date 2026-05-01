@@ -91,8 +91,7 @@ class SightFeasibilityApp extends StatelessWidget {
             useMaterial3: true,
             brightness: Brightness.light,
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF007AFF), // iOS Blue
-              background: const Color(0xFFF2F2F7), // iOS Light Gray Background
+              seedColor: const Color(0xFF007AFF),
               surface: Colors.white,
             ),
             scaffoldBackgroundColor: const Color(0xFFF2F2F7),
@@ -117,10 +116,9 @@ class SightFeasibilityApp extends StatelessWidget {
             useMaterial3: true,
             brightness: Brightness.dark,
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF0A84FF), // iOS Dark Blue
+              seedColor: const Color(0xFF0A84FF),
               brightness: Brightness.dark,
-              background: const Color(0xFF000000), // Pure Black
-              surface: const Color(0xFF1C1C1E), // iOS Dark Surface
+              surface: const Color(0xFF1C1C1E),
             ),
             scaffoldBackgroundColor: const Color(0xFF000000),
             
@@ -188,7 +186,7 @@ class _SessionRouterState extends State<_SessionRouter> {
   }
 }
 class RootApp extends StatefulWidget {
-  const RootApp({Key? key}) : super(key: key);
+  const RootApp({super.key});
 
   @override
   State<RootApp> createState() => _RootAppState();
@@ -361,7 +359,6 @@ class _OfflineAlertOverlay extends StatelessWidget {
           alertLevel,
         );
         final isDark = Theme.of(context).brightness == Brightness.dark;
-        final colorScheme = Theme.of(context).colorScheme;
 
         if (alertLevel == AlertLevel.blinkBubble) {
           return Positioned(

@@ -87,10 +87,10 @@ class ChildAccountCreationResult extends AccountActionResult {
   final ChildAccount? account;
 
   const ChildAccountCreationResult({
-    required bool success,
-    required String message,
+    required super.success,
+    required super.message,
     this.account,
-  }) : super(success: success, message: message);
+  });
 }
 
 class AuthAccountService {

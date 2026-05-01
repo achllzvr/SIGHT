@@ -687,7 +687,7 @@ class _GuardianControlCenterScreenState extends State<GuardianControlCenterScree
                                 decoration: BoxDecoration(
                                   color: Theme.of(context).brightness == Brightness.dark
                                       ? Colors.white10
-                                      : Colors.black.withOpacity(0.04),
+                                      : Colors.black.withValues(alpha: 0.04),
                                   borderRadius: BorderRadius.circular(18),
                                 ),
                                 child: Row(

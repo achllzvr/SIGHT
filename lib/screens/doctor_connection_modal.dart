@@ -148,7 +148,7 @@ class _DoctorConnectionModalState extends State<DoctorConnectionModal> {
             const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFD5C2E8).withOpacity(0.1),
+                color: const Color(0xFFD5C2E8).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               padding: const EdgeInsets.all(12),
@@ -182,7 +182,7 @@ class _DoctorConnectionModalState extends State<DoctorConnectionModal> {
             const SizedBox(height: 16),
             Container(
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
+                color: Colors.grey.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               padding: const EdgeInsets.all(12),
@@ -445,10 +445,10 @@ class _DoctorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFD5C2E8).withOpacity(0.15),
+        color: const Color(0xFFD5C2E8).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFD5C2E8).withOpacity(0.3),
+          color: const Color(0xFFD5C2E8).withValues(alpha: 0.3),
         ),
       ),
       padding: const EdgeInsets.all(16),
@@ -462,7 +462,7 @@ class _DoctorCard extends StatelessWidget {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD5C2E8).withOpacity(0.3),
+                  color: const Color(0xFFD5C2E8).withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
@@ -492,9 +492,9 @@ class _DoctorCard extends StatelessWidget {
                     ),
                     Text(
                       doctor.specialty,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
-                        color: const Color(0xFFD5C2E8),
+                        color: Color(0xFFD5C2E8),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -564,10 +564,10 @@ class _PendingRequestCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.08),
+        color: Colors.red.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.red.withOpacity(0.2),
+          color: Colors.red.withValues(alpha: 0.2),
         ),
       ),
       padding: const EdgeInsets.all(16),
@@ -578,7 +578,7 @@ class _PendingRequestCard extends StatelessWidget {
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: Colors.red.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
@@ -606,7 +606,7 @@ class _PendingRequestCard extends StatelessWidget {
                     color: isDark ? Colors.white60 : Colors.black54,
                   ),
                 ),
-                Text(
+                const Text(
                   'Waiting for approval...',
                   style: TextStyle(
                     fontSize: 12,
@@ -619,7 +619,7 @@ class _PendingRequestCard extends StatelessWidget {
           ),
           GestureDetector(
             onTap: onCancel,
-            child: Text(
+            child: const Text(
               'Cancel',
               style: TextStyle(
                 fontSize: 12,

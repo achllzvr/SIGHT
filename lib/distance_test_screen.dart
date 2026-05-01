@@ -91,7 +91,7 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
             builder: (_, detected, __) {
               if (!detected) {
                 return Container(
-                  color: Colors.red.withOpacity(0.35),
+                  color: Colors.red.withValues(alpha: 0.35),
                   padding: const EdgeInsets.symmetric(horizontal: 40),
                   child: const Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -220,7 +220,7 @@ class FaceMeshPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.greenAccent.withOpacity(0.5)..strokeWidth = 1.5..style = PaintingStyle.fill;
+    final paint = Paint()..color = Colors.greenAccent.withValues(alpha: 0.5)..strokeWidth = 1.5..style = PaintingStyle.fill;
     final double scaleX = widgetSize.width / imageSize.width;
     final double scaleY = widgetSize.height / imageSize.height;
     final double scale = scaleX > scaleY ? scaleX : scaleY;

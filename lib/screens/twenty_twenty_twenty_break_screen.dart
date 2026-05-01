@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/twenty_twenty_twenty_service.dart';
 
 class TwentyTwentyBreakScreen extends StatefulWidget {
-  const TwentyTwentyBreakScreen({Key? key}) : super(key: key);
+  const TwentyTwentyBreakScreen({super.key});
 
   @override
   State<TwentyTwentyBreakScreen> createState() => _TwentyTwentyBreakScreenState();
@@ -195,7 +195,7 @@ class _TwentyTwentyBreakScreenState extends State<TwentyTwentyBreakScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         decoration: BoxDecoration(
-                          color: faceDetected ? const Color(0xFF7FC86D).withOpacity(0.2) : const Color(0xFFFF6B6B).withOpacity(0.2),
+                          color: faceDetected ? const Color(0xFF7FC86D).withValues(alpha: 0.2) : const Color(0xFFFF6B6B).withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
                             color: faceDetected ? const Color(0xFF7FC86D) : const Color(0xFFFF6B6B),
@@ -220,7 +220,7 @@ class _TwentyTwentyBreakScreenState extends State<TwentyTwentyBreakScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Text(
+                      const Text(
                         'When your face reappears, the timer resets.',
                         style: TextStyle(fontSize: 12, color: Colors.white60),
                       ),
@@ -277,9 +277,9 @@ class _TwentyTwentyBreakScreenState extends State<TwentyTwentyBreakScreen> {
                   height: 200,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF7FC86D).withOpacity(0.1),
+                    color: const Color(0xFF7FC86D).withValues(alpha: 0.1),
                     border: Border.all(
-                      color: const Color(0xFF7FC86D).withOpacity(0.3),
+                      color: const Color(0xFF7FC86D).withValues(alpha: 0.3),
                       width: 3,
                     ),
                   ),
@@ -348,11 +348,12 @@ class _TwentyTwentyBreakScreenState extends State<TwentyTwentyBreakScreen> {
   }
 
   Widget _buildCompletionScreen(BuildContext context, Size screenSize, bool isDark) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
         _breakService.resetBreakState();
-        Navigator.of(context).pop();
-        return false;
+        if (context.mounted) Navigator.of(context).pop();
       },
       child: Stack(
         fit: StackFit.expand,
@@ -381,7 +382,7 @@ class _TwentyTwentyBreakScreenState extends State<TwentyTwentyBreakScreen> {
                 height: 48,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   border: Border.all(color: Colors.white24),
                 ),
                 child: const Icon(Icons.close, color: Colors.white, size: 24),
@@ -398,7 +399,7 @@ class _TwentyTwentyBreakScreenState extends State<TwentyTwentyBreakScreen> {
                   height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFF7FC86D).withOpacity(0.1),
+                    color: const Color(0xFF7FC86D).withValues(alpha: 0.1),
                     border: Border.all(color: const Color(0xFF7FC86D), width: 3),
                   ),
                   child: const Icon(
@@ -417,7 +418,7 @@ class _TwentyTwentyBreakScreenState extends State<TwentyTwentyBreakScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
+                const Text(
                   'Your eyes are refreshed. Great job!',
                   style: TextStyle(
                     fontSize: 16,
@@ -429,7 +430,7 @@ class _TwentyTwentyBreakScreenState extends State<TwentyTwentyBreakScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
+                    color: Colors.white.withValues(alpha: 0.05),
                     border: Border.all(color: Colors.white12),
                     borderRadius: BorderRadius.circular(16),
                   ),
@@ -498,7 +499,7 @@ class CountdownPainter extends CustomPainter {
       center,
       radius,
       Paint()
-        ..color = const Color(0xFF7FC86D).withOpacity(0.2)
+        ..color = const Color(0xFF7FC86D).withValues(alpha: 0.2)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3,
     );

@@ -185,12 +185,12 @@ class _MediaHubScreenState extends State<MediaHubScreen> {
                               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
                                 width: 1,
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.08),
+                                  color: Colors.black.withValues(alpha: 0.08),
                                   blurRadius: 12,
                                   offset: const Offset(0, 4),
                                 ),
@@ -361,7 +361,7 @@ class _MediaHubScreenState extends State<MediaHubScreen> {
                                             boxShadow: isSelected
                                                 ? [
                                                     BoxShadow(
-                                                      color: const Color(0xFF00ACC1).withOpacity(0.3),
+                                                      color: const Color(0xFF00ACC1).withValues(alpha: 0.3),
                                                       blurRadius: 8,
                                                       offset: const Offset(0, 2),
                                                     ),

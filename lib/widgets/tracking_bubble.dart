@@ -58,7 +58,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
     final responsiveExpandedSize = (screenSize.width * 0.35).clamp(140.0, 180.0);
     final bubbleSize = _expanded ? responsiveExpandedSize : responsiveCollapsedSize;
     
-    final leftSnap = _margin;
+    const leftSnap = _margin;
     final rightSnap = screenSize.width - bubbleSize - _margin;
     final topSnap = _offset.dy.clamp(
       MediaQuery.of(context).padding.top + _margin,
@@ -180,7 +180,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                                       ? const Color(0xFFD74E4E)
                                       : const Color(0xFF91C77A),
                                 ),
-                                backgroundColor: Colors.white.withOpacity(0.25),
+                                backgroundColor: Colors.white.withValues(alpha: 0.25),
                               ),
                             ),
                             AnimatedSwitcher(
@@ -216,7 +216,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                                             Container(
                                               padding: EdgeInsets.all(bubbleSize * 0.08),
                                               decoration: BoxDecoration(
-                                                color: Colors.black.withOpacity(0.05),
+                                                color: Colors.black.withValues(alpha: 0.05),
                                                 borderRadius: BorderRadius.circular(bubbleSize * 0.06),
                                               ),
                                               child: Text(

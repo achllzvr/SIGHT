@@ -24,7 +24,7 @@ class FeedbackService {
   Future<void> initialize() async {
     // Test if haptic feedback is available
     final canVibrate = await Vibration.hasVibrator();
-    _hapticEnabled = canVibrate ?? false;
+    _hapticEnabled = canVibrate;
 
     if (kDebugMode) {
       debugPrint('[FeedbackService] Initialized - Haptic: $_hapticEnabled');

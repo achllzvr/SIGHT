@@ -32,7 +32,7 @@ class LumiShell extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 110,
                   fontWeight: FontWeight.w900,
-                  color: Colors.white.withOpacity(0.28),
+                  color: Colors.white.withValues(alpha: 0.28),
                   letterSpacing: 3,
                 ),
               ),

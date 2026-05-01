@@ -60,7 +60,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                     footnoteBuilder: (context) => ValueListenableBuilder<int>(
                       valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
                       builder: (_, value, __) => Text(
-                        'Good blinks per minute! ${value}/min',
+                        'Good blinks per minute! $value/min',
                         style: const TextStyle(
                           fontSize: 12,
                           color: Color(0xFFA68AC0),
@@ -237,8 +237,8 @@ class _CameraStatusIndicatorState extends State<_CameraStatusIndicator> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: hasFreshFrames
-            ? (isDark ? Colors.green.withOpacity(0.15) : Colors.green.withOpacity(0.1))
-            : (isDark ? Colors.orange.withOpacity(0.15) : Colors.orange.withOpacity(0.1)),
+            ? (isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.withValues(alpha: 0.1))
+            : (isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.1)),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: hasFreshFrames ? Colors.green.shade400 : Colors.orange.shade300,

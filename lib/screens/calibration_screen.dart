@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../widgets/rounded_card.dart';
 
 class CalibrationScreen extends StatelessWidget {
-  const CalibrationScreen({Key? key}) : super(key: key);
+  const CalibrationScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

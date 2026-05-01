@@ -231,11 +231,11 @@ class _OverviewTabState extends State<OverviewTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -338,11 +338,11 @@ class _OverviewTabState extends State<OverviewTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -382,7 +382,7 @@ class _OverviewTabState extends State<OverviewTab> {
                 const SizedBox(height: 12),
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFB9E3A4).withOpacity(0.15),
+                    color: const Color(0xFFB9E3A4).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(18),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -406,11 +406,11 @@ class _OverviewTabState extends State<OverviewTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -471,10 +471,10 @@ class _OverviewTabState extends State<OverviewTab> {
               borderRadius: BorderRadius.circular(18),
             ),
             padding: const EdgeInsets.all(20),
-            child: Column(
+            child: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Recommendations',
                   style: TextStyle(
                     fontSize: 16,
@@ -482,19 +482,19 @@ class _OverviewTabState extends State<OverviewTab> {
                     color: Color(0xFF1976D2),
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 _RecommendationItem(
                   text: 'Encourage more frequent breaks during afternoon sessions',
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 _RecommendationItem(
                   text: 'Monitor ink rate during gaming - detected reduction to 8/min',
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 _RecommendationItem(
                   text: 'Consider scheduling an eye check-up (last visit: 4 months ago)',
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 _RecommendationItem(
                   text: 'Enable stricter distance alerts for evening usage',
                 ),
@@ -645,7 +645,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -721,11 +721,11 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -774,7 +774,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
             ),
             padding: const EdgeInsets.all(20),
@@ -820,7 +820,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
             ),
             padding: const EdgeInsets.all(20),
@@ -866,7 +866,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
             ),
             padding: const EdgeInsets.all(20),
@@ -913,10 +913,10 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               borderRadius: BorderRadius.circular(18),
             ),
             padding: const EdgeInsets.all(20),
-            child: Column(
+            child: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Recommendations',
                   style: TextStyle(
                     fontSize: 16,
@@ -924,19 +924,19 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
                     color: Color(0xFF1976D2),
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
                 _RecommendationItem(
                   text: 'Peak usage occurs during 6-8 PM (average 45 min/day)',
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 _RecommendationItem(
                   text: 'Weekend screen time 28% higher than weekdays',
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 _RecommendationItem(
                   text: 'Blink rate consistently drops during afternoon sessions',
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 _RecommendationItem(
                   text: 'Completed 71% of recommended 20-20-20 breaks this week',
                 ),
@@ -1032,11 +1032,11 @@ class _ControlsTabState extends State<ControlsTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -1091,7 +1091,7 @@ class _ControlsTabState extends State<ControlsTab> {
                   activeColor: const Color(0xFF00ACC1),
                   inactiveColor: isDark
                       ? Colors.white12
-                      : Colors.black.withOpacity(0.1),
+                      : Colors.black.withValues(alpha: 0.1),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -1124,11 +1124,11 @@ class _ControlsTabState extends State<ControlsTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -1223,11 +1223,11 @@ class _ControlsTabState extends State<ControlsTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -1289,7 +1289,7 @@ class _ControlsTabState extends State<ControlsTab> {
                       activeColor: const Color(0xFF00ACC1),
                       inactiveColor: isDark
                           ? Colors.white12
-                          : Colors.black.withOpacity(0.1),
+                          : Colors.black.withValues(alpha: 0.1),
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1358,7 +1358,7 @@ class _ControlsTabState extends State<ControlsTab> {
                       activeColor: const Color(0xFF00ACC1),
                       inactiveColor: isDark
                           ? Colors.white12
-                          : Colors.black.withOpacity(0.1),
+                          : Colors.black.withValues(alpha: 0.1),
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1392,11 +1392,11 @@ class _ControlsTabState extends State<ControlsTab> {
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+                color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                  color: Colors.black.withValues(alpha: 0.08),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -1444,7 +1444,7 @@ class _ControlsTabState extends State<ControlsTab> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
                 ),
-                disabledBackgroundColor: const Color(0xFF00ACC1).withOpacity(0.5),
+                disabledBackgroundColor: const Color(0xFF00ACC1).withValues(alpha: 0.5),
               ),
               child: _saving
                   ? const CircularProgressIndicator(color: Colors.white)
@@ -1488,7 +1488,7 @@ class _MetricCard extends StatelessWidget {
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+          color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
         ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1645,7 +1645,7 @@ class _AnalyticsMetricCard extends StatelessWidget {
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+          color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
         ),
       ),
       padding: const EdgeInsets.all(16),
@@ -1725,13 +1725,13 @@ class _ModeButton extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFF00ACC1).withOpacity(0.15)
+                ? const Color(0xFF00ACC1).withValues(alpha: 0.15)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
               color: isSelected
                   ? const Color(0xFF00ACC1)
-                  : Colors.grey.withOpacity(0.3),
+                  : Colors.grey.withValues(alpha: 0.3),
               width: isSelected ? 2 : 1,
             ),
           ),
@@ -1860,11 +1860,11 @@ class WeeklyScreenTimeChart extends StatelessWidget {
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+          color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1944,7 +1944,7 @@ class WeeklyScreenTimeChart extends StatelessWidget {
                   horizontalInterval: 50,
                   getDrawingHorizontalLine: (value) {
                     return FlLine(
-                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+                      color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.1),
                       strokeWidth: 1,
                     );
                   },
@@ -2058,11 +2058,11 @@ class BlinkRateTrendsChart extends StatelessWidget {
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+          color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -2088,22 +2088,22 @@ class BlinkRateTrendsChart extends StatelessWidget {
             const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFFF3B30).withOpacity(0.15),
+                color: const Color(0xFFFF3B30).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color(0xFFFF3B30).withOpacity(0.3),
+                  color: const Color(0xFFFF3B30).withValues(alpha: 0.3),
                 ),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.warning_rounded,
                     size: 16,
                     color: Color(0xFFFF3B30),
                   ),
-                  const SizedBox(width: 8),
-                  const Expanded(
+                  SizedBox(width: 8),
+                  Expanded(
                     child: Text(
                       'Blink rate below healthy threshold (15/min)',
                       style: TextStyle(
@@ -2176,13 +2176,13 @@ class BlinkRateTrendsChart extends StatelessWidget {
                   getDrawingHorizontalLine: (value) {
                     if (value == blinkThreshold) {
                       return FlLine(
-                        color: const Color(0xFFFF3B30).withOpacity(0.3),
+                        color: const Color(0xFFFF3B30).withValues(alpha: 0.3),
                         strokeWidth: 2,
                         dashArray: [5, 5],
                       );
                     }
                     return FlLine(
-                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+                      color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.1),
                       strokeWidth: 1,
                     );
                   },
@@ -2212,7 +2212,7 @@ class BlinkRateTrendsChart extends StatelessWidget {
                     ),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: const Color(0xFF00ACC1).withOpacity(0.1),
+                      color: const Color(0xFF00ACC1).withValues(alpha: 0.1),
                     ),
                   ),
                 ],
@@ -2278,11 +2278,11 @@ class ViewingDistanceTrendsChart extends StatelessWidget {
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+          color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -2308,22 +2308,22 @@ class ViewingDistanceTrendsChart extends StatelessWidget {
             const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFFF3B30).withOpacity(0.15),
+                color: const Color(0xFFFF3B30).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color(0xFFFF3B30).withOpacity(0.3),
+                  color: const Color(0xFFFF3B30).withValues(alpha: 0.3),
                 ),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.warning_rounded,
                     size: 16,
                     color: Color(0xFFFF3B30),
                   ),
-                  const SizedBox(width: 8),
-                  const Expanded(
+                  SizedBox(width: 8),
+                  Expanded(
                     child: Text(
                       'Viewing distance too close (below 40cm)',
                       style: TextStyle(
@@ -2396,13 +2396,13 @@ class ViewingDistanceTrendsChart extends StatelessWidget {
                   getDrawingHorizontalLine: (value) {
                     if (value == distanceThreshold) {
                       return FlLine(
-                        color: const Color(0xFFFF3B30).withOpacity(0.3),
+                        color: const Color(0xFFFF3B30).withValues(alpha: 0.3),
                         strokeWidth: 2,
                         dashArray: [5, 5],
                       );
                     }
                     return FlLine(
-                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+                      color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.1),
                       strokeWidth: 1,
                     );
                   },
@@ -2432,7 +2432,7 @@ class ViewingDistanceTrendsChart extends StatelessWidget {
                     ),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: const Color(0xFF34C759).withOpacity(0.1),
+                      color: const Color(0xFF34C759).withValues(alpha: 0.1),
                     ),
                   ),
                 ],
@@ -2500,11 +2500,11 @@ class DailyUsagePatternChart extends StatelessWidget {
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? Colors.white12 : Colors.black.withOpacity(0.08),
+          color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -2584,7 +2584,7 @@ class DailyUsagePatternChart extends StatelessWidget {
                   horizontalInterval: 10,
                   getDrawingHorizontalLine: (value) {
                     return FlLine(
-                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.withOpacity(0.1),
+                      color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.1),
                       strokeWidth: 1,
                     );
                   },

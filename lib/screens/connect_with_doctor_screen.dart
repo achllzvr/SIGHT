@@ -60,7 +60,7 @@ class _ConnectWithDoctorScreenState extends State<ConnectWithDoctorScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(22),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 16)],
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16)],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,

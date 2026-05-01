@@ -54,7 +54,7 @@ class FaceMeshPainter extends CustomPainter {
   }
 
   // Helper to detect platform without importing dart:io everywhere
-  bool get IsAndroid => false; // We handle this logic inside the calling widget usually, 
+  bool get isAndroid => false; // We handle this logic inside the calling widget usually, 
   // but for simplicity, we just use the raw coordinates assuming standard camera rotation.
 
   @override
