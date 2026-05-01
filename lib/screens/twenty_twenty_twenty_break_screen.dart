@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/twenty_twenty_twenty_service.dart';
-import '../services/detection_service.dart';
 
 class TwentyTwentyBreakScreen extends StatefulWidget {
   const TwentyTwentyBreakScreen({Key? key}) : super(key: key);

@@ -1,9 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:async';
 
-import 'background_foreground_service.dart';
 import 'detection_service.dart';
 import 'local_metrics_service.dart';
 import 'metrics_service.dart';
@@ -13,281 +11,47 @@ class AppLifecycleService {
   static final AppLifecycleService instance = AppLifecycleService._private();
 
   bool _backgroundServicesInitialized = false;
-  Timer? _backgroundHeartbeat;
   bool _isBackgroundMode = false;
   Future<void> _transitionQueue = Future<void>.value();
-  DateTime? _lastHardRecoveryAt;
-  
-  // --- Background Fallback Notification Timers (Phase 2) ---
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
-  Timer? _eyeBreakReminderTimer;
-  Timer? _blinkReminderTimer;
-  bool _notificationsInitialized = false;
 
-  /// Initialize background services (must be called during app startup)
+  /// Initialize background services (keeps metrics active)
   Future<void> initializeBackgroundServices() async {
-    if (_backgroundServicesInitialized) {
-      return;
-    }
+    if (_backgroundServicesInitialized) return;
 
     try {
-      // Initialize local metrics service
       await LocalMetricsService.instance.initialize();
       MetricsService.instance.ensureMinuteCounterActive();
-
       _backgroundServicesInitialized = true;
 
-      if (kDebugMode) {
-        debugPrint('[AppLifecycleService] Background services initialized');
-      }
+      if (kDebugMode) debugPrint('[AppLifecycleService] Background services initialized');
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[AppLifecycleService] Error initializing background services: $e');
-      }
+      if (kDebugMode) debugPrint('[AppLifecycleService] Error initializing background services: $e');
     }
   }
 
-  Future<void> _runBackgroundHeartbeatTick() async {
-    try {
-      await DetectionService.instance.ensureMonitoring();
-
-      final hasFreshFrames = DetectionService.instance.hasFreshFrames;
-      final staleForMs = DetectionService.instance.millisSinceLastFrame;
-      final distance = MetricsService.instance.distanceCmNotifier.value;
-      final minuteBlinks = MetricsService.instance.currentMinuteBlinkCountNotifier.value;
-      final status = hasFreshFrames ? 'active' : 'recovering';
-      final distanceText = distance > 0 ? '${distance.toStringAsFixed(1)}cm' : '--';
-
-      await BackgroundForegroundService.instance.updateNotification(
-        title: 'SIGHT monitoring $status',
-        message: 'Blinks this min: $minuteBlinks • Distance: $distanceText',
-      );
-
-      await BackgroundForegroundService.instance.updateFloatingBubble(
-        blinkCountThisMinute: minuteBlinks,
-        distanceCm: distance,
-        isTracking: hasFreshFrames,
-      );
-
-      final now = DateTime.now();
-      final canAttemptHardRecovery = _lastHardRecoveryAt == null ||
-          now.difference(_lastHardRecoveryAt!) >= const Duration(seconds: 15);
-
-      if (!hasFreshFrames && staleForMs > 12000 && canAttemptHardRecovery) {
-        _lastHardRecoveryAt = now;
-        await DetectionService.instance.forceHardRestart();
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[AppLifecycleService] Background heartbeat tick failed: $e');
-      }
-    }
-  }
-
-  void _startBackgroundHeartbeat() {
-    if (_backgroundHeartbeat != null) {
-      return;
-    }
-
-    _backgroundHeartbeat = Timer.periodic(const Duration(seconds: 3), (_) {
-      unawaited(_runBackgroundHeartbeatTick());
-    });
-  }
-
-  void _stopBackgroundHeartbeat() {
-    _backgroundHeartbeat?.cancel();
-    _backgroundHeartbeat = null;
-  }
-
-  /// Initialize local notifications for background reminders (Phase 2)
-  Future<void> _initializeNotifications() async {
-    if (_notificationsInitialized) {
-      return;
-    }
-
-    try {
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const iosSettings = DarwinInitializationSettings();
-      const initSettings = InitializationSettings(
-        android: androidSettings,
-        iOS: iosSettings,
-      );
-
-      await _notificationsPlugin.initialize(initSettings);
-      _notificationsInitialized = true;
-
-      if (kDebugMode) {
-        debugPrint('[AppLifecycleService] Local notifications initialized');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[AppLifecycleService] Error initializing notifications: $e');
-      }
-    }
-  }
-
-  /// Start background reminder notifications (20-20-20 break & blink reminders)
-  Future<void> _startBackgroundReminders() async {
-    if (!_notificationsInitialized) {
-      await _initializeNotifications();
-    }
-
-    // Cancel existing timers
-    _eyeBreakReminderTimer?.cancel();
-    _blinkReminderTimer?.cancel();
-
-    // 20-minute eye break reminder: "Look 20 feet away for 20 seconds"
-    _eyeBreakReminderTimer = Timer.periodic(const Duration(minutes: 20), (_) async {
-      try {
-        await _notificationsPlugin.show(
-          1,
-          'LUMI Reminder',
-          'Look 20 feet away for 20 seconds! Your eyes need a break.',
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'lumi_break_channel',
-              'Eye Break Reminders',
-              channelDescription: 'Reminders to take 20-20-20 breaks',
-              importance: Importance.high,
-              priority: Priority.high,
-            ),
-            iOS: DarwinNotificationDetails(),
-          ),
-        );
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('[AppLifecycleService] Error showing eye break notification: $e');
-        }
-      }
-    });
-
-    // Blink reminder every 5 minutes: "Don't forget to blink!"
-    _blinkReminderTimer = Timer.periodic(const Duration(minutes: 5), (_) async {
-      try {
-        await _notificationsPlugin.show(
-          2,
-          'LUMI Blink Reminder',
-          'Don\'t forget to blink! Keep your eyes healthy.',
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'lumi_blink_channel',
-              'Blink Reminders',
-              channelDescription: 'Reminders to blink regularly',
-              importance: Importance.low,
-              priority: Priority.low,
-            ),
-            iOS: DarwinNotificationDetails(),
-          ),
-        );
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('[AppLifecycleService] Error showing blink notification: $e');
-        }
-      }
-    });
-
-    if (kDebugMode) {
-      debugPrint('[AppLifecycleService] Background reminders started');
-    }
-  }
-
-  /// Stop background reminder notifications
-  Future<void> _stopBackgroundReminders() async {
-    _eyeBreakReminderTimer?.cancel();
-    _blinkReminderTimer?.cancel();
-    _eyeBreakReminderTimer = null;
-    _blinkReminderTimer = null;
-
-    try {
-      await _notificationsPlugin.cancelAll();
-    } catch (_) {}
-
-    if (kDebugMode) {
-      debugPrint('[AppLifecycleService] Background reminders stopped');
-    }
-  }
-
-  /// Start background monitoring (called when app is backgrounded)
+  /// When app is backgrounded, pause ML Kit camera preview to avoid native issues.
   Future<void> handleAppBackgrounded() async {
-    if (_isBackgroundMode) {
-      return;
-    }
-
+    if (_isBackgroundMode) return;
     _isBackgroundMode = true;
 
     try {
-      // Safe camera pause: disable ML Kit processing to prevent OS crashes
-      await DetectionService.instance.disableWakelock();
-      
-      // Start background fallback notifications (20-20-20 break & blink reminders)
-      await _startBackgroundReminders();
-
-      // Enable wakelock to keep device awake during background monitoring
-      await DetectionService.instance.enableWakelockForMonitoring();
-
-      // Start the foreground service (Android) or configure background modes (iOS)
-      final started = await BackgroundForegroundService.instance.startBackgroundMonitoring();
-      if (!started && kDebugMode) {
-        debugPrint('[AppLifecycleService] Foreground service could not start. Check notification permission.');
-      }
-
-      final canDrawOverlay = await BackgroundForegroundService.instance.canDrawOverlays();
-      if (canDrawOverlay) {
-        await BackgroundForegroundService.instance.showFloatingBubble();
-      }
-
-      // Ensure detection continues in background
-      await DetectionService.instance.ensureContinuousMonitoring();
-      _startBackgroundHeartbeat();
-      await _runBackgroundHeartbeatTick();
-
-      // Attempt immediate sync of any pending batches
-      await LocalMetricsService.instance.attemptBackgroundSync();
-
-      if (kDebugMode) {
-        debugPrint('[AppLifecycleService] App backgrounded - background monitoring started with fallback reminders');
-      }
+      DetectionService.instance.controller?.pausePreview();
+      if (kDebugMode) debugPrint('[AppLifecycleService] Paused camera preview for backgrounded app');
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[AppLifecycleService] Error in handleAppBackgrounded: $e');
-      }
+      if (kDebugMode) debugPrint('[AppLifecycleService] Error pausing preview: $e');
     }
   }
 
-  /// Resume foreground monitoring (called when app is foregrounded)
+  /// When app returns to foreground, resume ML Kit camera preview.
   Future<void> handleAppForegrounded() async {
-    if (!_isBackgroundMode) {
-      return;
-    }
-
+    if (!_isBackgroundMode) return;
     _isBackgroundMode = false;
 
     try {
-      // Stop background reminders
-      await _stopBackgroundReminders();
-      
-      _stopBackgroundHeartbeat();
-      await BackgroundForegroundService.instance.hideFloatingBubble();
-      await BackgroundForegroundService.instance.stopBackgroundMonitoring();
-
-      // Force hard restart of detection to ensure fresh camera stream
-      await DetectionService.instance.forceHardRestart();
-      await Future.delayed(const Duration(milliseconds: 300));
-      await DetectionService.instance.ensureMonitoringWithRetry(
-        attempts: 6,
-        delay: const Duration(milliseconds: 500),
-      );
-
-      // Attempt to sync any new data
-      await LocalMetricsService.instance.attemptBackgroundSync();
-
-      if (kDebugMode) {
-        debugPrint('[AppLifecycleService] App foregrounded - detection restarted, reminders canceled');
-      }
+      DetectionService.instance.controller?.resumePreview();
+      if (kDebugMode) debugPrint('[AppLifecycleService] Resumed camera preview on foreground');
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('[AppLifecycleService] Error in handleAppForegrounded: $e');
-      }
+      if (kDebugMode) debugPrint('[AppLifecycleService] Error resuming preview: $e');
     }
   }
 
@@ -303,29 +67,24 @@ class AppLifecycleService {
           await handleAppBackgrounded();
           break;
         case AppLifecycleState.inactive:
-          // Ignore transient inactive events to avoid transition thrash.
+          // Ignore transient inactive events
           break;
         case AppLifecycleState.detached:
           await handleAppBackgrounded();
           break;
       }
     }).catchError((e) {
-      if (kDebugMode) {
-        debugPrint('[AppLifecycleService] Lifecycle transition failed: $e');
-      }
+      if (kDebugMode) debugPrint('[AppLifecycleService] Lifecycle transition failed: $e');
     });
 
     await _transitionQueue;
   }
 
-  /// Cleanup and shutdown
+  /// Cleanup
   Future<void> dispose() async {
-    _stopBackgroundHeartbeat();
-    await BackgroundForegroundService.instance.dispose();
-    await LocalMetricsService.instance.dispose();
-
-    if (kDebugMode) {
-      debugPrint('[AppLifecycleService] Disposed');
-    }
+    try {
+      await LocalMetricsService.instance.dispose();
+    } catch (_) {}
+    if (kDebugMode) debugPrint('[AppLifecycleService] Disposed');
   }
 }

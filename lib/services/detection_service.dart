@@ -6,7 +6,6 @@ import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'background_notification_service.dart';
 import 'local_metrics_service.dart';
 import 'metrics_service.dart';
 import 'offline_database_service.dart';
@@ -258,12 +257,7 @@ class DetectionService {
     _calibrationConstant = cm * _currentFaceWidth;
     unawaited(OfflineDatabaseService.instance.saveCalibrationConstant(_calibrationConstant!));
     MetricsService.instance.setCalibrated(true);
-    BackgroundNotificationService.instance.start();
-    BackgroundNotificationService.instance.refreshNow().then((ok) {
-      if (!ok && kDebugMode) {
-        debugPrint('Background notification refresh failed: ${BackgroundNotificationService.instance.lastError}');
-      }
-    });
+
   }
 
   void calibrateReferenceFromMeasuredWidth(double cm, double measuredFaceWidth) {
@@ -272,12 +266,7 @@ class DetectionService {
     _currentFaceWidth = measuredFaceWidth;
     unawaited(OfflineDatabaseService.instance.saveCalibrationConstant(_calibrationConstant!));
     MetricsService.instance.setCalibrated(true);
-    BackgroundNotificationService.instance.start();
-    BackgroundNotificationService.instance.refreshNow().then((ok) {
-      if (!ok && kDebugMode) {
-        debugPrint('Background notification refresh failed: ${BackgroundNotificationService.instance.lastError}');
-      }
-    });
+
   }
 
   InputImage? _inputImageFromCameraImage(CameraImage image) {

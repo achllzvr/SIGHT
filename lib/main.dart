@@ -11,22 +11,18 @@ import 'widgets/tracking_bubble.dart';
 import 'screens/auth/auth_options_screen.dart';
 import 'screens/add_children_screen.dart';
 import 'screens/child_dashboard_screen.dart';
-import 'screens/connect_with_doctor_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/tracking_screen.dart';
 import 'screens/tasks_screen.dart';
 import 'screens/media_hub_screen.dart';
 import 'screens/guardian_setup_screen.dart';
 import 'screens/guardian_control_center_screen.dart';
-import 'screens/guardian_dashboard_screen.dart';
 import 'screens/guardian_child_dashboard_screen.dart';
-import 'screens/doctor_connection_modal.dart';
 import 'screens/welcome_screen.dart';
 import 'services/app_lifecycle_service.dart';
 import 'services/active_child_context_service.dart';
 import 'services/auth_session_service.dart';
-import 'services/background_notification_service.dart';
-import 'services/detection_service.dart';
+// Background notification service removed (deprecated)
 import 'services/gamification_service.dart';
 import 'services/guardian_preferences_service.dart';
 import 'services/guardian_setup_service.dart';
@@ -87,7 +83,6 @@ class SightFeasibilityApp extends StatelessWidget {
             '/guardian-setup': (_) => const GuardianSetupScreen(mandatory: true),
             '/add-child': (_) => const AddChildrenScreen(),
             '/child-dashboard': (_) => const ChildDashboardScreen(),
-            '/connect-doctor': (_) => const ConnectWithDoctorScreen(),
             '/media-hub': (_) => const MediaHubScreen(),
           },
           
@@ -232,13 +227,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
       debugPrint('TwentyTwentyBreakService init error: $e');
     }
 
-    // Start background notification service (it will only enable background
-    // execution after calibration to respect the 30cm requirement)
-    try {
-      BackgroundNotificationService.instance.start();
-    } catch (e) {
-      debugPrint('BackgroundNotificationService init error: $e');
-    }
+    // Background notification service removed (deprecated)
   }
 
 
@@ -288,7 +277,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     try {
       unawaited(AppLifecycleService.instance.trackScreenState(state));
     } catch (e) {
-      debugPrint('BackgroundNotificationService lifecycle error: $e');
+      debugPrint('App lifecycle tracking error: $e');
     }
   }
 

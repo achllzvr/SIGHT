@@ -669,11 +669,7 @@ class _GuardianControlCenterScreenState extends State<GuardianControlCenterScree
                               icon: const Icon(Icons.dashboard_outlined),
                               label: const Text('Child Dashboard'),
                             ),
-                            OutlinedButton.icon(
-                              onPressed: () => Navigator.of(context).pushNamed('/connect-doctor'),
-                              icon: const Icon(Icons.local_hospital_outlined),
-                              label: const Text('Connect Doctor'),
-                            ),
+                            
                           ],
                         ),
                         const SizedBox(height: 8),
