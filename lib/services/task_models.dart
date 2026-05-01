@@ -1,15 +1,6 @@
-enum TaskType {
-  eyeHealth, // 20-20-20 breaks, blink exercises, etc.
-  gamification, // XP goals, streak maintenance
-}
-
-enum TaskStatus {
-  notStarted,
-  inProgress,
-  completed,
-}
-
-enum TimePeriod { daily, weekly } // Changed from morning/afternoon/evening
+enum TaskType { eyeHealth, gamification }
+enum TaskStatus { notStarted, inProgress, completed }
+enum TimePeriod { daily, weekly } 
 
 extension TimePeriodX on TimePeriod {
   String get displayName {
@@ -26,13 +17,14 @@ class Task {
   final String description;
   final TaskType type;
   final TaskStatus status;
-  final int? targetValue; // For gamification tasks (XP target, streak target, etc.)
-  final int? currentValue; // Current progress toward target
+  final int? targetValue; 
+  final int? currentValue; 
   final DateTime createdAt;
   final DateTime? completedAt;
-  final String? category; // "eye-exercise", "xp-goal", "streak", etc.
-  final int? rewardXp;
-  final TimePeriod timePeriod; // Morning, Afternoon, or Evening
+  final String? category; 
+  final int? rewardCoins;   // REPLACED rewardXp
+  final int? rewardHealth;  // REPLACED rewardXp
+  final TimePeriod timePeriod; 
 
   Task({
     required this.id,
@@ -45,13 +37,14 @@ class Task {
     required this.createdAt,
     this.completedAt,
     this.category,
-    this.rewardXp,
+    this.rewardCoins,
+    this.rewardHealth,
     required this.timePeriod,
   });
 
   bool get isCompleted => status == TaskStatus.completed;
+
   bool get isExpired {
-    // Tasks expire at the end of the day
     final now = DateTime.now();
     return createdAt.isBefore(DateTime(now.year, now.month, now.day));
   }
@@ -68,11 +61,9 @@ class Task {
     return '${((progress * 100).toStringAsFixed(0))}%';
   }
 
-  // Inside the Task class[cite: 18]
   String get scoreBadgeText {
-    // If it's a health-only task, show HP, else show Coins
-    if (category == 'health-restore') return '${rewardXp ?? 0} HP'; 
-    return '${rewardXp ?? 0} Coins'; // renamed conceptually[cite: 18]
+    if (rewardHealth != null && rewardHealth! > 0) return '+$rewardHealth HP';
+    return '+${rewardCoins ?? 0} Coins'; 
   }
 
   Task copyWith({
@@ -86,7 +77,8 @@ class Task {
     DateTime? createdAt,
     DateTime? completedAt,
     String? category,
-    int? rewardXp,
+    int? rewardCoins,
+    int? rewardHealth,
     TimePeriod? timePeriod,
   }) {
     return Task(
@@ -100,7 +92,8 @@ class Task {
       createdAt: createdAt ?? this.createdAt,
       completedAt: completedAt ?? this.completedAt,
       category: category ?? this.category,
-      rewardXp: rewardXp ?? this.rewardXp,
+      rewardCoins: rewardCoins ?? this.rewardCoins,
+      rewardHealth: rewardHealth ?? this.rewardHealth,
       timePeriod: timePeriod ?? this.timePeriod,
     );
   }
@@ -116,7 +109,8 @@ class Task {
     'createdAt': createdAt.toIso8601String(),
     'completedAt': completedAt?.toIso8601String(),
     'category': category,
-    'rewardXp': rewardXp,
+    'rewardCoins': rewardCoins,
+    'rewardHealth': rewardHealth,
     'timePeriod': timePeriod.name,
   };
 
@@ -131,7 +125,8 @@ class Task {
     createdAt: DateTime.parse(json['createdAt'] as String),
     completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt'] as String) : null,
     category: json['category'] as String?,
-    rewardXp: json['rewardXp'] as int?,
+    rewardCoins: json['rewardCoins'] as int?,
+    rewardHealth: json['rewardHealth'] as int?,
     timePeriod: TimePeriod.values.firstWhere((e) => e.name == (json['timePeriod'] as String)),
   );
 }

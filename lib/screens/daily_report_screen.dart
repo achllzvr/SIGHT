@@ -1,0 +1,160 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import '../services/auth_session_service.dart';
+import '../services/gamification_service.dart';
+import '../widgets/rounded_card.dart';
+
+class DailyReportScreen extends StatefulWidget {
+  const DailyReportScreen({super.key});
+
+  @override
+  State<DailyReportScreen> createState() => _DailyReportScreenState();
+}
+
+class _DailyReportScreenState extends State<DailyReportScreen> {
+  Timer? _midnightTimer;
+  String _timeUntilMidnight = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _startMidnightCountdown();
+  }
+
+  void _startMidnightCountdown() {
+    _updateTime();
+    _midnightTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateTime());
+  }
+
+  void _updateTime() {
+    final now = DateTime.now();
+    final tomorrow = DateTime(now.year, now.month, now.day + 1);
+    final diff = tomorrow.difference(now);
+    
+    if (mounted) {
+      setState(() {
+        _timeUntilMidnight = "${diff.inHours.toString().padLeft(2, '0')}:${(diff.inMinutes % 60).toString().padLeft(2, '0')}:${(diff.inSeconds % 60).toString().padLeft(2, '0')}";
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _midnightTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return PopScope(
+      canPop: false, // Strict Lock
+      child: Scaffold(
+        backgroundColor: isDark ? const Color(0xFF0F0F11) : const Color(0xFFFAFAFC),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(Icons.nightlight_round, size: 80, color: Color(0xFFD5C2E8)),
+                const SizedBox(height: 24),
+                const Text(
+                  "Great Job Today!",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  "LUMI is resting. Your screen time limit has been reached to protect your eyes.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+                const SizedBox(height: 40),
+                
+                RoundedCard(
+                  child: Column(
+                    children: [
+                      const Text("Daily Report", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      const Divider(height: 30),
+                      _StatRow(
+                        icon: Icons.favorite, 
+                        color: Colors.redAccent, 
+                        label: "Final HP", 
+                        value: "${GamificationService.instance.healthScoreNotifier.value}/100"
+                      ),
+                      const SizedBox(height: 16),
+                      _StatRow(
+                        icon: Icons.monetization_on, 
+                        color: Colors.amber, 
+                        label: "Coins Earned", 
+                        value: "${GamificationService.instance.coinsNotifier.value}"
+                      ),
+                      const SizedBox(height: 16),
+                      _StatRow(
+                        icon: Icons.local_fire_department, 
+                        color: Colors.orange, 
+                        label: "Daily Streak", 
+                        value: "${GamificationService.instance.dailyStreakNotifier.value} Days"
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 40),
+                Text(
+                  "LUMI wakes up in:",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: isDark ? Colors.white60 : Colors.black54),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _timeUntilMidnight,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, letterSpacing: 2),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () async {
+                     await AuthSessionService.instance.clearUserSession();
+                     if (context.mounted) Navigator.pushReplacementNamed(context, '/welcome');
+                  }, 
+                  icon: const Icon(Icons.logout), 
+                  label: const Text("Log Out")
+                )
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatRow extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+  
+  const _StatRow({required this.icon, required this.color, required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(width: 12),
+            Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ],
+        ),
+        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+}

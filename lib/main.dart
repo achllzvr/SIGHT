@@ -20,6 +20,7 @@ import 'screens/guardian_setup_screen.dart';
 import 'screens/guardian_dashboard_screen.dart';
 import 'screens/guardian_child_dashboard_screen.dart';
 import 'screens/store_screen.dart';
+import 'screens/daily_report_screen.dart';
 
 import 'screens/welcome_screen.dart';
 import 'services/active_child_context_service.dart';
@@ -88,6 +89,7 @@ class SightFeasibilityApp extends StatelessWidget {
             '/child-dashboard': (_) => const ChildDashboardScreen(),
             '/media-hub': (_) => const MediaHubScreen(),
             '/store': (_) => const StoreScreen(),
+            '/daily-report': (_) => const DailyReportScreen(),
           },
           
           // --- LIGHT THEME (Apple Style) ---
@@ -187,16 +189,19 @@ class _SessionRouterState extends State<_SessionRouter> {
     if (session == null) {
       return const WelcomeScreen();
     }
-
     if (session.role == AppUserRole.guardian) {
       final hasPin = await GuardianSetupService.instance.hasGuardianPin();
       return hasPin
           ? const GuardianDashboardScreen()
           : const GuardianSetupScreen(mandatory: true);
     }
-
     await ActiveChildContextService.instance.setActiveChildId(session.childId);
-
+    
+    // FIX: Force routing if time is up
+    await SessionTimerService.instance.initialize();
+    if (SessionTimerService.instance.remainingSecondsNotifier.value <= 0) {
+      return const DailyReportScreen();
+    }
     return const RootApp();
   }
 
@@ -238,9 +243,9 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
     RuleEngineService.instance.alertLevelNotifier.addListener(_handleAlertLevelChange);
 
+    SessionTimerService.instance.isTimeUpNotifier.addListener(_onTimeUp);
     unawaited(LocalMetricsService.instance.initialize());
     unawaited(RuleEngineService.instance.initialize());
     unawaited(GamificationService.instance.initialize());
@@ -265,12 +270,18 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     // Background notification service removed (deprecated)
   }
 
-
   @override
   void dispose() {
+    SessionTimerService.instance.isTimeUpNotifier.removeListener(_onTimeUp);
     RuleEngineService.instance.alertLevelNotifier.removeListener(_handleAlertLevelChange);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onTimeUp() {
+    if (SessionTimerService.instance.isTimeUpNotifier.value && mounted) {
+      Navigator.of(context).pushReplacementNamed('/daily-report');
+    }
   }
 
   void _handleAlertLevelChange() {
@@ -354,10 +365,50 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
             },
           ),
         ),
-        // Only show TrackingBubble if not on home screen (index 0)
         if (_index != 0) TrackingBubble(currentPageIndex: _index),
         const _OfflineAlertOverlay(),
-        const _TimeLimitOverlay(),
+        
+        // NEW: The 2-Minute Wrap Up Warning
+        ValueListenableBuilder<bool>(
+          valueListenable: SessionTimerService.instance.showWrapUpWarningNotifier,
+          builder: (_, showWarning, __) {
+            if (!showWarning) return const SizedBox.shrink();
+            return Positioned.fill(
+              child: Container(
+                color: Colors.black87,
+                child: Center(
+                  child: RoundedCard(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.timer, size: 48, color: Colors.orange),
+                        const SizedBox(height: 16),
+                        const Text("2 Minutes Left!", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "Wrap up now for a +20 Coin Early Bird Bonus, or use your remaining time.",
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: () => SessionTimerService.instance.wrapUpEarly(),
+                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7FC86D), foregroundColor: Colors.white),
+                          child: const Text("Wrap Up Now (+20 Coins)"),
+                        ),
+                        TextButton(
+                          onPressed: () => SessionTimerService.instance.ignoreWrapUp(),
+                          child: const Text("Use Remaining Time", style: TextStyle(color: Colors.grey)),
+                        )
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        
         ValueListenableBuilder<bool>(
           valueListenable: SessionTimerService.instance.isPausedNotifier,
           builder: (_, isPaused, __) => isPaused ? _ManualResumeOverlay() : const SizedBox.shrink(),

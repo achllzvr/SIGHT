@@ -188,13 +188,7 @@ class _OverviewTabState extends State<OverviewTab> {
 
       int? score;
       if (hasData) {
-        score = 100;
-        if (totalScreenTime > 120) score -= 10;
-        if (totalScreenTime > 180) score -= 10;
-        if (totalBlinkRate / batchCount < 10) score -= 15;
-        if (double.parse(avgDistance) < 30) score -= 10;
-        if (totalStrainEvents > 3) score -= (totalStrainEvents - 3) * 5;
-        score = score.clamp(0, 100);
+        score = todayBatches.last.healthScore ?? 100;
       }
 
       if (mounted) {

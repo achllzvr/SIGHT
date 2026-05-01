@@ -3,6 +3,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../main.dart';
 import '../services/detection_service.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 /// Media App definition with name, URL, and icon
 class MediaApp {
@@ -73,6 +74,8 @@ class _MediaHubScreenState extends State<MediaHubScreen> {
     
     // Listen to bubble tap events from TrackingBubble
     mediaHubBubbleTapNotifier.addListener(_onBubbleTap);
+    // Keep screen awake while in media hub
+    WakelockPlus.enable();
   }
 
   void _onBubbleTap() {
@@ -439,6 +442,8 @@ class _MediaHubScreenState extends State<MediaHubScreen> {
     mediaHubBubbleTapNotifier.removeListener(_onBubbleTap);
     // Reset fullscreen mode when leaving media hub
     mediaHubFullscreenNotifier.value = false;
+    // Allow screen to sleep again when exiting media hub
+    WakelockPlus.disable();
     super.dispose();
   }
 }

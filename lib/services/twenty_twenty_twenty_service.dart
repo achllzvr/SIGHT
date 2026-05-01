@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'detection_service.dart';
 import 'feedback_service.dart';
+import 'gamification_service.dart';
 
 enum BreakState {
   inactive,
@@ -177,15 +178,10 @@ class TwentyTwentyBreakService {
     countdownNotifier.value = 0;
     _lastBreakTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     _enforceCompletion = false;
-
-    // Play success sound
     FeedbackService.instance.exerciseCompleted();
+    
+    unawaited(GamificationService.instance.recordBreakCompleted202020());
 
-    if (kDebugMode) {
-      debugPrint('[20-20-20 Service] Break completed successfully');
-    }
-
-    // Mark that break was just completed (prevents immediate intervention)
     _breakJustCompleted = true;
     Future.delayed(const Duration(seconds: 2), () {
       _breakJustCompleted = false;

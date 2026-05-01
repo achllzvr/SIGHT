@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../widgets/lumi_shell.dart';
+import '../services/gamification_service.dart';
 
 class ChildDashboardScreen extends StatelessWidget {
   const ChildDashboardScreen({super.key});
@@ -46,12 +47,51 @@ class ChildDashboardScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(22),
                     boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 16)],
                   ),
-                  child: const Column(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Today\'s Status', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                      SizedBox(height: 8),
-                      Text('You are doing great. Keep your screen at safe distance and take breaks every 20 minutes.'),
+                      const Text('LUMI Status', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Colors.black87)),
+                      const SizedBox(height: 16),
+                      ValueListenableBuilder<int>(
+                        valueListenable: GamificationService.instance.healthScoreNotifier,
+                        builder: (context, hp, _) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Eye Health (HP)', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black54)),
+                                  Text('$hp/100', style: TextStyle(fontWeight: FontWeight.bold, color: hp > 50 ? Colors.green : Colors.red)),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: LinearProgressIndicator(
+                                  value: hp / 100,
+                                  minHeight: 12,
+                                  backgroundColor: Colors.grey[200],
+                                  color: hp > 50 ? const Color(0xFF7FC86D) : Colors.redAccent,
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                      ),
+                      const SizedBox(height: 16),
+                      ValueListenableBuilder<int>(
+                        valueListenable: GamificationService.instance.coinsNotifier,
+                        builder: (context, coins, _) {
+                          return Row(
+                            children: [
+                              const Icon(Icons.monetization_on, color: Colors.amber),
+                              const SizedBox(width: 8),
+                              Text('$coins Coins', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Colors.black87)),
+                            ],
+                          );
+                        }
+                      ),
                     ],
                   ),
                 ),

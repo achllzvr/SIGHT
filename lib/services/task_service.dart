@@ -87,8 +87,8 @@ class TaskService {
         description: 'Complete 15 blinks to restore health.',
         type: TaskType.eyeHealth,
         status: TaskStatus.notStarted,
-        category: 'health-restore', // Only rewards Health[cite: 18]
-        rewardXp: 10, // This represents HP for this category
+        category: 'health-restore',
+        rewardHealth: 10,
         createdAt: now,
         timePeriod: TimePeriod.daily,
       ),
@@ -99,7 +99,7 @@ class TaskService {
         type: TaskType.eyeHealth,
         status: TaskStatus.notStarted,
         category: 'eye-exercise',
-        rewardXp: 5,
+        rewardHealth: 5,
         createdAt: now,
         timePeriod: TimePeriod.daily,
       ),
@@ -110,7 +110,7 @@ class TaskService {
         type: TaskType.eyeHealth,
         status: TaskStatus.notStarted,
         category: 'eye-exercise',
-        rewardXp: 10,
+        rewardHealth: 10,
         createdAt: now,
         timePeriod: TimePeriod.daily,
       ),
@@ -123,7 +123,7 @@ class TaskService {
         targetValue: 10, // 10 minutes
         currentValue: 0,
         category: 'eye-exercise',
-        rewardXp: 15,
+        rewardHealth: 15,
         createdAt: now,
         timePeriod: TimePeriod.daily,
       ),
@@ -144,7 +144,7 @@ class TaskService {
         targetValue: 25,
         currentValue: currentCoins,
         category: 'coin-goal',
-        rewardXp: 25, 
+        rewardCoins: 25, 
         createdAt: now,
         completedAt: currentCoins >= 25 ? now : null,
         timePeriod: TimePeriod.daily,
@@ -159,7 +159,7 @@ class TaskService {
         targetValue: 50,
         currentValue: currentCoins,
         category: 'coin-goal',
-        rewardXp: 50,
+        rewardCoins: 50,
         createdAt: now,
         completedAt: currentCoins >= 50 ? now : null,
         timePeriod: TimePeriod.daily,
@@ -174,7 +174,7 @@ class TaskService {
         targetValue: 3,
         currentValue: currentStreak,
         category: 'streak',
-        rewardXp: 30, // Can rename to rewardCoins later
+        rewardCoins: 30,
         createdAt: now,
         completedAt: currentStreak >= 3 ? now : null,
         timePeriod: TimePeriod.daily,
@@ -241,16 +241,15 @@ class TaskService {
   Future<void> completeTask(String taskId) async {
     final tasks = tasksNotifier.value;
     final taskIndex = tasks.indexWhere((t) => t.id == taskId);
-
     if (taskIndex != -1) {
       final task = tasks[taskIndex];
-
-      if (task.category == 'health-restore') {
+      
+      if (task.rewardHealth != null && task.rewardHealth! > 0) {
         GamificationService.instance.healthScoreNotifier.value = 
-            (GamificationService.instance.healthScoreNotifier.value + (task.rewardXp ?? 0)).clamp(0, 100);
-      } else {
-        // Normal coin reward
-        GamificationService.instance.coinsNotifier.value += (task.rewardXp ?? 0);
+            (GamificationService.instance.healthScoreNotifier.value + task.rewardHealth!).clamp(0, 100);
+      }
+      if (task.rewardCoins != null && task.rewardCoins! > 0) {
+        GamificationService.instance.coinsNotifier.value += task.rewardCoins!;
       }
 
       tasks[taskIndex] = task.copyWith(
@@ -258,16 +257,9 @@ class TaskService {
         currentValue: task.targetValue,
         completedAt: DateTime.now(),
       );
-
       tasksNotifier.value = List.from(tasks);
       _updateCompletedCount();
-
-      // Provide haptic and audio feedback
       await FeedbackService.instance.taskCompleted();
-
-      if (kDebugMode) {
-        debugPrint('[TaskService] Completed task: $taskId');
-      }
     }
   }
 

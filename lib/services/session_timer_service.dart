@@ -1,21 +1,21 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-
+import 'active_child_context_service.dart';
+import 'offline_database_service.dart';
 import 'guardian_preferences_service.dart';
+import 'gamification_service.dart';
 import 'feedback_service.dart';
 
 class SessionTimerService {
   SessionTimerService._private();
   static final SessionTimerService instance = SessionTimerService._private();
 
-  // Tracks remaining time in seconds
   final ValueNotifier<int> remainingSecondsNotifier = ValueNotifier<int>(0);
-  
-  // Triggers the "Time's Up" lock screen
   final ValueNotifier<bool> isTimeUpNotifier = ValueNotifier<bool>(false);
-
-  // Resume
   final ValueNotifier<bool> isPausedNotifier = ValueNotifier<bool>(false);
+  
+  // NEW: Triggers the Wrap-up overlay
+  final ValueNotifier<bool> showWrapUpWarningNotifier = ValueNotifier<bool>(false);
 
   Timer? _ticker;
   bool _initialized = false;
@@ -25,35 +25,59 @@ class SessionTimerService {
     if (_initialized) return;
     
     final prefs = await GuardianPreferencesService.instance.loadPreferences();
+    final childId = await ActiveChildContextService.instance.getActiveChildId();
     
-    // Convert guardian's minute limit to seconds
-    remainingSecondsNotifier.value = prefs.dailyScreenLimitMinutes * 60;
+    int elapsedMinutes = 0;
+    if (childId != null) {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final tomorrow = today.add(const Duration(days: 1));
+      
+      // Calculate screen time already spent today
+      final todayBatches = await OfflineDatabaseService.instance.loadBatchesForChild(childId, today, tomorrow);
+      elapsedMinutes = todayBatches.fold<int>(0, (sum, b) => sum + b.screenTimeMinutes);
+    }
+
+    final remainingMins = prefs.dailyScreenLimitMinutes - elapsedMinutes;
+    remainingSecondsNotifier.value = remainingMins > 0 ? remainingMins * 60 : 0;
+    isTimeUpNotifier.value = remainingSecondsNotifier.value <= 0;
+    
     _initialized = true;
   }
 
   void startTracking() {
-    // Hide the overlay immediately when this is called, 
-    // even if the timer is already technically running.
-    isPausedNotifier.value = false; 
-
-    // Now check if we actually need to start a new ticker
+    isPausedNotifier.value = false;
     if (_isRunning || isTimeUpNotifier.value) return;
-    
     _isRunning = true;
     
     _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (remainingSecondsNotifier.value > 0) {
         remainingSecondsNotifier.value--;
         
+        // Trigger Wrap-up warning at 2 minutes left
         if (remainingSecondsNotifier.value == 120) {
+          showWrapUpWarningNotifier.value = true;
           FeedbackService.instance.interventionTriggered();
         }
       } else {
         isTimeUpNotifier.value = true;
+        showWrapUpWarningNotifier.value = false;
         pauseTracking();
-        FeedbackService.instance.negativeAction(); 
+        FeedbackService.instance.negativeAction();
       }
     });
+  }
+
+  void wrapUpEarly() {
+    // Reward Early Bird Bonus
+    GamificationService.instance.coinsNotifier.value += 20;
+    isTimeUpNotifier.value = true;
+    showWrapUpWarningNotifier.value = false;
+    pauseTracking();
+  }
+
+  void ignoreWrapUp() {
+    showWrapUpWarningNotifier.value = false;
   }
 
   void pauseTracking() {
