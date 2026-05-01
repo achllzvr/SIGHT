@@ -453,15 +453,10 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                         icon: const Icon(Icons.add, size: 20),
                         label: const Text('Add Child'),
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFFD5C2E8),
-                          foregroundColor: Colors.black87,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
+                          backgroundColor: const Color(0xFF00ACC1),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Sharper corners
                         ),
                       ),
                     ],
@@ -486,40 +481,32 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                       itemBuilder: (context, index) {
                         final child = _children[index];
                         final isSelected = child.childId == _selectedChildId;
-
                         return GestureDetector(
                           onTap: () => _selectChild(child.childId),
                           child: Container(
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? const Color(0xFFD5C2E8).withValues(alpha: 0.3)
+                                  ? const Color(0xFF00ACC1).withValues(alpha: 0.1) // Subtle cyan tint
                                   : (isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF9F9FB)),
-                            borderRadius: BorderRadius.circular(18),
+                              borderRadius: BorderRadius.circular(16),
                               border: Border.all(
                                 color: isSelected
-                                    ? const Color(0xFFD5C2E8)
+                                    ? const Color(0xFF00ACC1) // Cyan border
                                     : (isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.05)),
                                 width: isSelected ? 2 : 1,
                               ),
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                             child: Row(
                               children: [
                                 Container(
                                   width: 50,
                                   height: 50,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFD5C2E8),
-                                    borderRadius: BorderRadius.circular(18),
+                                    color: const Color(0xFF00ACC1), // Cyan Avatar
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: const Icon(
-                                    Icons.pets,
-                                    size: 28,
-                                    color: Colors.white,
-                                  ),
+                                  child: const Icon(Icons.face, size: 28, color: Colors.white), // Face icon
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
@@ -631,6 +618,41 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 20),
+            // Parent-Clinician Link Placeholder
+            RoundedCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Clinician Access', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Search for certified eye-care professionals to safely share your child\'s health metrics.',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        // TODO: Implement Clinician Search/Link Modal
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Clinician search coming soon...')),
+                        );
+                      },
+                      icon: const Icon(Icons.medical_services_outlined),
+                      label: const Text('Find a Clinician'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF00ACC1),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12)
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             const SizedBox(height: 40),
           ],
         ),
@@ -648,19 +670,20 @@ class AddChildModal extends StatefulWidget {
 
 class _AddChildModalState extends State<AddChildModal> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
   final _birthdateController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _childIdController = TextEditingController(); 
+  
   DateTime? _selectedBirthdate;
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
     _birthdateController.dispose();
     _passwordController.dispose();
-    _childIdController.dispose();
     super.dispose();
   }
 
@@ -672,47 +695,42 @@ class _AddChildModalState extends State<AddChildModal> {
       final session = await AuthSessionService.instance.loadUserSession();
       final guardianEmail = session?.guardianEmail ?? '';
 
-      final childIdRaw = _childIdController.text.trim();
-      final parsedChildId = childIdRaw.isEmpty ? null : int.tryParse(childIdRaw);
-      
-      if (childIdRaw.isNotEmpty && parsedChildId == null) {
+      if (guardianEmail.isEmpty) {
         setState(() => _isLoading = false);
-        // ignore: use_build_context_synchronously
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Server Child ID must be numeric.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Guardian session required.')));
         return;
       }
 
       final result = await AuthAccountService.instance.createChildAccount(
         guardianEmail: guardianEmail,
-        firstName: _nameController.text.trim(),
-        lastName: _nameController.text.trim(),
+        firstName: _firstNameController.text.trim(),
+        lastName: _lastNameController.text.trim(),
         password: _passwordController.text,
       );
 
-      if (mounted) {
-        setState(() => _isLoading = false);
-        if (result.success) {
-          await showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Account Created!'),
-              content: Text('Login Code: ${result.account?.loginCode}'),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).pop(true); 
-                  },
-                  child: const Text('Done'),
-                ),
-              ],
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result.message)),
-          );
-        }
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+
+      if (result.success) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Account Created!'),
+            content: Text('Write down this Login Code:\n\n${result.account?.loginCode}', style: const TextStyle(fontSize: 16)),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop(); // close dialog
+                  Navigator.of(context).pop(true); // close modal and trigger refresh
+                },
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.message)));
       }
     } catch (e) {
       if (mounted) {
@@ -729,12 +747,10 @@ class _AddChildModalState extends State<AddChildModal> {
     return Container(
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
+        left: 20, right: 20, top: 20,
         bottom: MediaQuery.of(context).viewInsets.bottom + 20,
       ),
       child: SingleChildScrollView(
@@ -745,19 +761,10 @@ class _AddChildModalState extends State<AddChildModal> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Add Child',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                const Text('Add Child', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
-                  child: Icon(
-                    Icons.close,
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
+                  child: Icon(Icons.close, color: isDark ? Colors.white70 : Colors.black54),
                 ),
               ],
             ),
@@ -767,21 +774,24 @@ class _AddChildModalState extends State<AddChildModal> {
               child: Column(
                 children: [
                   TextFormField(
-                    controller: _nameController,
+                    controller: _firstNameController,
                     decoration: InputDecoration(
-                      hintText: 'Name',
-                      filled: true,
+                      hintText: 'First Name', filled: true,
                       fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide.none,
-                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Name is required';
-                      return null;
-                    },
+                    validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _lastNameController,
+                    decoration: InputDecoration(
+                      hintText: 'Last Name', filled: true,
+                      fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -797,86 +807,44 @@ class _AddChildModalState extends State<AddChildModal> {
                       if (pickedDate != null) {
                         setState(() {
                           _selectedBirthdate = pickedDate;
-                          _birthdateController.text = '${pickedDate.day}/${pickedDate.month}/${pickedDate.year}';
+                          _birthdateController.text = '${pickedDate.year}-${pickedDate.month.toString().padLeft(2,'0')}-${pickedDate.day.toString().padLeft(2,'0')}';
                         });
                       }
                     },
                     decoration: InputDecoration(
-                      hintText: 'Birthdate (DD/MM/YYYY)',
-                      filled: true,
+                      hintText: 'Birthdate (YYYY-MM-DD)', filled: true,
                       fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide.none,
-                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       suffixIcon: const Icon(Icons.calendar_today),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Birthdate is required';
-                      if (_selectedBirthdate == null) return 'Please select a valid birthdate';
-                      return null;
-                    },
+                    validator: (value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _passwordController,
                     obscureText: true,
                     decoration: InputDecoration(
-                      hintText: 'Password',
-                      filled: true,
+                      hintText: 'Child Password', filled: true,
                       fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide.none,
-                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Password is required';
-                      if (value.length < 6) return 'Password must be at least 6 characters';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _childIdController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: InputDecoration(
-                      hintText: 'Server Child ID (Optional)',
-                      filled: true,
-                      fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
+                    validator: (value) => value == null || value.length < 4 ? 'Min 4 characters' : null,
                   ),
                   const SizedBox(height: 20),
                   SizedBox(
-                    width: double.infinity,
-                    height: 48,
+                    width: double.infinity, height: 48,
                     child: FilledButton(
                       onPressed: _isLoading ? null : _submitForm,
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFD5C2E8),
-                        foregroundColor: Colors.black87,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        disabledBackgroundColor: const Color(0xFFD5C2E8).withValues(alpha: 0.5),
+                        backgroundColor: const Color(0xFF00ACC1),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: _isLoading
-                          ? const CircularProgressIndicator()
-                          : const Text(
-                              'Save Child',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('Save Child', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ],

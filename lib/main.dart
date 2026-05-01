@@ -10,7 +10,6 @@ import 'widgets/tracking_bubble.dart';
 import 'widgets/rounded_card.dart';
 
 import 'screens/auth/auth_options_screen.dart';
-import 'screens/add_children_screen.dart';
 import 'screens/child_dashboard_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/tracking_screen.dart';
@@ -85,7 +84,6 @@ class SightFeasibilityApp extends StatelessWidget {
             '/guardian': (_) => const GuardianDashboardScreen(),
             '/guardian/child-dashboard': (_) => const GuardianChildDashboardScreen(),
             '/guardian-setup': (_) => const GuardianSetupScreen(mandatory: true),
-            '/add-child': (_) => const AddChildrenScreen(),
             '/child-dashboard': (_) => const ChildDashboardScreen(),
             '/media-hub': (_) => const MediaHubScreen(),
             '/store': (_) => const StoreScreen(),

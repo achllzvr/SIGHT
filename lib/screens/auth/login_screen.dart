@@ -47,9 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final password = _guardianPasswordController.text;
       final success = await AuthAccountService.instance.authenticateGuardian(email: email, password: password);
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       if (!success) {
         setState(() {
@@ -58,6 +56,8 @@ class _LoginScreenState extends State<LoginScreen> {
         });
         return;
       }
+
+      await ActiveChildContextService.instance.clearActiveChild();
 
       await AuthSessionService.instance.saveGuardianSession(guardianEmail: email);
       final hasPin = await GuardianSetupService.instance.hasGuardianPin();

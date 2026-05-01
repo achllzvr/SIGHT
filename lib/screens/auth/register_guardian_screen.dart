@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_account_service.dart';
 import '../../services/auth_session_service.dart';
 import '../../services/guardian_setup_service.dart';
+import '../../services/active_child_context_service.dart';
 import '../../widgets/lumi_shell.dart';
 
 class RegisterGuardianScreen extends StatefulWidget {
@@ -72,6 +73,8 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
       });
       return;
     }
+
+    await ActiveChildContextService.instance.clearActiveChild();
 
     await AuthSessionService.instance.saveGuardianSession(guardianEmail: email);
     final hasPin = await GuardianSetupService.instance.hasGuardianPin();
