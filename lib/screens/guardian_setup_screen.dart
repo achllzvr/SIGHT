@@ -63,10 +63,22 @@ class _GuardianSetupScreenState extends State<GuardianSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return PopScope(
       canPop: !widget.mandatory,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+            ? [const Color.fromARGB(255, 208, 174, 245), const Color.fromARGB(255, 163, 138, 214)]
+            : [const Color.fromARGB(255, 208, 174, 245), const Color.fromARGB(255, 163, 138, 214)],
+          ),
+        ),
       child: Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        backgroundColor: Colors.transparent,
         body: SafeArea(
           child: Center(
             child: Padding(
@@ -148,6 +160,7 @@ class _GuardianSetupScreenState extends State<GuardianSetupScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 }

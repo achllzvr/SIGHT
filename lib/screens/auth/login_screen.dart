@@ -45,32 +45,39 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_isGuardian) {
       final email = _guardianEmailController.text.trim();
       final password = _guardianPasswordController.text;
-      final success = await AuthAccountService.instance.authenticateGuardian(email: email, password: password);
+      
+      try {
+        final success = await AuthAccountService.instance.authenticateGuardian(email: email, password: password);
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      if (!success) {
+        if (!success) {
+          setState(() {
+            _loading = false;
+            _error = 'Invalid guardian email or password.';
+          });
+          return;
+        }
+
+        await ActiveChildContextService.instance.clearActiveChild();
+        await AuthSessionService.instance.saveGuardianSession(guardianEmail: email);
+        final hasPin = await GuardianSetupService.instance.hasGuardianPin();
+        
+        if (!mounted) return;
+        FocusManager.instance.primaryFocus?.unfocus();
+
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          hasPin ? '/guardian' : '/guardian-setup',
+          (route) => false,
+        );
+      } catch (e) {
+        // Catches the "No Internet" exception we just created!
         setState(() {
           _loading = false;
-          _error = 'Invalid guardian email or password.';
+          // Clean up the exception text for the UI
+          _error = e.toString().replaceAll('Exception: ', ''); 
         });
-        return;
       }
-
-      await ActiveChildContextService.instance.clearActiveChild();
-
-      await AuthSessionService.instance.saveGuardianSession(guardianEmail: email);
-      final hasPin = await GuardianSetupService.instance.hasGuardianPin();
-      if (!mounted) {
-        return;
-      }
-
-      FocusManager.instance.primaryFocus?.unfocus();
-
-      Navigator.of(context).pushNamedAndRemoveUntil(
-        hasPin ? '/guardian' : '/guardian-setup',
-        (route) => false,
-      );
       return;
     }
 

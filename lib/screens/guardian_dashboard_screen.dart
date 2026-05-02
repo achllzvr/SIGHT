@@ -5,8 +5,10 @@ import '../services/active_child_context_service.dart';
 import '../services/auth_account_service.dart';
 import '../services/auth_session_service.dart';
 import '../services/cleanup_service.dart';
-import '../services/guardian_setup_service.dart'; 
 import 'guardian_child_dashboard_screen.dart';
+import 'doctor_connection_modal.dart';
+
+import '../services/guardian_setup_service.dart';
 import '../widgets/rounded_card.dart';
 
 /// Model for child with basic info and login code
@@ -87,6 +89,18 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
       debugPrint('Error loading children: $e');
       if (mounted) {
         setState(() => _loading = false);
+        
+        // Let the parent know they need internet!
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(e.toString().replaceAll('Exception: ', '')),
+                backgroundColor: Colors.redAccent,
+              ),
+            );
+          }
+        });
       }
     }
   }
@@ -124,12 +138,15 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
   }
 
   Future<void> _showChangePinDialog() async {
+    
+    final messenger = ScaffoldMessenger.of(context); 
+    
     final currentController = TextEditingController();
     final newController = TextEditingController();
     final confirmController = TextEditingController();
 
     try {
-      await showDialog<void>(
+      final successMsg = await showDialog<String>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) {
@@ -204,14 +221,10 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                               confirmNewPin: confirmController.text.trim(),
                             );
 
-                            if (!mounted) return;
+                            if (!dialogContext.mounted) return;
 
                             if (result.success) {
-                              if (!dialogContext.mounted) return;
-                              Navigator.of(dialogContext).pop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(result.message)),
-                              );
+                              Navigator.of(dialogContext).pop(result.message); // Pass message out
                               return;
                             }
 
@@ -230,15 +243,26 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
           );
         },
       );
+
+      // Show SnackBar safely outside the dialog lifecycle using the pre-captured messenger
+      if (successMsg != null) {
+        messenger.showSnackBar(SnackBar(content: Text(successMsg)));
+      }
     } finally {
-      currentController.dispose();
-      newController.dispose();
-      confirmController.dispose();
+      // WAIT FOR EXIT ANIMATION BEFORE DISPOSING
+      Future.delayed(const Duration(milliseconds: 400), () {
+        currentController.dispose();
+        newController.dispose();
+        confirmController.dispose();
+      });
     }
   }
 
   // IMPROVEMENT #2: Parent Account Password Reset (Crash Fixed)
   Future<void> _showParentChangePasswordDialog() async {
+    // CAPTURE MESSENGER EARLY TO PREVENT CONTEXT CRASHES
+    final messenger = ScaffoldMessenger.of(context); 
+
     final currentController = TextEditingController();
     final newController = TextEditingController();
     final confirmController = TextEditingController();
@@ -318,7 +342,7 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                             if (!dialogContext.mounted) return;
 
                             if (result.success) {
-                               Navigator.of(dialogContext).pop(result.message); // Pass success message back
+                               Navigator.of(dialogContext).pop(result.message); // Pass message out
                             } else {
                                setDialogState(() {
                                 inProgress = false;
@@ -337,15 +361,18 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
         },
       );
 
-      // Handle the success message outside the dialog context to prevent the crash
-      if (successMsg != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(successMsg)));
+      // Show SnackBar safely outside the dialog lifecycle using the pre-captured messenger
+      if (successMsg != null) {
+        messenger.showSnackBar(SnackBar(content: Text(successMsg)));
       }
 
     } finally {
-      currentController.dispose();
-      newController.dispose();
-      confirmController.dispose();
+      // WAIT FOR EXIT ANIMATION BEFORE DISPOSING
+      Future.delayed(const Duration(milliseconds: 400), () {
+        currentController.dispose();
+        newController.dispose();
+        confirmController.dispose();
+      });
     }
   }
 
@@ -392,6 +419,16 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final backgroundGradient = BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: isDark
+            ? [const Color.fromARGB(255, 208, 174, 245), const Color.fromARGB(255, 163, 138, 214)]
+            : [const Color.fromARGB(255, 208, 174, 245), const Color.fromARGB(255, 163, 138, 214)],
+      ),
+    );
+
     if (_loading) {
       return Scaffold(
         backgroundColor: isDark ? const Color(0xFF0F0F11) : const Color(0xFFFAFAFC),
@@ -399,262 +436,280 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F0F11) : const Color(0xFFFAFAFC),
-      appBar: AppBar(
-        title: const Text('Parent Dashboard'),
-        elevation: 0,
-        backgroundColor: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF5F5F7),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: 'Logout',
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Select Child Section
-            Container(
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+    return Container(
+      decoration: backgroundGradient,
+      child: Scaffold(
+          backgroundColor: Colors.transparent,        appBar: AppBar(
+          title: const Text('Parent Dashboard'),
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: _logout,
+              tooltip: 'Logout',
+            ),
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Select Child Section
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
                   ),
-                ],
-              ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Select Child',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Select Child',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
+                        FilledButton.icon(
+                          onPressed: _addChild,
+                          icon: const Icon(Icons.add, size: 20),
+                          label: const Text('Add Child'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF00ACC1),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Sharper corners
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    if (_children.isEmpty)
+                      Center(
+                        child: Text(
+                          'Add a child to get started',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: isDark ? Colors.white60 : Colors.black54,
+                          ),
+                        ),
+                      )
+                    else
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _children.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final child = _children[index];
+                          final isSelected = child.childId == _selectedChildId;
+                          return GestureDetector(
+                            onTap: () => _selectChild(child.childId),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(0xFF00ACC1).withValues(alpha: 0.1) // Subtle cyan tint
+                                    : (isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF9F9FB)),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFF00ACC1) // Cyan border
+                                      : (isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.05)),
+                                  width: isSelected ? 2 : 1,
+                                ),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 50,
+                                    height: 50,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00ACC1), // Cyan Avatar
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(Icons.face, size: 28, color: Colors.white), // Face icon
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          child.displayName,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: isDark ? Colors.white : Colors.black87,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${child.ageYears} years old',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: isDark ? Colors.white60 : Colors.black54,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isSelected)
+                                    const Icon(
+                                      Icons.check_circle,
+                                      color: Color(0xFFD5C2E8),
+                                      size: 24,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      FilledButton.icon(
-                        onPressed: _addChild,
-                        icon: const Icon(Icons.add, size: 20),
-                        label: const Text('Add Child'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              // Guardian Security Card
+              RoundedCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Guardian Security', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Update your guardian PIN used for strict lock override and guardian access.',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _showChangePinDialog,
+                        icon: const Icon(Icons.pin),
+                        label: const Text('Change Guardian PIN'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+      
+              // IMPROVEMENT #2: Parent Account Management
+              RoundedCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Parent Account Management', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.email_outlined, size: 20, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _guardianEmail ?? 'Loading...',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final res = await AuthAccountService.instance.verifyEmail(_guardianEmail!);
+                          if (context.mounted) {
+                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res.message)));
+                          }
+                        },
+                        icon: const Icon(Icons.mark_email_read_outlined),
+                        label: const Text('Verify Email Address'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _showParentChangePasswordDialog,
+                        icon: const Icon(Icons.password),
+                        label: const Text('Reset Parent Password'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Parent-Clinician Link Placeholder
+              RoundedCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Clinician Access', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Search for certified eye-care professionals to safely share your child\'s health metrics.',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () {
+                           // Ensure we have a child selected before opening the modal
+                           if (_selectedChildId == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please select a child first.')),
+                              );
+                              return;
+                           }
+                           showModalBottomSheet(
+                             context: context,
+                             isScrollControlled: true,
+                             backgroundColor: Colors.transparent,
+                             builder: (context) => Container(
+                               height: MediaQuery.of(context).size.height * 0.85,
+                               decoration: BoxDecoration(
+                                 color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+                                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                               ),
+                               child: DoctorConnectionModal(childId: _selectedChildId!),
+                             ),
+                           );
+                        },
+                        icon: const Icon(Icons.medical_services_outlined),
+                        label: const Text('Find a Clinician'),
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFF00ACC1),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Sharper corners
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12)
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  if (_children.isEmpty)
-                    Center(
-                      child: Text(
-                        'Add a child to get started',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: isDark ? Colors.white60 : Colors.black54,
-                        ),
-                      ),
-                    )
-                  else
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _children.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final child = _children[index];
-                        final isSelected = child.childId == _selectedChildId;
-                        return GestureDetector(
-                          onTap: () => _selectChild(child.childId),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? const Color(0xFF00ACC1).withValues(alpha: 0.1) // Subtle cyan tint
-                                  : (isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF9F9FB)),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isSelected
-                                    ? const Color(0xFF00ACC1) // Cyan border
-                                    : (isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.05)),
-                                width: isSelected ? 2 : 1,
-                              ),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 50,
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF00ACC1), // Cyan Avatar
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: const Icon(Icons.face, size: 28, color: Colors.white), // Face icon
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        child.displayName,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                          color: isDark ? Colors.white : Colors.black87,
-                                        ),
-                                      ),
-                                      Text(
-                                        '${child.ageYears} years old',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: isDark ? Colors.white60 : Colors.black54,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (isSelected)
-                                  const Icon(
-                                    Icons.check_circle,
-                                    color: Color(0xFFD5C2E8),
-                                    size: 24,
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            
-            // Guardian Security Card
-            RoundedCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Guardian Security', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Update your guardian PIN used for strict lock override and guardian access.',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _showChangePinDialog,
-                      icon: const Icon(Icons.pin),
-                      label: const Text('Change Guardian PIN'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // IMPROVEMENT #2: Parent Account Management
-            RoundedCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Parent Account Management', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      const Icon(Icons.email_outlined, size: 20, color: Colors.grey),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _guardianEmail ?? 'Loading...',
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final res = await AuthAccountService.instance.verifyEmail(_guardianEmail!);
-                        if (context.mounted) {
-                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res.message)));
-                        }
-                      },
-                      icon: const Icon(Icons.mark_email_read_outlined),
-                      label: const Text('Verify Email Address'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _showParentChangePasswordDialog,
-                      icon: const Icon(Icons.password),
-                      label: const Text('Reset Parent Password'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Parent-Clinician Link Placeholder
-            RoundedCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Clinician Access', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Search for certified eye-care professionals to safely share your child\'s health metrics.',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        // TODO: Implement Clinician Search/Link Modal
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Clinician search coming soon...')),
-                        );
-                      },
-                      icon: const Icon(Icons.medical_services_outlined),
-                      label: const Text('Find a Clinician'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF00ACC1),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12)
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 40),
-          ],
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );

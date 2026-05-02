@@ -77,4 +77,15 @@ class ApiClientService {
       rawBody: response.body,
     );
   }
+
+  Future<ApiClientResponse> delete(Uri uri, {Map<String, dynamic>? jsonBody}) async {
+    final response = await http
+        .delete(
+          uri,
+          headers: await _headers(),
+          body: jsonBody == null ? null : jsonEncode(jsonBody),
+        )
+        .timeout(_timeout);
+    return _parse(response);
+  }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/clinician_service.dart';
 
-/// Model for doctor information
 class DoctorInfo {
   final int doctorId;
   final String name;
@@ -9,21 +9,18 @@ class DoctorInfo {
   final String? clinic;
   final String? location;
   final bool isValidated;
+  final int? linkId; // ADDED: Needed for cancellation
+  final bool isPending; // ADDED
 
   DoctorInfo({
-    required this.doctorId,
-    required this.name,
-    required this.email,
-    required this.specialty,
-    this.clinic,
-    this.location,
-    required this.isValidated,
+    required this.doctorId, required this.name, required this.email,
+    required this.specialty, this.clinic, this.location, required this.isValidated,
+    this.linkId, this.isPending = false,
   });
 }
 
 class DoctorConnectionModal extends StatefulWidget {
   final int childId;
-
   const DoctorConnectionModal({super.key, required this.childId});
 
   @override
@@ -35,72 +32,70 @@ class _DoctorConnectionModalState extends State<DoctorConnectionModal> {
   List<DoctorInfo> _allDoctors = [];
   List<DoctorInfo> _filteredDoctors = [];
   List<DoctorInfo> _pendingRequests = [];
+  // ignore: unused_field
+  List<DoctorInfo> _activeConnections = [];
   String _searchQuery = '';
+  // ignore: unused_field
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadDoctors();
+    _loadData();
     _searchController.addListener(_filterDoctors);
   }
 
-  Future<void> _loadDoctors() async {
+  Future<void> _loadData() async {
     try {
-      // TODO: Fetch from API based on child_id
-      // This will get available doctors and pending requests
-      final doctors = [
-        DoctorInfo(
-          doctorId: 1,
-          name: 'Doc McStuffins',
-          email: 'DocMcStuffins@gmail.com',
-          specialty: 'Optometrist',
-          clinic: 'Lipeye',
-          location: 'Lipa',
-          isValidated: true,
-        ),
-        DoctorInfo(
-          doctorId: 2,
-          name: 'Dr. Sarah Smith',
-          email: 'sarah.smith@clinic.com',
-          specialty: 'Ophthalmologist',
-          clinic: 'Vision Care Center',
-          location: 'Downtown',
-          isValidated: true,
-        ),
-        DoctorInfo(
-          doctorId: 3,
-          name: 'Dr. John Eye',
-          email: 'john@eyeclinic.com',
-          specialty: 'Optometrist',
-          clinic: 'Clear Vision',
-          location: 'Midtown',
-          isValidated: true,
-        ),
-      ];
+      final availableDocsRaw = await ClinicianService.instance.getAvailableDoctors();
+      final linksRaw = await ClinicianService.instance.getChildLinks(widget.childId);
 
-      final pending = [
-        DoctorInfo(
-          doctorId: 4,
-          name: 'Doc McStuffins',
-          email: 'DocMcStuffins@gmail.com',
-          specialty: 'Optometrist',
-          clinic: 'Lipeye',
-          location: 'Lipa',
+      final List<DoctorInfo> pending = [];
+      final List<DoctorInfo> active = [];
+      final List<int> linkedDoctorIds = [];
+
+      for (var link in linksRaw) {
+        linkedDoctorIds.add(link['doctor_id']);
+        final doc = DoctorInfo(
+          doctorId: link['doctor_id'],
+          linkId: link['link_id'],
+          name: 'Dr. ${link['first_name']} ${link['last_name']}'.trim(),
+          email: link['email'] ?? '',
+          specialty: link['specialty'] ?? '',
+          clinic: link['clinic'],
           isValidated: true,
-        ),
-      ];
+          isPending: link['is_active'] == 0,
+        );
+        if (link['is_active'] == 0) {
+          pending.add(doc);
+        } else {
+          active.add(doc);
+        }
+      }
+
+      final List<DoctorInfo> available = availableDocsRaw
+          .where((d) => !linkedDoctorIds.contains(d['doctor_id']))
+          .map((d) => DoctorInfo(
+                doctorId: d['doctor_id'],
+                name: 'Dr. ${d['first_name']} ${d['last_name']}'.trim(),
+                email: d['email'] ?? '',
+                specialty: d['specialty'] ?? '',
+                clinic: d['clinic'], location: d['location'],
+                isValidated: d['is_validated'] == 1,
+              ))
+          .toList();
 
       if (mounted) {
         setState(() {
-          _allDoctors = doctors;
-          _filteredDoctors = doctors;
+          _allDoctors = available;
+          _filteredDoctors = available;
           _pendingRequests = pending;
+          _activeConnections = active;
+          _isLoading = false;
         });
       }
     } catch (e) {
-      debugPrint('Error loading doctors: $e');
-      // Error handled
-      debugPrint('Error loading doctors: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -109,12 +104,27 @@ class _DoctorConnectionModalState extends State<DoctorConnectionModal> {
     setState(() {
       _searchQuery = query;
       _filteredDoctors = _allDoctors.where((doctor) {
-        return doctor.name.toLowerCase().contains(query) ||
-            doctor.specialty.toLowerCase().contains(query) ||
-            doctor.email.toLowerCase().contains(query) ||
-            (doctor.clinic?.toLowerCase().contains(query) ?? false);
+        return doctor.name.toLowerCase().contains(query) || doctor.specialty.toLowerCase().contains(query);
       }).toList();
     });
+  }
+
+  // ignore: unused_element
+  Future<void> _sendConnectionRequest(DoctorInfo doctor) async {
+    final success = await ClinicianService.instance.requestConnection(widget.childId, doctor.doctorId);
+    if (!mounted) return;
+    if (success) {
+      showDialog(context: context, builder: (context) => _SuccessDialog(doctorName: doctor.name));
+      _loadData(); // Refresh lists
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to send request')));
+    }
+  }
+
+  Future<void> _cancelPendingRequest(DoctorInfo doctor) async {
+    if (doctor.linkId == null) return;
+    final success = await ClinicianService.instance.cancelConnection(doctor.linkId!);
+    if (success && mounted) _loadData(); // Refresh lists
   }
 
   void _connectDoctor(DoctorInfo doctor) {
@@ -130,9 +140,7 @@ class _DoctorConnectionModalState extends State<DoctorConnectionModal> {
         backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         title: Text(
           'Confirm Connection',
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black,
-          ),
+          style: TextStyle(color: isDark ? Colors.white : Colors.black),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -140,10 +148,7 @@ class _DoctorConnectionModalState extends State<DoctorConnectionModal> {
           children: [
             Text(
               'Send connection request to',
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? Colors.white70 : Colors.black87,
-              ),
+              style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.black87),
             ),
             const SizedBox(height: 12),
             Container(
@@ -155,27 +160,9 @@ class _DoctorConnectionModalState extends State<DoctorConnectionModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    doctor.name,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    doctor.email,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white60 : Colors.black54,
-                    ),
-                  ),
-                  Text(
-                    doctor.specialty,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white60 : Colors.black54,
-                    ),
-                  ),
+                  Text(doctor.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                  Text(doctor.email, style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54)),
+                  Text(doctor.specialty, style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54)),
                 ],
               ),
             ),
@@ -188,11 +175,7 @@ class _DoctorConnectionModalState extends State<DoctorConnectionModal> {
               padding: const EdgeInsets.all(12),
               child: Text(
                 'This will allow the doctor to monitor your child\'s eye health data. You can revoke access at any time.',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? Colors.white60 : Colors.black54,
-                  height: 1.4,
-                ),
+                style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54, height: 1.4),
               ),
             ),
           ],
@@ -205,7 +188,7 @@ class _DoctorConnectionModalState extends State<DoctorConnectionModal> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _sendConnectionRequest(doctor);
+              _sendConnectionRequest(doctor); // Wires up to the new live API!
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFD5C2E8),
@@ -216,40 +199,6 @@ class _DoctorConnectionModalState extends State<DoctorConnectionModal> {
         ],
       ),
     );
-  }
-
-  Future<void> _sendConnectionRequest(DoctorInfo doctor) async {
-    try {
-      // TODO: Send connection request via API
-      // This should sync with clinician_patient_link table
-      
-      // Show success dialog
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => _SuccessDialog(doctorName: doctor.name),
-        );
-      }
-
-      // Update state
-      setState(() {
-        _filteredDoctors.removeWhere((d) => d.doctorId == doctor.doctorId);
-        _pendingRequests.add(doctor);
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
-  }
-
-  void _cancelPendingRequest(DoctorInfo doctor) {
-    setState(() {
-      _pendingRequests.removeWhere((d) => d.doctorId == doctor.doctorId);
-      _filteredDoctors.add(doctor);
-    });
   }
 
   @override

@@ -47,46 +47,57 @@ class _GuardianChildDashboardScreenState extends State<GuardianChildDashboardScr
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F0F11) : const Color(0xFFFAFAFC),
-      appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF5F5F7),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios),
-          onPressed: () => Navigator.of(context).pop(),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+            ? [const Color.fromARGB(255, 208, 174, 245), const Color.fromARGB(255, 163, 138, 214)]
+            : [const Color.fromARGB(255, 208, 174, 245), const Color.fromARGB(255, 163, 138, 214)],
         ),
-        title: const Text('Child Dashboard'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(56),
-          child: Container(
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF5F5F7),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              labelColor: const Color(0xFF00ACC1),
-              unselectedLabelColor: isDark ? Colors.white54 : Colors.black54,
-              indicatorColor: const Color(0xFF00ACC1),
-              indicatorWeight: 3,
-              tabs: const [
-                Tab(text: 'Overview'),
-                Tab(text: 'Analytics'),
-                Tab(text: 'Controls'),
-                Tab(text: 'Account'), // New Tab
-              ],
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: const Text('Child Dashboard'),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(56),
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.transparent,
+              ),
+              child: TabBar(
+                controller: _tabController,
+                labelColor: const Color(0xFF00ACC1),
+                unselectedLabelColor: isDark ? Colors.white54 : Colors.black54,
+                indicatorColor: const Color(0xFF00ACC1),
+                indicatorWeight: 3,
+                tabs: const [
+                  Tab(text: 'Overview'),
+                  Tab(text: 'Analytics'),
+                  Tab(text: 'Controls'),
+                  Tab(text: 'Account'), // New Tab
+                ],
+              ),
             ),
           ),
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          OverviewTab(childId: widget.childId),
-          AnalyticsTab(childId: widget.childId),
-          ControlsTab(childId: widget.childId),
-          ChildAccountTab(childId: widget.childId), // New Tab Screen
-        ],
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            OverviewTab(childId: widget.childId),
+            AnalyticsTab(childId: widget.childId),
+            ControlsTab(childId: widget.childId),
+            ChildAccountTab(childId: widget.childId), // New Tab Screen
+          ],
+        ),
       ),
     );
   }
@@ -642,6 +653,8 @@ class _ChildAccountTabState extends State<ChildAccountTab> {
   Future<void> _showResetPasswordDialog() async {
     if (_guardianEmail == null) return;
 
+    final messenger = ScaffoldMessenger.of(context); 
+
     final guardianPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
 
@@ -719,16 +732,19 @@ class _ChildAccountTabState extends State<ChildAccountTab> {
         },
       );
 
-      // Handle the success message outside the dialog context to prevent the crash
-      if (success == true && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      // Show SnackBar safely outside the dialog lifecycle using the pre-captured messenger
+      if (success == true) {
+        messenger.showSnackBar(
           const SnackBar(content: Text('Child password updated successfully. (TODO: Link to DB)')),
         );
       }
 
     } finally {
-      guardianPasswordController.dispose();
-      newPasswordController.dispose();
+      // WAIT FOR EXIT ANIMATION BEFORE DISPOSING
+      Future.delayed(const Duration(milliseconds: 400), () {
+        guardianPasswordController.dispose();
+        newPasswordController.dispose();
+      });
     }
   }
 
