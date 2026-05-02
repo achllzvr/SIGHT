@@ -1,10 +1,9 @@
 import 'dart:convert';
-import 'dart:math';
-
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:lumi/services/auth_session_service.dart';
 import 'connectivity_service.dart';
-
 import 'api_client_service.dart';
 import 'api_config_service.dart';
 
@@ -15,17 +14,13 @@ class GuardianAccount {
   final bool isEmailVerified;
 
   const GuardianAccount({
-    required this.email,
-    required this.passwordHash,
-    required this.createdAt,
-    required this.isEmailVerified,
+    required this.email, required this.passwordHash,
+    required this.createdAt, required this.isEmailVerified,
   });
 
   Map<String, dynamic> toJson() => {
-    'email': email,
-    'passwordHash': passwordHash,
-    'createdAt': createdAt.toIso8601String(),
-    'isEmailVerified': isEmailVerified,
+    'email': email, 'passwordHash': passwordHash,
+    'createdAt': createdAt.toIso8601String(), 'isEmailVerified': isEmailVerified,
   };
 
   factory GuardianAccount.fromJson(Map<String, dynamic> json) => GuardianAccount(
@@ -46,23 +41,14 @@ class ChildAccount {
   final DateTime? birthdate;
 
   const ChildAccount({
-    required this.loginCode,
-    required this.displayName,
-    required this.passwordHash,
-    required this.guardianEmail,
-    required this.childId,
-    required this.createdAt,
-    this.birthdate,
+    required this.loginCode, required this.displayName, required this.passwordHash,
+    required this.guardianEmail, required this.childId, required this.createdAt, this.birthdate,
   });
 
   Map<String, dynamic> toJson() => {
-    'loginCode': loginCode,
-    'displayName': displayName,
-    'passwordHash': passwordHash,
-    'guardianEmail': guardianEmail,
-    'childId': childId,
-    'createdAt': createdAt.toIso8601String(),
-    'birthdate': birthdate?.toIso8601String(),
+    'loginCode': loginCode, 'displayName': displayName, 'passwordHash': passwordHash,
+    'guardianEmail': guardianEmail, 'childId': childId,
+    'createdAt': createdAt.toIso8601String(), 'birthdate': birthdate?.toIso8601String(),
   };
 
   factory ChildAccount.fromJson(Map<String, dynamic> json) => ChildAccount(
@@ -94,8 +80,6 @@ class AuthAccountService {
   static const _guardianAccountsKey = 'guardian_accounts_v1';
   static const _childAccountsKey = 'child_accounts_v1';
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  // ignore: unused_field
-  final Random _random = Random();
 
   String _hashPassword(String value) => sha256.convert(utf8.encode(value)).toString();
 
@@ -120,37 +104,21 @@ class AuthAccountService {
   }
 
   // --- PARENT ACCOUNT CREATION (ONLINE ONLY) ---
-  Future<AccountActionResult> registerGuardian({
-    required String firstName, 
-    required String lastName, 
-    required String email, 
-    required String password
-  }) async {
+  Future<AccountActionResult> registerGuardian({required String firstName, required String lastName, required String email, required String password}) async {
     if (!await ConnectivityService.instance.isOnline()) {
       return const AccountActionResult(success: false, message: 'Internet connection required to create a Parent account.');
     }
     
     final normalizedEmail = email.trim().toLowerCase();
-    if (normalizedEmail.isEmpty || !normalizedEmail.contains('@')) return const AccountActionResult(success: false, message: 'Enter a valid email.');
-    if (password.length < 6) return const AccountActionResult(success: false, message: 'Password must be at least 6 characters.');
-    
     try {
       final uri = ApiConfigService.buildUri(ApiConfigService.registerGuardianEndpoint);
-      final response = await ApiClientService.instance.post(
-        uri,
-        jsonBody: {
-          'first_name': firstName.trim(),
-          'last_name': lastName.trim(),
-          'email': normalizedEmail,
-          'password': password, 
-        }
-      );
+      final response = await ApiClientService.instance.post(uri, jsonBody: {
+          'first_name': firstName.trim(), 'last_name': lastName.trim(),
+          'email': normalizedEmail, 'password': password, 
+      });
 
-      if (!response.isSuccess) {
-        return AccountActionResult(success: false, message: 'Server error: ${response.rawBody}');
-      }
+      if (!response.isSuccess) return AccountActionResult(success: false, message: 'Server error: ${response.rawBody}');
 
-      // Cache locally
       final accounts = await _loadGuardianAccounts();
       accounts.add(GuardianAccount(email: normalizedEmail, passwordHash: _hashPassword(password), createdAt: DateTime.now(), isEmailVerified: false));
       await _saveGuardianAccounts(accounts);
@@ -161,60 +129,52 @@ class AuthAccountService {
     }
   }
 
+  // STRICT ONLINE AUTHENTICATION
   Future<bool> authenticateGuardian({required String email, required String password}) async {
     final normalizedEmail = email.trim().toLowerCase();
     
-    // STRICT ONLINE CHECK
     if (!await ConnectivityService.instance.isOnline()) {
       throw Exception('Internet connection is required to login as a Guardian.');
     }
 
     final uri = ApiConfigService.buildUri('/api/shared/login');
-    final response = await ApiClientService.instance.post(uri, jsonBody: {
-      'email': normalizedEmail,
-      'password': password
-    });
+    final response = await ApiClientService.instance.post(uri, jsonBody: {'email': normalizedEmail, 'password': password});
     
     if (response.isSuccess) {
+      final token = response.data['token'];
+      if (token != null && token.isNotEmpty) {
+        await AuthSessionService.instance.saveAccessToken(token);
+      }
+
+      final accounts = await _loadGuardianAccounts();
+      if (!accounts.any((a) => a.email == normalizedEmail)) {
+        accounts.add(GuardianAccount(email: normalizedEmail, passwordHash: _hashPassword(password), createdAt: DateTime.now(), isEmailVerified: true));
+        await _saveGuardianAccounts(accounts);
+      }
       return true;
     }
-    
-    return false; // Server rejected credentials
+    return false;
   }
 
-  // --- CHILD ACCOUNT CREATION (ONLINE ONLY) ---
-  Future<ChildAccountCreationResult> createChildAccount({
-    required String guardianEmail, 
-    required String firstName, 
-    required String lastName, 
-    required String password,
-  }) async {
+  // --- STRICT ONLINE CHILD CREATION ---
+  Future<ChildAccountCreationResult> createChildAccount({required String guardianEmail, required String firstName, required String lastName, required String password}) async {
     if (!await ConnectivityService.instance.isOnline()) {
-      return const ChildAccountCreationResult(success: false, message: 'Internet connection required to create a Child account.');
+      return const ChildAccountCreationResult(success: false, message: 'Internet connection required.');
     }
     
     final normalizedGuardianEmail = guardianEmail.trim().toLowerCase();
-    if (normalizedGuardianEmail.isEmpty) return const ChildAccountCreationResult(success: false, message: 'Guardian session invalid.');
-    if (firstName.trim().isEmpty) return const ChildAccountCreationResult(success: false, message: 'First name required.');
-    if (password.length < 4) return const ChildAccountCreationResult(success: false, message: 'Password must be at least 4 characters.');
-
     try {
       final uri = ApiConfigService.buildUri(ApiConfigService.registerChildEndpoint);
-      final response = await ApiClientService.instance.post(
-        uri,
-        jsonBody: {
-          'guardian_email': normalizedGuardianEmail,
+      final response = await ApiClientService.instance.post(uri, jsonBody: {
+          'guardian_email': normalizedGuardianEmail, 
           'first_name': firstName.trim(),
-          'last_name': lastName.trim(),
+          'last_name': lastName.trim(), 
           'password': password,
-        }
-      );
+          'mobile_password': password, // FIXED: Now Laravel won't generate a random password!
+      });
 
-      if (!response.isSuccess) {
-        return ChildAccountCreationResult(success: false, message: 'Server error: ${response.rawBody}');
-      }
+      if (!response.isSuccess) return ChildAccountCreationResult(success: false, message: 'Server error: ${response.rawBody}');
 
-      // STRICT SERVER RELIANCE: Extract the REAL ID and Code generated by Laravel
       final responseData = response.data['data'] ?? {};
       final childData = responseData['child'] ?? {};
       
@@ -225,16 +185,10 @@ class AuthAccountService {
         return const ChildAccountCreationResult(success: false, message: 'Invalid response from server.');
       }
 
-      final String displayName = '${firstName.trim()} ${lastName.trim()}'.trim();
-
-      // Mirror the exact server state to local cache
       final account = ChildAccount(
-        loginCode: serverCode, 
-        displayName: displayName, 
-        passwordHash: _hashPassword(password),
-        guardianEmail: normalizedGuardianEmail, 
-        childId: serverChildId, 
-        createdAt: DateTime.now(),
+        loginCode: serverCode, displayName: '${firstName.trim()} ${lastName.trim()}'.trim(), 
+        passwordHash: _hashPassword(password), guardianEmail: normalizedGuardianEmail, 
+        childId: serverChildId, createdAt: DateTime.now(),
       );
       
       final accounts = await _loadChildAccounts();
@@ -247,38 +201,46 @@ class AuthAccountService {
     }
   }
 
+  // --- STRICT ONLINE LIST FETCHING ---
   Future<List<ChildAccount>> listChildrenForGuardian(String guardianEmail) async {
     final normalizedEmail = guardianEmail.trim().toLowerCase();
+    
+    if (!await ConnectivityService.instance.isOnline()) {
+      throw Exception('Internet connection is required to view the Parent Dashboard.');
+    }
+
     final uri = ApiConfigService.buildUri('/api/mobile/guardian/children', queryParameters: {'email': normalizedEmail});
     final response = await ApiClientService.instance.get(uri);
     
-    // --> NEW: Expose the actual Laravel error to the SnackBar!
     if (!response.isSuccess) {
       throw Exception('Server Error ${response.statusCode}: ${response.rawBody}');
     }
     
     if (response.data != null && response.data['data'] != null) {
       final List<dynamic> serverChildren = response.data['data'];
+      var localAccounts = await _loadChildAccounts();
       
       final List<ChildAccount> liveAccounts = serverChildren.map((c) {
+        final serverCode = c['login_code']?.toString() ?? '';
+        
+        // FIXED: Extract our local password hash if it exists so offline login stays functional!
+        String preservedHash = '';
+        try { preservedHash = localAccounts.firstWhere((a) => a.loginCode == serverCode).passwordHash; } catch (_) {}
+
         return ChildAccount(
-          loginCode: c['login_code']?.toString() ?? '',
+          loginCode: serverCode,
           displayName: '${c['first_name']} ${c['last_name']}'.trim(),
-          passwordHash: c['password_hash'] ?? '', 
-          guardianEmail: normalizedEmail,
-          childId: c['child_id'],
-          createdAt: DateTime.now(),
+          passwordHash: preservedHash.isNotEmpty ? preservedHash : (c['password_hash'] ?? ''), 
+          guardianEmail: normalizedEmail, childId: c['child_id'], createdAt: DateTime.now(),
         );
       }).toList();
       
-      var localAccounts = await _loadChildAccounts();
       localAccounts.removeWhere((a) => a.guardianEmail == normalizedEmail); 
       localAccounts.addAll(liveAccounts); 
       await _saveChildAccounts(localAccounts);
       
       return liveAccounts..sort((a, b) => a.displayName.compareTo(b.displayName));
     }
-
     throw Exception('Invalid data format received from server.');
   }
 
@@ -289,25 +251,13 @@ class AuthAccountService {
     } catch (_) { return null; }
   }
 
-  // --- EMAIL VERIFICATION (ONLINE ONLY) ---
-  // TODO: API METHOD FOR VERIFY EMAIL
   Future<AccountActionResult> verifyEmail(String email) async {
-    if (!await ConnectivityService.instance.isOnline()) {
-      return const AccountActionResult(success: false, message: 'Internet required for Email Verification.');
-    }
-
+    if (!await ConnectivityService.instance.isOnline()) return const AccountActionResult(success: false, message: 'Internet required.');
     try {
       final uri = ApiConfigService.buildUri(ApiConfigService.verifyEmailEndpoint);
-      final response = await ApiClientService.instance.post(
-        uri,
-        jsonBody: {'email': email.trim().toLowerCase()}
-      );
+      final response = await ApiClientService.instance.post(uri, jsonBody: {'email': email.trim().toLowerCase()});
+      if (!response.isSuccess) return const AccountActionResult(success: false, message: 'Failed to send verification email.');
 
-      if (!response.isSuccess) {
-        return const AccountActionResult(success: false, message: 'Failed to send verification email.');
-      }
-
-      // Update local cache
       final accounts = await _loadGuardianAccounts();
       final index = accounts.indexWhere((a) => a.email == email.trim().toLowerCase());
       if (index != -1) {
@@ -321,32 +271,17 @@ class AuthAccountService {
     }
   }
 
-  // --- RESET PARENT PASSWORD (ONLINE ONLY) ---
-  // TODO: API METHOD FOR RESETTING PARENT PASSWORD
   Future<AccountActionResult> resetParentPassword(String email, String currentPassword, String newPassword) async {
-    if (!await ConnectivityService.instance.isOnline()) {
-      return const AccountActionResult(success: false, message: 'Internet connection required to reset password.');
-    }
+    if (!await ConnectivityService.instance.isOnline()) return const AccountActionResult(success: false, message: 'Internet connection required.');
 
     final isValid = await authenticateGuardian(email: email, password: currentPassword);
     if (!isValid) return const AccountActionResult(success: false, message: 'Current password is incorrect.');
     
     try {
       final uri = ApiConfigService.buildUri(ApiConfigService.resetPasswordEndpoint);
-      final response = await ApiClientService.instance.post(
-        uri,
-        jsonBody: {
-          'email': email.trim().toLowerCase(),
-          'current_password': currentPassword,
-          'new_password': newPassword
-        }
-      );
+      final response = await ApiClientService.instance.post(uri, jsonBody: {'email': email.trim().toLowerCase(), 'current_password': currentPassword, 'new_password': newPassword});
+      if (!response.isSuccess) return AccountActionResult(success: false, message: 'Server error: ${response.rawBody}');
 
-      if (!response.isSuccess) {
-        return AccountActionResult(success: false, message: 'Server error: ${response.rawBody}');
-      }
-
-      // Update local cache
       final accounts = await _loadGuardianAccounts();
       final index = accounts.indexWhere((a) => a.email == email.trim().toLowerCase());
       if (index != -1) {
@@ -360,54 +295,63 @@ class AuthAccountService {
     }
   }
 
-  // --- CHILD LOGIN (TRIES ONLINE FIRST, FALLS BACK TO OFFLINE CACHE) ---
+  // --- CHILD LOGIN (ONLINE FIRST, OFFLINE FALLBACK) ---
   Future<ChildAccount?> authenticateChild({required String loginCode, required String password}) async {
     final normalizedCode = loginCode.trim().toUpperCase();
     final hash = _hashPassword(password);
     final accounts = await _loadChildAccounts();
 
-    // 1. Try API if online
     if (await ConnectivityService.instance.isOnline()) {
       try {
         final uri = ApiConfigService.buildUri(ApiConfigService.loginChildEndpoint);
-        final response = await ApiClientService.instance.post(
-          uri,
-          jsonBody: {
-            'login_code': normalizedCode,
-            'password': password
-          }
-        );
-
+        final response = await ApiClientService.instance.post(uri, jsonBody: {'login_code': normalizedCode, 'password': password});
+        
         if (response.isSuccess) {
-           // Extract the nested data object
            final serverData = response.data['data'] ?? {};
 
-           // Success from API. If it's not in our local cache, add it so they can login offline later.
-           bool existsLocally = accounts.any((a) => a.loginCode == normalizedCode);
-           if (!existsLocally) {
-              final newAccount = ChildAccount(
+           final token = serverData['access_token'];
+           if (token != null && token.isNotEmpty) {
+             await AuthSessionService.instance.saveAccessToken(token);
+           }
+           
+           ChildAccount? matchedAccount;
+           int index = accounts.indexWhere((a) => a.loginCode == normalizedCode);
+           
+           if (index != -1) {
+              // Update existing account with fresh server data
+              matchedAccount = ChildAccount(
+                loginCode: normalizedCode, 
+                displayName: serverData['display_name'] ?? accounts[index].displayName, 
+                passwordHash: hash, 
+                guardianEmail: serverData['guardian_email'] ?? accounts[index].guardianEmail, 
+                childId: serverData['child_id'] ?? accounts[index].childId, 
+                createdAt: accounts[index].createdAt,
+              );
+              accounts[index] = matchedAccount;
+           } else {
+              // Create new local account cache
+              matchedAccount = ChildAccount(
                 loginCode: normalizedCode, 
                 displayName: serverData['display_name'] ?? 'Child', 
-                passwordHash: hash,
+                passwordHash: hash, 
                 guardianEmail: serverData['guardian_email'] ?? '', 
-                childId: serverData['child_id'],
+                childId: serverData['child_id'], 
                 createdAt: DateTime.now(),
               );
-              accounts.add(newAccount);
-              await _saveChildAccounts(accounts);
-              return newAccount;
+              accounts.add(matchedAccount);
            }
+           
+           await _saveChildAccounts(accounts);
+           return matchedAccount; 
         }
       } catch (e) {
-        // API failed (timeout/500). Fall through to offline cache check.
+        debugPrint('Child online login failed, falling back to cache: $e');
       }
     }
     
-    // 2. Fallback to Local Cache (Offline Login)
+    // FALLBACK TO OFFLINE CACHE
     try {
       return accounts.firstWhere((a) => a.loginCode == normalizedCode && a.passwordHash == hash);
-    } catch (_) {
-      return null; 
-    }
+    } catch (_) { return null; }
   }
 }

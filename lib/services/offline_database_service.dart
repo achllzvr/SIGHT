@@ -53,7 +53,7 @@ class OfflineDatabaseService {
     final path = p.join(databasePath, 'sight_local.db');
     _database = await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: (db) async {
@@ -90,7 +90,9 @@ class OfflineDatabaseService {
         retryCount INTEGER NOT NULL DEFAULT 0,
         lastError TEXT,
         lastSyncAttemptAt INTEGER,
-        remoteId TEXT
+        remoteId TEXT,
+        healthScore INTEGER,
+        coins INTEGER
       )
     ''');
 
@@ -125,6 +127,10 @@ class OfflineDatabaseService {
       await _addColumnIfMissing(db, 'child_inventory', 'childId', 'INTEGER');
       await _addColumnIfMissing(db, 'child_inventory', 'syncState', "TEXT NOT NULL DEFAULT 'pending'");
       await _addColumnIfMissing(db, 'child_inventory', 'remoteId', 'TEXT');
+    }
+    if (oldVersion < 3) {
+      await _addColumnIfMissing(db, 'curated_batches', 'healthScore', 'INTEGER');
+      await _addColumnIfMissing(db, 'curated_batches', 'coins', 'INTEGER');
     }
   }
 

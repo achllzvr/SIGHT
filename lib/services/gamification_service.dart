@@ -55,10 +55,10 @@ class GamificationService {
 
   // === Clinical Multipliers ===
   // TODO: Tune Dioptric Multiplier (M1) if distance penalty is too harsh/weak
-  static const double _m1DioptricMultiplier = 2.0;
+  static const double _m1DioptricMultiplier = 4.0;
   
   // TODO: Tune Blink Multiplier (M2) if blink suppression penalty is too harsh/weak
-  static const double _m2BlinkMultiplier = 1.5;
+  static const double _m2BlinkMultiplier = 4.0;
 
   // === Recovery & Rewards ===
   // TODO: Adjust HP recovered after completing a 20-20-20 break

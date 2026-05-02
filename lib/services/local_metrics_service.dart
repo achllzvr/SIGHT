@@ -270,15 +270,26 @@ class LocalMetricsService {
       throw Exception('No local metrics found to sync today.');
     }
 
-    // 3. Format the payload for Laravel
-    final List<Map<String, dynamic>> batchPayload = batches.map((b) => {
-      'timestamp': b.windowEnd.toIso8601String(), // Using windowEnd as the primary timestamp
-      'screen_time_minutes': b.screenTimeMinutes,
-      'avg_blink_rate': b.averageBlinkRate ?? 0.0,
-      'avg_distance': b.averageDistanceCm ?? 0.0,
-      'strain_events': b.strainEvents,
-      'health_score': b.healthScore ?? 100,
-      'coins': b.coins ?? 0, 
+    final List<Map<String, dynamic>> batchPayload = batches.map((b) {
+      
+      // Convert DateTime to 'YYYY-MM-DD HH:MM:SS' for Laravel
+      final String formattedTimestamp = 
+          "${b.windowEnd.year.toString().padLeft(4, '0')}-"
+          "${b.windowEnd.month.toString().padLeft(2, '0')}-"
+          "${b.windowEnd.day.toString().padLeft(2, '0')} "
+          "${b.windowEnd.hour.toString().padLeft(2, '0')}:"
+          "${b.windowEnd.minute.toString().padLeft(2, '0')}:"
+          "${b.windowEnd.second.toString().padLeft(2, '0')}";
+
+      return {
+        'timestamp': formattedTimestamp,
+        'screen_time_minutes': b.screenTimeMinutes,
+        'avg_blink_rate': b.averageBlinkRate ?? 0.0,
+        'avg_distance': b.averageDistanceCm ?? 0.0,
+        'strain_events': b.strainEvents,
+        'health_score': b.healthScore ?? 100,
+        'coins': b.coins ?? 0, 
+      };
     }).toList();
 
     // 4. Send to the Laravel API

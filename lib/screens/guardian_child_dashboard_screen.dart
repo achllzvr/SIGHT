@@ -599,7 +599,7 @@ class _ControlsTabState extends State<ControlsTab> {
                 ),
                 Slider(
                   value: _preferences.dailyScreenLimitMinutes.toDouble(),
-                  min: 30, max: 240, divisions: 21,
+                  min: 3, max: 240, divisions: 21,
                   onChanged: (value) => setState(() => _preferences = _preferences.copyWith(dailyScreenLimitMinutes: value.toInt())),
                   activeColor: const Color(0xFF00ACC1),
                 ),

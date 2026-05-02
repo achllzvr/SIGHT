@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:lumi/services/detection_service.dart';
 import '../services/auth_session_service.dart';
 import '../services/gamification_service.dart';
+import '../services/session_lock_service.dart';
+import '../services/local_metrics_service.dart';
+import '../services/active_child_context_service.dart';
 import '../widgets/rounded_card.dart';
 
 class DailyReportScreen extends StatefulWidget {
@@ -19,6 +23,24 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
   void initState() {
     super.initState();
     _startMidnightCountdown();
+    
+    // Call the sync function immediately when the screen opens
+    _finalizeDayAndSync();
+  }
+
+  Future<void> _finalizeDayAndSync() async {
+    try {
+      final int? childId = await ActiveChildContextService.instance.getActiveChildId();
+      if (childId == null) return;
+      
+      await LocalMetricsService.instance.curateOneMinuteBatch();
+      await SessionLockService.lockDeviceForToday(childId);
+      await LocalMetricsService.instance.forceSyncNow(childId);
+      
+      debugPrint('Day finalized: Local saved, Device locked, Cloud synced.');
+    } catch (e) {
+      debugPrint('Error finalizing day: $e');
+    }
   }
 
   void _startMidnightCountdown() {
@@ -118,8 +140,13 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                 const Spacer(),
                 TextButton.icon(
                   onPressed: () async {
-                     await AuthSessionService.instance.clearUserSession();
-                     if (context.mounted) Navigator.pushReplacementNamed(context, '/welcome');
+                    // 1. Explicitly kill the camera and background isolates!
+                    await DetectionService.instance.dispose();
+                    
+                    // 2. Clear the session
+                    await AuthSessionService.instance.clearUserSession();
+                    
+                    if (context.mounted) Navigator.pushReplacementNamed(context, '/welcome');
                   }, 
                   icon: const Icon(Icons.logout), 
                   label: const Text("Log Out")

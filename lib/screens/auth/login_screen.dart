@@ -4,6 +4,7 @@ import '../../services/active_child_context_service.dart';
 import '../../services/auth_account_service.dart';
 import '../../services/auth_session_service.dart';
 import '../../services/guardian_setup_service.dart';
+import '../../services/session_lock_service.dart';
 import '../../widgets/lumi_shell.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -95,6 +96,18 @@ class _LoginScreenState extends State<LoginScreen> {
         _error = 'Invalid child login code or password.';
       });
       return;
+    }
+
+    if (child.childId != null) {
+      final isLocked = await SessionLockService.isLockedToday(child.childId!);
+      
+      if (isLocked) {
+        setState(() {
+          _loading = false;
+          _error = 'LUMI is resting today! Please come back tomorrow.';
+        });
+        return;
+      }
     }
 
     await AuthSessionService.instance.saveChildSession(
