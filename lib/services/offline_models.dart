@@ -152,8 +152,8 @@ class CuratedMetricBatch {
   final double? averageDistanceCm;
   final int strainEvents;
   final int screenTimeMinutes;
-  final int? healthScore; // ADDED
-  final int? coins;       // ADDED
+  final int? healthScore; 
+  final int? coins;     
   final int eventCount;
   final SyncState syncState;
   final int retryCount;
@@ -192,8 +192,8 @@ class CuratedMetricBatch {
       'averageDistanceCm': averageDistanceCm,
       'strainEvents': strainEvents,
       'screenTimeMinutes': screenTimeMinutes,
-      'healthScore': healthScore, // ADDED
-      'coins': coins,             // ADDED
+      'healthScore': healthScore,
+      'coins': coins,             
       'eventCount': eventCount,
       'synced': synced ? 1 : 0,
       'syncState': syncState.key,
@@ -263,7 +263,7 @@ class GamificationState {
       'dailyStreak': dailyStreak,
       'petMood': petMood.key,
       'lastComplianceDateIso': lastComplianceDateIso,
-      'mascotName': mascotName, // ADDED
+      'mascotName': mascotName,
     };
   }
 

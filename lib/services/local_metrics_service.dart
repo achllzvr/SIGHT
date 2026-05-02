@@ -3,9 +3,12 @@ import 'dart:math';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:lumi/services/api_client_service.dart';
+import 'package:lumi/services/api_config_service.dart';
+import 'package:lumi/services/connectivity_service.dart';
+import 'package:lumi/services/offline_database_service.dart';
 
 import 'active_child_context_service.dart';
-import 'offline_database_service.dart';
 import 'offline_models.dart';
 import 'server_sync_service.dart';
 import 'gamification_service.dart';
@@ -245,5 +248,58 @@ class LocalMetricsService {
     if (kDebugMode) {
       debugPrint('[LocalMetricsService] Disposed');
     }
+  }
+
+  // TODO: Remove after testing/demo purposes to avoid misuse in production
+  /// Forces an immediate sync of local metrics to the cloud for testing/demos.
+  Future<void> forceSyncNow(int childId) async {
+    // 1. Check Connectivity
+    if (!await ConnectivityService.instance.isOnline()) {
+      throw Exception('No internet connection available. Cannot sync.');
+    }
+
+    // 2. Fetch the data we want to sync
+    // Assuming we want to sync today's data for the demo.
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+
+    final batches = await OfflineDatabaseService.instance.loadBatchesForChild(childId, today, tomorrow);
+
+    if (batches.isEmpty) {
+      throw Exception('No local metrics found to sync today.');
+    }
+
+    // 3. Format the payload for Laravel
+    final List<Map<String, dynamic>> batchPayload = batches.map((b) => {
+      'timestamp': b.windowEnd.toIso8601String(), // Using windowEnd as the primary timestamp
+      'screen_time_minutes': b.screenTimeMinutes,
+      'avg_blink_rate': b.averageBlinkRate ?? 0.0,
+      'avg_distance': b.averageDistanceCm ?? 0.0,
+      'strain_events': b.strainEvents,
+      'health_score': b.healthScore ?? 100,
+      'coins': b.coins ?? 0, 
+    }).toList();
+
+    // 4. Send to the Laravel API
+    final uri = ApiConfigService.buildUri('/api/mobile/child/$childId/sync/metrics/batch');
+    final response = await ApiClientService.instance.post(
+      uri,
+      jsonBody: {
+        'metrics': batchPayload 
+      },
+    );
+
+    // 5. Handle the response
+    if (!response.isSuccess) {
+      debugPrint('Sync Error Body: ${response.rawBody}');
+      throw Exception('Server rejected the sync request. Code: ${response.statusCode}');
+    }
+
+    // Optional: If your OfflineDatabaseService has a method to mark rows as "synced" 
+    // to prevent duplicate uploads, you would call it here.
+    // e.g., await OfflineDatabaseService.instance.markAsSynced(batches.map((b) => b.id).toList());
+
+    debugPrint('Force sync completely successfully for child ID: $childId');
   }
 }

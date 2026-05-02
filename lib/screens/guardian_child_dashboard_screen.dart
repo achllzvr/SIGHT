@@ -540,6 +540,45 @@ class _ControlsTabState extends State<ControlsTab> {
         children: [
           // Keep all existing Control Tab elements as they are.
           // (Slider, Monitoring Settings, Toggle, etc)
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Syncing data to cloud...'), duration: Duration(seconds: 1)),
+                );
+                
+                try {
+                  // Force the app to bundle and push local SQLite data to Laravel
+                  final childId = widget.childId ?? await ActiveChildContextService.instance.getActiveChildId();
+                  if (childId != null) {
+                    await LocalMetricsService.instance.forceSyncNow(childId);
+                  }
+                  
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Sync complete! Refresh the web dashboard.'), backgroundColor: Colors.green),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Sync failed: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              },
+              icon: const Icon(Icons.cloud_upload),
+              label: const Text('Force Cloud Sync Now', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00ACC1),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
           Container(
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
