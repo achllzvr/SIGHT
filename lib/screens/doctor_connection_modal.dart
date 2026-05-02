@@ -160,7 +160,18 @@ class _DoctorConnectionModalState extends State<DoctorConnectionModal> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(doctor.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      Text(
+                        doctor.name,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                      if (doctor.isValidated) ...[
+                        const SizedBox(width: 4),
+                        const Icon(Icons.verified, color: Colors.blue, size: 16),
+                      ],
+                    ],
+                  ),
                   Text(doctor.email, style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54)),
                   Text(doctor.specialty, style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54)),
                 ],
