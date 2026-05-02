@@ -752,6 +752,7 @@ class _AddChildModalState extends State<AddChildModal> {
 
       if (guardianEmail.isEmpty) {
         setState(() => _isLoading = false);
+        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Guardian session required.')));
         return;
       }
