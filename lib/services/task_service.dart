@@ -3,6 +3,9 @@ import 'package:flutter/foundation.dart';
 import 'task_models.dart';
 import 'gamification_service.dart';
 import 'feedback_service.dart';
+import 'api_client_service.dart';
+import 'api_config_service.dart';
+import 'active_child_context_service.dart';
 
 class TaskService {
   TaskService._private();
@@ -23,7 +26,7 @@ class TaskService {
     await GamificationService.instance.initialize();
     
     _initialized = true;
-    _generateDailyTasks();
+    await _generateDailyTasks();
     _setupListeners();
     _startTimers();
 
@@ -61,22 +64,46 @@ class TaskService {
     });
   }
 
-  void _generateDailyTasks() {
+  Future<void> _generateDailyTasks() async {
     final newTasks = <Task>[];
     final now = DateTime.now();
 
-    // Eye Health Tasks
+    // Eye Health & Gamification Tasks (Default)
     newTasks.addAll(_generateEyeHealthTasks(now));
-
-    // Gamification Challenge Tasks
     newTasks.addAll(_generateGamificationTasks(now));
+
+    // Fetch Doctor Prescriptions from API
+    try {
+      final childId = await ActiveChildContextService.instance.getActiveChildId();
+      if (childId != null) {
+        final uri = ApiConfigService.buildUri('/api/mobile/child/$childId/prescriptions');
+        final response = await ApiClientService.instance.get(uri);
+        
+        if (response.isSuccess && response.data != null) {
+          final List<dynamic> prescriptions = response.data['data'] ?? [];
+          
+          for (var p in prescriptions) {
+            // Insert at index 0 so Doctor's orders appear at the very top
+            newTasks.insert(0, Task(
+              id: 'prescription_${p['recommendation_id']}',
+              title: '🩺 Doctor\'s Orders',
+              description: p['advice_text'], 
+              type: TaskType.eyeHealth,
+              status: TaskStatus.notStarted,
+              category: 'doctor-prescription',
+              rewardHealth: 15, // Bonus HP for following prescription
+              timePeriod: TimePeriod.daily,
+              createdAt: now,
+            ));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load prescriptions: $e');
+    }
 
     tasksNotifier.value = newTasks;
     _updateCompletedCount();
-
-    if (kDebugMode) {
-      debugPrint('[TaskService] Generated ${newTasks.length} daily tasks');
-    }
   }
 
   List<Task> _generateEyeHealthTasks(DateTime now) {
