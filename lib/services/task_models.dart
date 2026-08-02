@@ -61,10 +61,13 @@ class Task {
     return '${((progress * 100).toStringAsFixed(0))}%';
   }
 
-  String get scoreBadgeText {
-    if (rewardHealth != null && rewardHealth! > 0) return '+$rewardHealth HP';
-    return '+${rewardCoins ?? 0} Coins'; 
+  String get rewardText {
+    if (rewardHealth != null && rewardHealth! > 0) return '+$rewardHealth Eye Care';
+    return '+${rewardCoins ?? 0} Stars';
   }
+
+  /// Alias kept for existing call sites.
+  String get scoreBadgeText => rewardText;
 
   Task copyWith({
     String? id,

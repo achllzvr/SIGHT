@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -5,11 +8,18 @@ import '../services/active_child_context_service.dart';
 import '../services/auth_account_service.dart';
 import '../services/auth_session_service.dart';
 import '../services/cleanup_service.dart';
-import 'guardian_child_dashboard_screen.dart';
-import 'doctor_connection_modal.dart';
-
+import '../services/connectivity_service.dart';
 import '../services/guardian_setup_service.dart';
-import '../widgets/rounded_card.dart';
+import '../theme/lumi_theme.dart';
+import '../widgets/arcade/arcade.dart';
+import '../widgets/lumi_dialog.dart';
+import '../widgets/lumi_form.dart';
+import '../services/local_metrics_service.dart';
+import 'auth/verify_email_otp_screen.dart';
+import 'guardian_access_audit_screen.dart';
+import 'guardian_child_dashboard_screen.dart';
+import 'guardian/child_dashboard/shared_widgets.dart';
+import 'share_telemetry_screen.dart';
 
 /// Model for child with basic info and login code
 class ChildInfo {
@@ -40,11 +50,37 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
   int? _selectedChildId;
   bool _loading = true;
   String? _guardianEmail;
+  CloudSyncStatus? _syncStatus;
+  bool _isOffline = false;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   @override
   void initState() {
     super.initState();
     _loadChildren();
+    _initConnectivity();
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initConnectivity() async {
+    final online = await ConnectivityService.instance.isOnline();
+    if (mounted) setState(() => _isOffline = !online);
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      final offline = results.isEmpty || results.contains(ConnectivityResult.none);
+      if (mounted) setState(() => _isOffline = offline);
+    });
+  }
+
+  Future<void> _refreshSyncStatus() async {
+    try {
+      final status = await LocalMetricsService.instance.getCloudSyncStatus(childId: _selectedChildId);
+      if (mounted) setState(() => _syncStatus = status);
+    } catch (_) {}
   }
 
   Future<void> _loadChildren() async {
@@ -60,7 +96,7 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
           if (child.birthdate != null) {
             age = _calculateAge(child.birthdate!);
           }
-          
+
           return ChildInfo(
             childId: child.childId ?? 0,
             displayName: child.displayName,
@@ -79,6 +115,7 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
             _selectedChildId = activeChildId ?? (children.isNotEmpty ? children[0].childId : null);
             _loading = false;
           });
+          _refreshSyncStatus();
         }
       } else {
         if (mounted) {
@@ -89,14 +126,13 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
       debugPrint('Error loading children: $e');
       if (mounted) {
         setState(() => _loading = false);
-        
-        // Let the parent know they need internet!
+
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(e.toString().replaceAll('Exception: ', '')),
-                backgroundColor: Colors.redAccent,
+                backgroundColor: LumiColors.redAlert,
               ),
             );
           }
@@ -117,7 +153,7 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
   void _selectChild(int childId) {
     setState(() => _selectedChildId = childId);
     ActiveChildContextService.instance.setActiveChildId(childId);
-    
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => GuardianChildDashboardScreen(childId: childId),
@@ -129,6 +165,7 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
     final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) => const AddChildModal(),
     );
 
@@ -138,9 +175,8 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
   }
 
   Future<void> _showChangePinDialog() async {
-    
-    final messenger = ScaffoldMessenger.of(context); 
-    
+    final messenger = ScaffoldMessenger.of(context);
+
     final currentController = TextEditingController();
     final newController = TextEditingController();
     final confirmController = TextEditingController();
@@ -149,94 +185,95 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
       final successMsg = await showDialog<String>(
         context: context,
         barrierDismissible: false,
+        barrierColor: LumiColors.scaffoldLight.withValues(alpha: 0.72),
         builder: (dialogContext) {
           String? error;
           bool inProgress = false;
 
           return StatefulBuilder(
             builder: (_, setDialogState) {
-              return AlertDialog(
-                title: const Text('Change Guardian PIN'),
+              return LumiDialog(
+                title: 'Change Guardian PIN',
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextField(
+                    LumiPillField(
+                      label: 'Current PIN',
                       controller: currentController,
                       obscureText: true,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       maxLength: 4,
-                      decoration: const InputDecoration(
-                        labelText: 'Current PIN',
-                        border: OutlineInputBorder(),
-                        counterText: '',
-                      ),
                     ),
-                    const SizedBox(height: 10),
-                    TextField(
+                    const SizedBox(height: LumiSpacing.md),
+                    LumiPillField(
+                      label: 'New PIN',
                       controller: newController,
                       obscureText: true,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       maxLength: 4,
-                      decoration: const InputDecoration(
-                        labelText: 'New PIN',
-                        border: OutlineInputBorder(),
-                        counterText: '',
-                      ),
                     ),
-                    const SizedBox(height: 10),
-                    TextField(
+                    const SizedBox(height: LumiSpacing.md),
+                    LumiPillField(
+                      label: 'Confirm New PIN',
                       controller: confirmController,
                       obscureText: true,
                       keyboardType: TextInputType.number,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       maxLength: 4,
-                      decoration: InputDecoration(
-                        labelText: 'Confirm New PIN',
-                        border: const OutlineInputBorder(),
-                        counterText: '',
-                        errorText: error,
-                      ),
+                      errorText: error,
                     ),
                   ],
                 ),
                 actions: [
-                  TextButton(
+                  LumiPillButton(
+                    label: 'Cancel',
+                    backgroundColor: Colors.white,
                     onPressed: inProgress ? null : () => Navigator.of(dialogContext).pop(),
-                    child: const Text('Cancel'),
                   ),
-                  FilledButton(
-                    onPressed: inProgress
-                        ? null
-                        : () async {
-                            setDialogState(() {
-                              inProgress = true;
-                              error = null;
-                            });
+                  const SizedBox(height: LumiSpacing.md),
+                  if (inProgress)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: LumiSpacing.md),
+                      child: Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.4, color: LumiColors.greenMid),
+                        ),
+                      ),
+                    )
+                  else
+                    LumiPillButton(
+                      label: 'Update PIN',
+                      backgroundColor: LumiColors.greenMid,
+                      foregroundColor: Colors.white,
+                      onPressed: () async {
+                        setDialogState(() {
+                          inProgress = true;
+                          error = null;
+                        });
 
-                            final result = await GuardianSetupService.instance.changeGuardianPin(
-                              currentPin: currentController.text.trim(),
-                              newPin: newController.text.trim(),
-                              confirmNewPin: confirmController.text.trim(),
-                            );
+                        final result = await GuardianSetupService.instance.changeGuardianPin(
+                          currentPin: currentController.text.trim(),
+                          newPin: newController.text.trim(),
+                          confirmNewPin: confirmController.text.trim(),
+                        );
 
-                            if (!dialogContext.mounted) return;
+                        if (!dialogContext.mounted) return;
 
-                            if (result.success) {
-                              Navigator.of(dialogContext).pop(result.message); // Pass message out
-                              return;
-                            }
+                        if (result.success) {
+                          Navigator.of(dialogContext).pop(result.message);
+                          return;
+                        }
 
-                            setDialogState(() {
-                              inProgress = false;
-                              error = result.message;
-                            });
-                          },
-                    child: inProgress
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Update PIN'),
-                  ),
+                        setDialogState(() {
+                          inProgress = false;
+                          error = result.message;
+                        });
+                      },
+                    ),
                 ],
               );
             },
@@ -244,12 +281,10 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
         },
       );
 
-      // Show SnackBar safely outside the dialog lifecycle using the pre-captured messenger
       if (successMsg != null) {
         messenger.showSnackBar(SnackBar(content: Text(successMsg)));
       }
     } finally {
-      // WAIT FOR EXIT ANIMATION BEFORE DISPOSING
       Future.delayed(const Duration(milliseconds: 400), () {
         currentController.dispose();
         newController.dispose();
@@ -258,10 +293,8 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
     }
   }
 
-  // IMPROVEMENT #2: Parent Account Password Reset (Crash Fixed)
   Future<void> _showParentChangePasswordDialog() async {
-    // CAPTURE MESSENGER EARLY TO PREVENT CONTEXT CRASHES
-    final messenger = ScaffoldMessenger.of(context); 
+    final messenger = ScaffoldMessenger.of(context);
 
     final currentController = TextEditingController();
     final newController = TextEditingController();
@@ -271,89 +304,93 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
       final successMsg = await showDialog<String>(
         context: context,
         barrierDismissible: false,
+        barrierColor: LumiColors.scaffoldLight.withValues(alpha: 0.72),
         builder: (dialogContext) {
           String? error;
           bool inProgress = false;
 
           return StatefulBuilder(
             builder: (_, setDialogState) {
-              return AlertDialog(
-                title: const Text('Change Account Password'),
+              return LumiDialog(
+                title: 'Change Account Password',
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextField(
+                    LumiPillField(
+                      label: 'Current Password',
                       controller: currentController,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Current Password',
-                        border: OutlineInputBorder(),
-                      ),
                     ),
-                    const SizedBox(height: 10),
-                    TextField(
+                    const SizedBox(height: LumiSpacing.md),
+                    LumiPillField(
+                      label: 'New Password',
                       controller: newController,
                       obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'New Password',
-                        border: OutlineInputBorder(),
-                      ),
                     ),
-                    const SizedBox(height: 10),
-                    TextField(
+                    const SizedBox(height: LumiSpacing.md),
+                    LumiPillField(
+                      label: 'Confirm New Password',
                       controller: confirmController,
                       obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Confirm New Password',
-                        border: const OutlineInputBorder(),
-                        errorText: error,
-                      ),
+                      errorText: error,
                     ),
                   ],
                 ),
                 actions: [
-                  TextButton(
+                  LumiPillButton(
+                    label: 'Cancel',
+                    backgroundColor: Colors.white,
                     onPressed: inProgress ? null : () => Navigator.of(dialogContext).pop(),
-                    child: const Text('Cancel'),
                   ),
-                  FilledButton(
-                    onPressed: inProgress
-                        ? null
-                        : () async {
-                            setDialogState(() {
-                              inProgress = true;
-                              error = null;
-                            });
+                  const SizedBox(height: LumiSpacing.md),
+                  if (inProgress)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: LumiSpacing.md),
+                      child: Center(
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.4, color: LumiColors.greenMid),
+                        ),
+                      ),
+                    )
+                  else
+                    LumiPillButton(
+                      label: 'Update Password',
+                      backgroundColor: LumiColors.greenMid,
+                      foregroundColor: Colors.white,
+                      onPressed: () async {
+                        setDialogState(() {
+                          inProgress = true;
+                          error = null;
+                        });
 
-                            if (newController.text != confirmController.text) {
-                              setDialogState(() {
-                                inProgress = false;
-                                error = 'New passwords do not match.';
-                              });
-                              return;
-                            }
+                        if (newController.text != confirmController.text) {
+                          setDialogState(() {
+                            inProgress = false;
+                            error = 'New passwords do not match.';
+                          });
+                          return;
+                        }
 
-                            final result = await AuthAccountService.instance.resetParentPassword(
-                              _guardianEmail!,
-                              currentController.text,
-                              newController.text,
-                            );
+                        final result = await AuthAccountService.instance.resetParentPassword(
+                          _guardianEmail!,
+                          currentController.text,
+                          newController.text,
+                        );
 
-                            if (!dialogContext.mounted) return;
+                        if (!dialogContext.mounted) return;
 
-                            if (result.success) {
-                               Navigator.of(dialogContext).pop(result.message); // Pass message out
-                            } else {
-                               setDialogState(() {
-                                inProgress = false;
-                                error = result.message;
-                              });
-                            }
-                          },
-                    child: inProgress
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Text('Update Password'),
-                  ),
+                        if (result.success) {
+                          Navigator.of(dialogContext).pop(result.message);
+                        } else {
+                          setDialogState(() {
+                            inProgress = false;
+                            error = result.message;
+                          });
+                        }
+                      },
+                    ),
                 ],
               );
             },
@@ -361,13 +398,10 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
         },
       );
 
-      // Show SnackBar safely outside the dialog lifecycle using the pre-captured messenger
       if (successMsg != null) {
         messenger.showSnackBar(SnackBar(content: Text(successMsg)));
       }
-
     } finally {
-      // WAIT FOR EXIT ANIMATION BEFORE DISPOSING
       Future.delayed(const Duration(milliseconds: 400), () {
         currentController.dispose();
         newController.dispose();
@@ -377,22 +411,13 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
   }
 
   Future<void> _logout() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showLumiConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout? All tracking will stop.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Logout', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      title: 'Logout',
+      message: 'Are you sure you want to logout? All tracking will stop.',
+      confirmLabel: 'Logout',
+      confirmColor: LumiColors.redAlert,
+      confirmForeground: Colors.white,
     );
 
     if (confirmed == true) {
@@ -417,300 +442,330 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final backgroundGradient = BoxDecoration(
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: isDark
-            ? [const Color.fromARGB(255, 208, 174, 245), const Color.fromARGB(255, 163, 138, 214)]
-            : [const Color.fromARGB(255, 208, 174, 245), const Color.fromARGB(255, 163, 138, 214)],
-      ),
-    );
-
     if (_loading) {
-      return Scaffold(
-        backgroundColor: isDark ? const Color(0xFF0F0F11) : const Color(0xFFFAFAFC),
-        body: const Center(child: CircularProgressIndicator()),
+      return const Scaffold(
+        backgroundColor: LumiColors.scaffoldMint,
+        body: Center(child: CircularProgressIndicator(color: LumiColors.primaryPurple)),
       );
     }
 
-    return Container(
-      decoration: backgroundGradient,
-      child: Scaffold(
-          backgroundColor: Colors.transparent,        appBar: AppBar(
-          title: const Text('Parent Dashboard'),
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: _logout,
-              tooltip: 'Logout',
-            ),
-          ],
+    return Scaffold(
+      backgroundColor: LumiColors.scaffoldMint,
+      appBar: AppBar(
+        title: Text(
+          LumiTheme.caps('Parent Home'),
+          style: LumiTheme.joyful(20, color: LumiColors.primaryPurple),
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Select Child Section
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+        centerTitle: true,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: LumiColors.textDark,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: LumiSpacing.md),
+            child: Center(
+              child: Tooltip(
+                message: 'Logout',
+                child: ArcadeIconBadge(
+                  arcadeIcon: 'lock',
+                  accentColor: LumiColors.redAlert,
+                  onTap: _logout,
                 ),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_isOffline)
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: LumiSpacing.lg),
+              padding: const EdgeInsets.symmetric(horizontal: LumiSpacing.md, vertical: LumiSpacing.md),
+              decoration: BoxDecoration(
+                color: LumiColors.tipYellow,
+                borderRadius: BorderRadius.circular(LumiRadii.md),
+                border: Border.all(color: LumiColors.badgeAmber, width: ArcadeSizes.badgeBorder),
+                boxShadow: LumiShadows.badge(LumiColors.badgeAmber),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.wifi_off, size: 18, color: LumiColors.textDark),
+                  const SizedBox(width: LumiSpacing.md),
+                  Expanded(
+                    child: Text(
+                      'No internet — sync and share need a connection.',
+                      style: LumiTheme.clanMedium(13, color: LumiColors.textDark),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(LumiSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ArcadeCard(
+                    padding: const EdgeInsets.all(LumiSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Select Child',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        const GuardianSectionTitle('Select Child', size: 20),
+                        const SizedBox(height: LumiSpacing.md),
+                        ArcadeButton(
+                          text: 'ADD CHILD',
+                          fontSize: 14,
+                          onTap: _addChild,
                         ),
-                        FilledButton.icon(
-                          onPressed: _addChild,
-                          icon: const Icon(Icons.add, size: 20),
-                          label: const Text('Add Child'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF00ACC1),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // Sharper corners
+                        if (_syncStatus != null) ...[
+                          const SizedBox(height: LumiSpacing.md),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: CloudSyncStatusPill(
+                              label: _syncStatus!.label,
+                              kind: switch (_syncStatus!.kind) {
+                                CloudSyncKind.synced => CloudSyncPillKind.synced,
+                                CloudSyncKind.needsSync => CloudSyncPillKind.needsSync,
+                                CloudSyncKind.failed => CloudSyncPillKind.failed,
+                              },
+                            ),
                           ),
+                        ],
+                        const SizedBox(height: LumiSpacing.lg),
+                        if (_children.isEmpty)
+                          Center(
+                            child: Text(
+                              'Add a child to get started',
+                              style: LumiTheme.clanRegular(15, color: LumiColors.textMuted),
+                            ),
+                          )
+                        else
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _children.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: LumiSpacing.md),
+                            itemBuilder: (context, index) {
+                              final child = _children[index];
+                              final isSelected = child.childId == _selectedChildId;
+                              final accent =
+                                  isSelected ? LumiColors.primaryGreen : LumiColors.secondaryLight;
+                              return GestureDetector(
+                                onTap: () => _selectChild(child.childId),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? LumiColors.secondaryGreen : LumiColors.primaryLight,
+                                    borderRadius: BorderRadius.circular(LumiRadii.lg),
+                                    border: Border.all(color: accent, width: ArcadeSizes.cardBorder),
+                                    boxShadow: LumiShadows.card(accent),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: LumiSpacing.md,
+                                    vertical: LumiSpacing.md,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 50,
+                                        height: 50,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: LumiColors.secondaryPurple,
+                                          borderRadius: BorderRadius.circular(LumiRadii.md),
+                                          border: Border.all(
+                                            color: LumiColors.primaryPurple,
+                                            width: ArcadeSizes.badgeBorder,
+                                          ),
+                                          boxShadow: LumiShadows.badge(LumiColors.primaryPurple),
+                                        ),
+                                        child: const Icon(
+                                          Icons.face,
+                                          size: 26,
+                                          color: LumiColors.primaryPurple,
+                                        ),
+                                      ),
+                                      const SizedBox(width: LumiSpacing.md),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              LumiTheme.caps(child.displayName),
+                                              style: LumiTheme.joyful(17, color: LumiColors.textDark),
+                                            ),
+                                            const SizedBox(height: LumiSpacing.xs),
+                                            Text(
+                                              '${child.ageYears} years old',
+                                              style: LumiTheme.clanRegular(13, color: LumiColors.textMuted),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (isSelected)
+                                        const Icon(
+                                          Icons.check_circle,
+                                          color: LumiColors.primaryGreen,
+                                          size: 24,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: LumiSpacing.lg),
+                  ArcadeCard(
+                    padding: const EdgeInsets.all(LumiSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const GuardianSectionTitle('Guardian Security', size: 20),
+                        const SizedBox(height: LumiSpacing.md),
+                        Text(
+                          'Update your guardian PIN used for strict lock override and guardian access.',
+                          style: LumiTheme.clanRegular(14, color: LumiColors.textMuted, height: 1.45),
+                        ),
+                        const SizedBox(height: LumiSpacing.lg),
+                        ArcadeButton(
+                          text: 'CHANGE GUARDIAN PIN',
+                          fontSize: 14,
+                          variant: ArcadeButtonVariant.outline,
+                          onTap: _showChangePinDialog,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 20),
-                    if (_children.isEmpty)
-                      Center(
-                        child: Text(
-                          'Add a child to get started',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: isDark ? Colors.white60 : Colors.black54,
-                          ),
-                        ),
-                      )
-                    else
-                      ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _children.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final child = _children[index];
-                          final isSelected = child.childId == _selectedChildId;
-                          return GestureDetector(
-                            onTap: () => _selectChild(child.childId),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? const Color(0xFF00ACC1).withValues(alpha: 0.1) // Subtle cyan tint
-                                    : (isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF9F9FB)),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: isSelected
-                                      ? const Color(0xFF00ACC1) // Cyan border
-                                      : (isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.05)),
-                                  width: isSelected ? 2 : 1,
-                                ),
-                              ),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 50,
-                                    height: 50,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF00ACC1), // Cyan Avatar
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Icon(Icons.face, size: 28, color: Colors.white), // Face icon
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          child.displayName,
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: isDark ? Colors.white : Colors.black87,
-                                          ),
-                                        ),
-                                        Text(
-                                          '${child.ageYears} years old',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: isDark ? Colors.white60 : Colors.black54,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  if (isSelected)
-                                    const Icon(
-                                      Icons.check_circle,
-                                      color: Color(0xFFD5C2E8),
-                                      size: 24,
-                                    ),
-                                ],
+                  ),
+                  const SizedBox(height: LumiSpacing.lg),
+                  ArcadeCard(
+                    padding: const EdgeInsets.all(LumiSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const GuardianSectionTitle('Parent Account', size: 20),
+                        const SizedBox(height: LumiSpacing.md),
+                        Row(
+                          children: [
+                            const Icon(Icons.email_outlined, size: 20, color: LumiColors.primaryPurple),
+                            const SizedBox(width: LumiSpacing.md),
+                            Expanded(
+                              child: Text(
+                                _guardianEmail ?? 'Loading...',
+                                style: LumiTheme.clanMedium(15, color: LumiColors.textDark),
                               ),
                             ),
-                          );
-                        },
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // Guardian Security Card
-              RoundedCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Guardian Security', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Update your guardian PIN used for strict lock override and guardian access.',
-                      style: TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _showChangePinDialog,
-                        icon: const Icon(Icons.pin),
-                        label: const Text('Change Guardian PIN'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-      
-              // IMPROVEMENT #2: Parent Account Management
-              RoundedCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Parent Account Management', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const Icon(Icons.email_outlined, size: 20, color: Colors.grey),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _guardianEmail ?? 'Loading...',
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                          ),
+                          ],
+                        ),
+                        const SizedBox(height: LumiSpacing.lg),
+                        ArcadeButton(
+                          text: 'VERIFY EMAIL ADDRESS',
+                          fontSize: 14,
+                          variant: ArcadeButtonVariant.outline,
+                          onTap: _guardianEmail == null
+                              ? null
+                              : () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => VerifyEmailOtpScreen(email: _guardianEmail!),
+                                    ),
+                                  );
+                                },
+                        ),
+                        const SizedBox(height: LumiSpacing.md),
+                        ArcadeButton(
+                          text: 'RESET PARENT PASSWORD',
+                          fontSize: 14,
+                          variant: ArcadeButtonVariant.outline,
+                          onTap: _showParentChangePasswordDialog,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final res = await AuthAccountService.instance.verifyEmail(_guardianEmail!);
-                          if (context.mounted) {
-                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res.message)));
-                          }
-                        },
-                        icon: const Icon(Icons.mark_email_read_outlined),
-                        label: const Text('Verify Email Address'),
-                      ),
+                  ),
+                  const SizedBox(height: LumiSpacing.lg),
+                  Container(
+                    padding: const EdgeInsets.all(LumiSpacing.lg),
+                    decoration: BoxDecoration(
+                      color: LumiColors.primaryLight,
+                      borderRadius: BorderRadius.circular(ArcadeSizes.cardRadius),
+                      border: Border.all(color: LumiColors.primaryPurple, width: ArcadeSizes.cardBorder),
+                      boxShadow: LumiShadows.card(LumiColors.primaryPurple),
                     ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _showParentChangePasswordDialog,
-                        icon: const Icon(Icons.password),
-                        label: const Text('Reset Parent Password'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Parent-Clinician Link Placeholder
-              RoundedCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Clinician Access', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Search for certified eye-care professionals to safely share your child\'s health metrics.',
-                      style: TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: () {
-                           // Ensure we have a child selected before opening the modal
-                           if (_selectedChildId == null) {
+
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const GuardianSectionTitle('Share with Doctor', size: 20),
+                        const SizedBox(height: LumiSpacing.md),
+                        Text(
+                          'Generate a temporary code for your doctor. You can end their viewing session anytime from your phone.',
+                          style: LumiTheme.clanRegular(14, color: LumiColors.textMuted, height: 1.45),
+                        ),
+                        const SizedBox(height: LumiSpacing.lg),
+                        ArcadeButton(
+                          text: 'SHARE WITH DOCTOR',
+                          fontSize: 14,
+                          onTap: () {
+                            if (_selectedChildId == null) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Please select a child first.')),
                               );
                               return;
-                           }
-                           showModalBottomSheet(
-                             context: context,
-                             isScrollControlled: true,
-                             backgroundColor: Colors.transparent,
-                             builder: (context) => Container(
-                               height: MediaQuery.of(context).size.height * 0.85,
-                               decoration: BoxDecoration(
-                                 color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                               ),
-                               child: DoctorConnectionModal(childId: _selectedChildId!),
-                             ),
-                           );
-                        },
-                        icon: const Icon(Icons.medical_services_outlined),
-                        label: const Text('Find a Clinician'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF00ACC1),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 12)
+                            }
+                            final child = _children.firstWhere(
+                              (c) => c.childId == _selectedChildId,
+                              orElse: () => _children.first,
+                            );
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ShareTelemetryScreen(
+                                  childId: _selectedChildId!,
+                                  childName: child.displayName,
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      ),
+                        const SizedBox(height: LumiSpacing.md),
+                        ArcadeButton(
+                          text: 'VIEWING ACCESS HISTORY',
+                          fontSize: 14,
+                          variant: ArcadeButtonVariant.outline,
+                          onTap: () {
+                            if (_selectedChildId == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please select a child first.')),
+                              );
+                              return;
+                            }
+                            final child = _children.firstWhere(
+                              (c) => c.childId == _selectedChildId,
+                              orElse: () => _children.first,
+                            );
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => GuardianAccessAuditScreen(
+                                  childId: _selectedChildId!,
+                                  childName: child.displayName,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: LumiSpacing.xxl),
+                ],
               ),
-              const SizedBox(height: 40),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -729,7 +784,7 @@ class _AddChildModalState extends State<AddChildModal> {
   final _lastNameController = TextEditingController();
   final _birthdateController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   DateTime? _selectedBirthdate;
   bool _isLoading = false;
 
@@ -742,17 +797,53 @@ class _AddChildModalState extends State<AddChildModal> {
     super.dispose();
   }
 
+  /// Arcade pill decoration — kept as a decoration (not [ArcadeTextField]) so
+  /// the form validators on these fields keep working.
+  InputDecoration _fieldDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: LumiTheme.clanRegular(14, color: LumiColors.textDisabled),
+      filled: true,
+      fillColor: LumiColors.cardWhite,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(LumiRadii.pill),
+        borderSide: const BorderSide(color: LumiColors.secondaryLight, width: ArcadeSizes.fieldBorder),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(LumiRadii.pill),
+        borderSide: const BorderSide(color: LumiColors.secondaryLight, width: ArcadeSizes.fieldBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(LumiRadii.pill),
+        borderSide: const BorderSide(color: LumiColors.primaryPurple, width: ArcadeSizes.fieldBorder),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(LumiRadii.pill),
+        borderSide: const BorderSide(color: LumiColors.redAlert, width: ArcadeSizes.fieldBorder),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(LumiRadii.pill),
+        borderSide: const BorderSide(color: LumiColors.redAlert, width: ArcadeSizes.fieldBorder),
+      ),
+      errorStyle: LumiTheme.clanRegular(12, color: LumiColors.redAlert),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: LumiSpacing.lg,
+        vertical: LumiSpacing.md,
+      ),
+    );
+  }
+
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-    
+
     try {
       final session = await AuthSessionService.instance.loadUserSession();
       final guardianEmail = session?.guardianEmail ?? '';
 
       if (guardianEmail.isEmpty) {
         setState(() => _isLoading = false);
-        // ignore: use_build_context_synchronously
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Guardian session required.')));
         return;
       }
@@ -762,6 +853,7 @@ class _AddChildModalState extends State<AddChildModal> {
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         password: _passwordController.text,
+        birthdate: _selectedBirthdate!,
       );
 
       if (!mounted) return;
@@ -771,16 +863,30 @@ class _AddChildModalState extends State<AddChildModal> {
         await showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: const Text('Account Created!'),
-            content: Text('Write down this Login Code:\n\n${result.account?.loginCode}', style: const TextStyle(fontSize: 16)),
+          barrierColor: LumiColors.scaffoldLight.withValues(alpha: 0.72),
+          builder: (dialogContext) => LumiDialog(
+            title: 'Account Created!',
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Write down this Login Code:',
+                  style: LumiTheme.clanRegular(14, color: LumiColors.textMuted),
+                ),
+                const SizedBox(height: LumiSpacing.md),
+                Text(
+                  result.account?.loginCode ?? '—',
+                  style: LumiTheme.joyful(30, color: LumiColors.primaryPurple, letterSpacing: 4),
+                ),
+              ],
+            ),
             actions: [
-              TextButton(
+              LumiPillButton(
+                label: 'Done',
                 onPressed: () {
-                  Navigator.of(context).pop(); // close dialog
-                  Navigator.of(context).pop(true); // close modal and trigger refresh
+                  Navigator.of(dialogContext).pop();
+                  Navigator.of(context).pop(true);
                 },
-                child: const Text('Done'),
               ),
             ],
           ),
@@ -798,16 +904,22 @@ class _AddChildModalState extends State<AddChildModal> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        color: LumiColors.primaryLight,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(LumiRadii.xl)),
+        border: const Border(
+          top: BorderSide(color: LumiColors.primaryPurple, width: ArcadeSizes.cardBorder),
+          left: BorderSide(color: LumiColors.primaryPurple, width: ArcadeSizes.cardBorder),
+          right: BorderSide(color: LumiColors.primaryPurple, width: ArcadeSizes.cardBorder),
+        ),
+        boxShadow: LumiShadows.modal(LumiColors.primaryPurple),
       ),
       padding: EdgeInsets.only(
-        left: 20, right: 20, top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        left: LumiSpacing.lg,
+        right: LumiSpacing.lg,
+        top: LumiSpacing.lg,
+        bottom: MediaQuery.of(context).viewInsets.bottom + LumiSpacing.lg,
       ),
       child: SingleChildScrollView(
         child: Column(
@@ -815,44 +927,36 @@ class _AddChildModalState extends State<AddChildModal> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Add Child', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const Expanded(child: GuardianSectionTitle('Add Child', size: 22)),
                 GestureDetector(
                   onTap: () => Navigator.pop(context),
-                  child: Icon(Icons.close, color: isDark ? Colors.white70 : Colors.black54),
+                  child: const Icon(Icons.close, color: LumiColors.textMuted),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: LumiSpacing.lg),
             Form(
               key: _formKey,
               child: Column(
                 children: [
                   TextFormField(
                     controller: _firstNameController,
-                    decoration: InputDecoration(
-                      hintText: 'First Name', filled: true,
-                      fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
+                    style: LumiTheme.clanMedium(15, color: LumiColors.textDark),
+                    decoration: _fieldDecoration('First Name'),
                     validator: (value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: LumiSpacing.md),
                   TextFormField(
                     controller: _lastNameController,
-                    decoration: InputDecoration(
-                      hintText: 'Last Name', filled: true,
-                      fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
+                    style: LumiTheme.clanMedium(15, color: LumiColors.textDark),
+                    decoration: _fieldDecoration('Last Name'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: LumiSpacing.md),
                   TextFormField(
                     controller: _birthdateController,
                     readOnly: true,
+                    style: LumiTheme.clanMedium(15, color: LumiColors.textDark),
                     onTap: () async {
                       final pickedDate = await showDatePicker(
                         context: context,
@@ -863,45 +967,28 @@ class _AddChildModalState extends State<AddChildModal> {
                       if (pickedDate != null) {
                         setState(() {
                           _selectedBirthdate = pickedDate;
-                          _birthdateController.text = '${pickedDate.year}-${pickedDate.month.toString().padLeft(2,'0')}-${pickedDate.day.toString().padLeft(2,'0')}';
+                          _birthdateController.text =
+                              '${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}';
                         });
                       }
                     },
-                    decoration: InputDecoration(
-                      hintText: 'Birthdate (YYYY-MM-DD)', filled: true,
-                      fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      suffixIcon: const Icon(Icons.calendar_today),
+                    decoration: _fieldDecoration('Birthdate (YYYY-MM-DD)').copyWith(
+                      suffixIcon: const Icon(Icons.calendar_today, color: LumiColors.textMuted),
                     ),
                     validator: (value) => value == null || value.isEmpty ? 'Required' : null,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: LumiSpacing.md),
                   TextFormField(
                     controller: _passwordController,
                     obscureText: true,
-                    decoration: InputDecoration(
-                      hintText: 'Child Password', filled: true,
-                      fillColor: isDark ? const Color(0xFF2A2A2C) : const Color(0xFFF5F5F7),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
+                    style: LumiTheme.clanMedium(15, color: LumiColors.textDark),
+                    decoration: _fieldDecoration('Child Password'),
                     validator: (value) => value == null || value.length < 4 ? 'Min 4 characters' : null,
                   ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity, height: 48,
-                    child: FilledButton(
-                      onPressed: _isLoading ? null : _submitForm,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF00ACC1),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Text('Save Child', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                    ),
+                  const SizedBox(height: LumiSpacing.lg),
+                  ArcadeButton(
+                    text: _isLoading ? 'SAVING…' : 'SAVE CHILD',
+                    onTap: _isLoading ? null : _submitForm,
                   ),
                 ],
               ),

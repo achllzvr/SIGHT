@@ -1,15 +1,19 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
-import '../services/cleanup_service.dart';
-import '../services/gamification_service.dart';
-import '../services/metrics_service.dart';
-import '../services/session_timer_service.dart';
-import '../widgets/rounded_card.dart';
-// ignore: unused_import
-import '../services/offline_models.dart';
-import '../services/feedback_service.dart';
-import '../services/guardian_auth_service.dart';
+import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+
 import '../services/auth_session_service.dart';
+import '../services/cleanup_service.dart';
+import '../services/feedback_service.dart';
+import '../services/gamification_service.dart';
+import '../services/guardian_auth_service.dart';
+import '../services/session_timer_service.dart';
+import '../services/task_service.dart';
+import '../theme/lumi_theme.dart';
+import '../widgets/arcade/arcade.dart';
+import '../widgets/lumi_dialog.dart';
+import '../widgets/lumi_form.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,164 +22,131 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  bool _showMetrics = true; // Track whether metrics container is expanded
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+  bool _cameraMissing = false;
+  late final AnimationController _mascotBob;
+
+  @override
+  void initState() {
+    super.initState();
+    _mascotBob = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+    unawaited(_bootstrap());
+  }
+
+  Future<void> _bootstrap() async {
+    await GamificationService.instance.initialize();
+    await GamificationService.instance.updatePetState();
+    await TaskService.instance.initialize();
+    await _checkCameraPermission();
+  }
+
+  @override
+  void dispose() {
+    _mascotBob.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkCameraPermission() async {
+    final status = await Permission.camera.status;
+    if (mounted) setState(() => _cameraMissing = !status.isGranted);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
+        bottom: false,
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const _TopBadge(), // Your Coin Badge
-                      Row(
-                        children: [
-                          // Clothes icon (Store)
-                          GestureDetector(
-                            onTap: () {
-                              if (!context.mounted) return;
-                              Navigator.pushNamed(context, '/store');
-                            },
-                            child: Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
-                                boxShadow: const [
-                                  BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
-                                  BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
-                                ],
-                              ),
-                              child: const Icon(Icons.checkroom, size: 20),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          // Timer icon
-                          const _SessionTimeBadge(),
-                          const SizedBox(width: 10),
-                          // Settings gear icon
-                          GestureDetector(
-                            onTap: () => _showSettingsDialog(context),
-                            child: Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(
-                                color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
-                                boxShadow: const [
-                                  BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
-                                  BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
-                                ],
-                              ),
-                              child: const Icon(Icons.settings, size: 20),
-                            ),
-                          ),
-                        ],
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  const _HealthBar(),
-                ],
-              ),
-            ),
-
-            // Mascot area - animated based on Health Score
-            Expanded(
-              child: Center(
-                child: SizedBox(
-                  width: 270,
-                  height: _showMetrics ? 340 : 360,
-                  child: ValueListenableBuilder<bool>(
-                    valueListenable: MetricsService.instance.faceDetectedNotifier,
-                    builder: (_, faceDetected, __) {
-                      return ValueListenableBuilder<int>(
-                        valueListenable: GamificationService.instance.healthScoreNotifier,
-                        builder: (_, hp, __) {
-                          final mascotPath = _resolveMascotAsset(
-                            faceDetected: faceDetected,
-                            hp: hp,
-                          );
-                          return Image.asset(mascotPath, fit: BoxFit.contain);
-                        },
-                      );
+            if (_cameraMissing)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(LumiSpacing.lg, LumiSpacing.md, LumiSpacing.lg, 0),
+                child: Material(
+                  color: LumiColors.coralTrack,
+                  borderRadius: BorderRadius.circular(LumiRadii.lg),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(LumiRadii.lg),
+                    onTap: () async {
+                      await openAppSettings();
+                      await _checkCameraPermission();
                     },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(LumiSpacing.md),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(LumiRadii.lg),
+                        border: Border.all(color: LumiColors.outline, width: LumiColors.borderWidth),
+                      ),
+                      child: const Text(
+                        'Ask a parent to turn on the camera in Settings so LUMI can help your eyes.',
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, height: 16 / 12, color: LumiColors.textDark),
+                      ),
+                    ),
                   ),
                 ),
               ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(LumiSpacing.lg, LumiSpacing.md, LumiSpacing.lg, LumiSpacing.sm),
+              child: _HomeTopChrome(onSettings: () => _showSettingsDialog(context)),
             ),
-
-            // Collapsible metrics container with arrow toggle
-            GestureDetector(
-              onTap: () => setState(() => _showMetrics = !_showMetrics),
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: AnimatedRotation(
-                  turns: _showMetrics ? 0 : 0.5,
-                  duration: const Duration(milliseconds: 300),
-                  child: Text('^', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: isDark ? Colors.white70 : Colors.black54)),
-                ),
-              ),
-            ),
-
-            AnimatedSize(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-              child: _showMetrics
-                  ? Container(
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF5F5F7),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                border: Border.all(color: isDark ? Colors.white54 : Colors.black26, width: 1),
-                boxShadow: const [
-                  BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(0, -2), blurRadius: 0),
-                  BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(0, -1), blurRadius: 0),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final mascotW = (constraints.maxWidth * 0.72).clamp(180.0, 270.0);
+                  final mascotH = (constraints.maxHeight * 0.72).clamp(200.0, 340.0);
+                  return Column(
                     children: [
-                      ValueListenableBuilder<int>(
-                        valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
-                        builder: (_, value, __) => _MetricChip(label: '$value/min', caption: 'Blink Rate'),
+                      Expanded(
+                        child: Center(
+                          child: AnimatedBuilder(
+                            animation: _mascotBob,
+                            builder: (_, child) {
+                              final dy = (_mascotBob.value - 0.5) * 8;
+                              return Transform.translate(offset: Offset(0, dy), child: child);
+                            },
+                            child: SizedBox(
+                              width: mascotW,
+                              height: mascotH,
+                              child: ValueListenableBuilder<int>(
+                                valueListenable: GamificationService.instance.healthScoreNotifier,
+                                builder: (_, hp, __) {
+                                  final path = resolveHomeMascotAsset(hp: hp);
+                                  return AnimatedSwitcher(
+                                    duration: LumiMotion.slow,
+                                    switchInCurve: LumiMotion.easeStandard,
+                                    switchOutCurve: LumiMotion.easeStandard,
+                                    transitionBuilder: (child, anim) => FadeTransition(
+                                      opacity: anim,
+                                      child: ScaleTransition(
+                                        scale: Tween(begin: 0.96, end: 1.0).animate(anim),
+                                        child: child,
+                                      ),
+                                    ),
+                                    child: Image.asset(
+                                      path,
+                                      key: ValueKey(path),
+                                      fit: BoxFit.contain,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      ValueListenableBuilder<double>(
-                        valueListenable: MetricsService.instance.distanceCmNotifier,
-                        builder: (_, value, __) => _MetricChip(label: value > 0 ? '${value.toStringAsFixed(1)} cm' : '--', caption: 'Distance'),
+                      const Padding(
+                        padding: EdgeInsets.fromLTRB(LumiSpacing.xl, 0, LumiSpacing.xl, LumiSpacing.md),
+                        child: _SubtleHealthBar(),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white10 : Colors.grey.withValues(alpha: 0.08),
-                      border: Border.all(color: isDark ? Colors.white24 : Colors.black12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text('Use the bottom navigation to go to Tracker or Tasks', style: TextStyle(fontSize: 12)),
-                  ),
-                ],
+                  );
+                },
               ),
-                    )
-                  : const SizedBox.shrink(),
-            )
+            ),
           ],
         ),
       ),
@@ -183,169 +154,234 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showSettingsDialog(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: isDark ? Colors.grey[900] : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.9,
-        ),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: const Icon(Icons.close),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            // Haptic Feedback Toggle
-            _SettingsTile(
-              title: 'Haptic Feedback',
-              subtitle: 'Vibrations and touches',
-              icon: Icons.vibration,
-              onTap: () {
-                final current = FeedbackService.instance.isHapticEnabled;
-                FeedbackService.instance.setHapticEnabled(!current);
-                setState(() {});
-              },
-              isEnabled: FeedbackService.instance.isHapticEnabled,
-            ),
-            const SizedBox(height: 12),
-            // Vibration Intensity Preset Buttons
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Vibration Duration',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            void refresh() {
+              setSheetState(() {});
+              setState(() {});
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: LumiColors.cardWhite,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(LumiRadii.xl)),
+                    border: Border.all(color: LumiColors.secondaryLight, width: ArcadeSizes.cardBorder),
+                    boxShadow: LumiShadows.modal(),
+                  ),
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+                  ),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                      LumiSpacing.lg,
+                      LumiSpacing.lg,
+                      LumiSpacing.lg,
+                      LumiSpacing.xl,
                     ),
-                    Text(
-                      '${(FeedbackService.instance.vibrationIntensity * 100).toStringAsFixed(0)}%',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Color(0xFF7FC86D)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [0, 25, 50, 75, 100].map((percent) {
-                    final value = percent / 100.0;
-                    final isSelected = (FeedbackService.instance.vibrationIntensity * 100).round() == percent;
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: GestureDetector(
-                          onTap: () {
-                            FeedbackService.instance.setVibrationIntensity(value);
-                            FeedbackService.instance.provideFeedback(FeedbackType.info);
-                            setState(() {});
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFF7FC86D) : (isDark ? Colors.white10 : Colors.grey[200]),
-                              border: Border.all(
-                                color: isSelected ? const Color(0xFF7FC86D) : (isDark ? Colors.white24 : Colors.black12),
-                                width: isSelected ? 2 : 1,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                LumiTheme.caps('Settings'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: LumiTheme.joyful(24, color: LumiColors.textDark),
                               ),
-                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            const SizedBox(width: LumiSpacing.sm),
+                            GestureDetector(
+                              onTap: () => Navigator.pop(sheetContext),
+                              child: const ArcadeIcon('close', size: 28),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: LumiSpacing.lg),
+                        _SettingsTile(
+                          title: 'Haptic Feedback',
+                          subtitle: 'Vibrations and touches',
+                          arcadeIcon: 'activity',
+                          onTap: () {
+                            FeedbackService.instance.setHapticEnabled(
+                              !FeedbackService.instance.isHapticEnabled,
+                            );
+                            refresh();
+                          },
+                          isEnabled: FeedbackService.instance.isHapticEnabled,
+                        ),
+                        const SizedBox(height: LumiSpacing.md),
+                        ArcadeCard(
+                          padding: const EdgeInsets.all(LumiSpacing.md),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Vibration Duration',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: LumiTheme.clanMedium(14, color: LumiColors.textDark),
+                                    ),
+                                  ),
+                                  const SizedBox(width: LumiSpacing.sm),
+                                  Text(
+                                    '${(FeedbackService.instance.vibrationIntensity * 100).toStringAsFixed(0)}%',
+                                    style: LumiTheme.clanMedium(12, color: LumiColors.primaryGreen),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: LumiSpacing.md),
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final compact = constraints.maxWidth < 340;
+                                  final options = [0, 25, 50, 75, 100];
+                                  return Wrap(
+                                    spacing: compact ? 6 : 8,
+                                    runSpacing: 8,
+                                    children: options.map((percent) {
+                                      final value = percent / 100.0;
+                                      final isSelected =
+                                          (FeedbackService.instance.vibrationIntensity * 100).round() ==
+                                              percent;
+                                      final chipWidth = compact
+                                          ? (constraints.maxWidth - 6) / 2
+                                          : (constraints.maxWidth - 32) / 5;
+                                      return SizedBox(
+                                        width: chipWidth.clamp(56.0, 120.0),
+                                        child: GestureDetector(
+                                          onTap: () {
+                                            FeedbackService.instance.setVibrationIntensity(value);
+                                            FeedbackService.instance.provideFeedback(FeedbackType.info);
+                                            refresh();
+                                          },
+                                          child: AnimatedContainer(
+                                            duration: LumiMotion.fast,
+                                            alignment: Alignment.center,
+                                            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? LumiColors.secondaryGreen
+                                                  : LumiColors.primaryLight,
+                                              border: Border.all(
+                                                color: isSelected
+                                                    ? LumiColors.primaryGreen
+                                                    : LumiColors.secondaryLight,
+                                                width: ArcadeSizes.badgeBorder,
+                                              ),
+                                              borderRadius: BorderRadius.circular(LumiRadii.pill),
+                                              boxShadow: isSelected
+                                                  ? LumiShadows.badge(LumiColors.primaryGreen)
+                                                  : const [],
+                                            ),
+                                            child: FittedBox(
+                                              fit: BoxFit.scaleDown,
+                                              child: Text(
+                                                '$percent%',
+                                                maxLines: 1,
+                                                style: LumiTheme.clanMedium(
+                                                  12,
+                                                  color: isSelected
+                                                      ? LumiColors.primaryGreen
+                                                      : LumiColors.textMuted,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: LumiSpacing.sm),
+                              Text(
+                                'Tap a level to adjust vibration duration',
+                                style: LumiTheme.clanRegular(12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: LumiSpacing.md),
+                        _SettingsTile(
+                          title: 'Audio Feedback',
+                          subtitle: 'Sounds and beeps',
+                          arcadeIcon: 'like',
+                          onTap: () {
+                            FeedbackService.instance.setAudioEnabled(
+                              !FeedbackService.instance.isAudioEnabled,
+                            );
+                            refresh();
+                          },
+                          isEnabled: FeedbackService.instance.isAudioEnabled,
+                        ),
+                        const SizedBox(height: LumiSpacing.lg),
+                        const Divider(color: LumiColors.outline, thickness: 1, height: 1),
+                        const SizedBox(height: LumiSpacing.lg),
+                        GestureDetector(
+                          onTap: () => _handleLogout(sheetContext),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: ArcadeSizes.buttonPadH,
+                              vertical: ArcadeSizes.buttonPadV,
+                            ),
+                            decoration: BoxDecoration(
+                              color: LumiColors.primaryLight,
+                              borderRadius: BorderRadius.circular(LumiRadii.pill),
+                              border: Border.all(
+                                color: LumiColors.redAlert,
+                                width: ArcadeSizes.buttonBorder,
+                              ),
+                              boxShadow: LumiShadows.button(LumiColors.redAlert),
                             ),
                             child: Text(
-                              '$percent%',
+                              LumiTheme.caps('Logout'),
                               textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black54),
+                              style: LumiTheme.clanMedium(
+                                ArcadeSizes.buttonFont,
+                                color: LumiColors.redAlert,
+                                letterSpacing: 1.2,
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Tap a level to adjust vibration duration',
-                  style: TextStyle(fontSize: 11, color: isDark ? Colors.white60 : Colors.black54),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // Audio Feedback Toggle
-            _SettingsTile(
-              title: 'Audio Feedback',
-              subtitle: 'Sounds and beeps',
-              icon: Icons.volume_up,
-              onTap: () {
-                final current = FeedbackService.instance.isAudioEnabled;
-                FeedbackService.instance.setAudioEnabled(!current);
-                setState(() {});
-              },
-              isEnabled: FeedbackService.instance.isAudioEnabled,
-            ),
-            const SizedBox(height: 20),
-            const Divider(),
-            const SizedBox(height: 20),
-            // Logout Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _handleLogout(context),
-                icon: const Icon(Icons.logout),
-                label: const Text('Logout'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-              ],
-            ),
-          ),
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
   Future<void> _handleLogout(BuildContext context) async {
-    // Try biometric authentication first
     final canAuth = await GuardianAuthService.instance.canAuthenticate();
     if (canAuth) {
       final authenticated = await GuardianAuthService.instance.authenticateWithBiometrics();
       if (authenticated) {
-        if (!context.mounted) return; // Added context check
+        if (!context.mounted) return;
         await _performLogout(context);
         return;
       }
     }
 
-    // Fall back to PIN entry
-    if (!context.mounted) return; // Swapped to context.mounted
+    if (!context.mounted) return;
     _showPinEntryDialog(context);
   }
 
@@ -354,49 +390,51 @@ class _HomeScreenState extends State<HomeScreen> {
 
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Guardian Verification'),
+      barrierColor: LumiColors.modalOverlay,
+      builder: (dialogContext) => LumiDialog(
+        title: 'Guardian Verification',
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Enter guardian passcode to logout'),
-            const SizedBox(height: 20),
-            TextField(
+            Text(
+              'Enter guardian passcode to logout',
+              style: LumiTheme.clanRegular(14),
+            ),
+            const SizedBox(height: LumiSpacing.lg),
+            ArcadeTextField(
+              label: 'Passcode',
               controller: pinController,
-              keyboardType: TextInputType.number,
               obscureText: true,
+              keyboardType: TextInputType.number,
               maxLength: 4,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 24, letterSpacing: 4),
-              decoration: InputDecoration(
-                hintText: '••••',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
             ),
           ],
         ),
         actions: [
-          TextButton(
+          LumiPillButton(
+            label: 'Cancel',
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
+            backgroundColor: LumiColors.cardWhite,
           ),
-          TextButton(
+          const SizedBox(height: LumiSpacing.md),
+          LumiPillButton(
+            label: 'Verify',
             onPressed: () async {
               final storedPin = await GuardianAuthService.instance.loadFallbackPin();
               if (storedPin != null && GuardianAuthService.instance.verifyFallbackPin(pinController.text, storedPin)) {
-                if (!dialogContext.mounted) return; // Swapped to context check
-                Navigator.pop(dialogContext); // Close PIN dialog
-                
+                if (!dialogContext.mounted) return;
+                Navigator.pop(dialogContext);
                 if (!context.mounted) return;
                 await _performLogout(context);
               } else {
-                if (!dialogContext.mounted) return; // Swapped to context check
+                if (!dialogContext.mounted) return;
                 ScaffoldMessenger.of(dialogContext).showSnackBar(
                   const SnackBar(content: Text('Incorrect passcode')),
                 );
               }
             },
-            child: const Text('Verify'),
+            backgroundColor: LumiColors.primaryPurple,
+            foregroundColor: Colors.white,
           ),
         ],
       ),
@@ -404,273 +442,210 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _performLogout(BuildContext context) async {
-    // Perform complete service cleanup (stop camera, cancel timers, clear metrics)
     await CleanupService.instance.performCompleteCleanup();
-
-    // Clear auth session
     await AuthSessionService.instance.clearSession();
-
-    if (!context.mounted) return; // Swapped to context.mounted
-    // Navigate back to auth screen
+    if (!context.mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil('/auth', (route) => false);
   }
 }
 
-class _MetricChip extends StatelessWidget {
-  final String label;
-  final String caption;
-  const _MetricChip({required this.label, required this.caption});
+/// Home mascot reflects persisted HP (same thresholds as GamificationService.updatePetState).
+String resolveHomeMascotAsset({required int hp}) {
+  if (hp >= 70) return 'assets/mascot/mascot_great_v1.png';
+  if (hp >= 30) return 'assets/mascot/mascot_good_v1.png';
+  return 'assets/mascot/mascot_bad_v1.png';
+}
+
+class _HomeTopChrome extends StatelessWidget {
+  const _HomeTopChrome({required this.onSettings});
+
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Column(
+    return Row(
       children: [
-        Container(
-          width: 68,
-          height: 68,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFFDFDFD),
-            border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
-            boxShadow: const [
-              BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
-              BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
-            ],
+        Expanded(
+          flex: 3,
+          child: ValueListenableBuilder<int>(
+            valueListenable: GamificationService.instance.coinsNotifier,
+            builder: (_, coins, __) => ArcadeScoreBadge(
+              arcadeIcon: 'star',
+              label: '$coins',
+              accentColor: LumiColors.badgeAmber,
+              compact: true,
+              expand: true,
+            ),
           ),
-          child: Center(child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold))),
         ),
-        const SizedBox(height: 5),
-        Text(caption, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500)),
+        const SizedBox(width: LumiSpacing.sm),
+        Expanded(
+          flex: 4,
+          child: ValueListenableBuilder<int>(
+            valueListenable: SessionTimerService.instance.remainingSecondsNotifier,
+            builder: (_, seconds, __) {
+              return ArcadeScoreBadge(
+                arcadeIcon: 'timer',
+                label: LumiTheme.formatRemaining(seconds),
+                accentColor: LumiColors.primaryPurple,
+                compact: true,
+                expand: true,
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: LumiSpacing.sm),
+        Expanded(
+          flex: 2,
+          child: ArcadeIconBadge(
+            arcadeIcon: 'tshirt',
+            accentColor: LumiColors.primaryGreen,
+            expand: true,
+            onTap: () {
+              if (!context.mounted) return;
+              Navigator.pushNamed(context, '/store');
+            },
+          ),
+        ),
+        const SizedBox(width: LumiSpacing.sm),
+        Expanded(
+          flex: 2,
+          child: ArcadeIconBadge(
+            arcadeIcon: 'settings',
+            accentColor: LumiColors.badgeCyan,
+            expand: true,
+            onTap: onSettings,
+          ),
+        ),
       ],
     );
   }
 }
 
-class _TopBadge extends StatelessWidget {
-  const _TopBadge();
+class _SubtleHealthBar extends StatelessWidget {
+  const _SubtleHealthBar();
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return SizedBox(
-      width: 76,
-      height: 46,
-      child: ValueListenableBuilder<int>(
-        valueListenable: GamificationService.instance.coinsNotifier,
-        builder: (_, coins, __) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFD9EE),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: isDark ? Colors.white70 : Colors.black87, width: 1),
-              boxShadow: const [
-                BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(2, 2), blurRadius: 0),
-              ],
+    return ValueListenableBuilder<int>(
+      valueListenable: GamificationService.instance.healthScoreNotifier,
+      builder: (_, hp, __) {
+        final barColor = hp < 30
+            ? LumiColors.redAlert
+            : (hp < 70 ? LumiColors.badgeAmber : LumiColors.primaryGreen);
+        final clamped = (hp.clamp(0, 100)) / 100.0;
+        return Row(
+          children: [
+            const ArcadeIcon('heart', size: 20),
+            const SizedBox(width: LumiSpacing.sm),
+            Expanded(
+              child: Container(
+                height: 16,
+                decoration: BoxDecoration(
+                  color: LumiColors.primaryLight,
+                  borderRadius: BorderRadius.circular(LumiRadii.pill),
+                  border: Border.all(color: LumiColors.secondaryLight, width: ArcadeSizes.cardBorder),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: clamped),
+                  duration: LumiMotion.slow,
+                  curve: LumiMotion.easeStandard,
+                  builder: (_, value, __) => Align(
+                    alignment: Alignment.centerLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: value,
+                      heightFactor: 1,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: barColor,
+                          borderRadius: BorderRadius.circular(LumiRadii.pill),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('$coins', style: const TextStyle(fontWeight: FontWeight.bold, height: 1)),
-                const SizedBox(height: 2),
-                const Text('COINS', style: TextStyle(fontSize: 8.5, height: 1, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          );
-        },
-      ),
+            const SizedBox(width: LumiSpacing.sm),
+            Text('$hp', style: LumiTheme.clanMedium(14, color: barColor)),
+          ],
+        );
+      },
     );
-
   }
 }
 
 class _SettingsTile extends StatelessWidget {
   final String title;
   final String subtitle;
-  final IconData icon;
+  final String arcadeIcon;
   final VoidCallback onTap;
   final bool isEnabled;
 
   const _SettingsTile({
     required this.title,
     required this.subtitle,
-    required this.icon,
+    required this.arcadeIcon,
     required this.onTap,
     required this.isEnabled,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return GestureDetector(
+    return ArcadeCard(
+      padding: const EdgeInsets.symmetric(horizontal: LumiSpacing.md, vertical: LumiSpacing.md),
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isDark ? Colors.white10 : Colors.grey.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isEnabled
-                ? const Color(0xFF7FC86D)
-                : (isDark ? Colors.white24 : Colors.black12),
-            width: isEnabled ? 1.5 : 1,
+      child: Row(
+        children: [
+          ArcadeIcon(arcadeIcon, size: 24, lightMono: !isEnabled),
+          const SizedBox(width: LumiSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: LumiTheme.clanMedium(14, color: LumiColors.textDark),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: LumiTheme.clanRegular(12),
+                ),
+              ],
+            ),
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 24, color: isEnabled ? const Color(0xFF7FC86D) : (isDark ? Colors.white60 : Colors.black54)),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 2),
-                  Text(subtitle, style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54)),
-                ],
+          const SizedBox(width: LumiSpacing.sm),
+          AnimatedContainer(
+            duration: LumiMotion.fast,
+            width: 52,
+            height: 30,
+            padding: const EdgeInsets.all(3),
+            alignment: isEnabled ? Alignment.centerRight : Alignment.centerLeft,
+            decoration: BoxDecoration(
+              color: isEnabled ? LumiColors.secondaryGreen : LumiColors.primaryLight,
+              borderRadius: BorderRadius.circular(LumiRadii.pill),
+              border: Border.all(
+                color: isEnabled ? LumiColors.primaryGreen : LumiColors.secondaryLight,
+                width: ArcadeSizes.badgeBorder,
               ),
             ),
-            Container(
-              width: 50,
-              height: 28,
+            child: Container(
+              width: 20,
+              height: 20,
               decoration: BoxDecoration(
-                color: isEnabled ? const Color(0xFF7FC86D) : (isDark ? Colors.white10 : Colors.grey.withValues(alpha: 0.2)),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Center(
-                child: Text(
-                  isEnabled ? 'ON' : 'OFF',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: isEnabled ? Colors.white : (isDark ? Colors.white60 : Colors.black54),
-                  ),
-                ),
+                color: isEnabled ? LumiColors.primaryGreen : LumiColors.secondaryLight,
+                shape: BoxShape.circle,
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HealthBar extends StatelessWidget {
-  const _HealthBar();
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: GamificationService.instance.healthScoreNotifier,
-      builder: (context, hp, _) {
-        Color barColor = hp < 30 ? const Color(0xFFFF6B6B) : (hp < 70 ? const Color(0xFFE9C37F) : const Color(0xFF9DE18A));
-        return RoundedCard(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  ValueListenableBuilder<String>(
-                    valueListenable: GamificationService.instance.mascotNameNotifier,
-                    builder: (_, name, __) => GestureDetector(
-                      onTap: () => _showRenameDialog(context, name),
-                      child: Row(
-                        children: [
-                          Text('$name\'S HEALTH', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12)),
-                          const SizedBox(width: 4),
-                          const Icon(Icons.edit, size: 12, color: Colors.black54),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Text('$hp / 100', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: barColor)),
-                ],
-              ),
-              const SizedBox(height: 8),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: LinearProgressIndicator(
-                  value: hp / 100,
-                  minHeight: 10,
-                  backgroundColor: Colors.black12,
-                  valueColor: AlwaysStoppedAnimation<Color>(barColor),
-                ),
-              ),
-            ],
-          ),
-        );
-      }
-    );
-  }
-  
-  void _showRenameDialog(BuildContext context, String currentName) {
-    final controller = TextEditingController(text: currentName);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Rename Mascot"),
-        content: TextField(controller: controller, decoration: const InputDecoration(hintText: "Enter new name")),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
-          TextButton(
-            onPressed: () {
-              GamificationService.instance.renameMascot(controller.text.trim());
-              Navigator.pop(ctx);
-            },
-            child: const Text("Save"),
           ),
         ],
       ),
-    );
-  }
-}
-
-String _resolveMascotAsset({
-  required bool faceDetected,
-  required int hp,
-}) {
-  if (!faceDetected) {
-    return 'assets/mascot/mascot_head_v1.png';
-  }
-
-  if (hp >= 70) {
-    return 'assets/mascot/mascot_great_v1.png'; // Happy
-  } else if (hp >= 30) {
-    return 'assets/mascot/mascot_good_v1.png'; // Warning/Tired
-  } else {
-    return 'assets/mascot/mascot_bad_v1.png'; // Critical/Sad
-  }
-}
-
-class _SessionTimeBadge extends StatelessWidget {
-  const _SessionTimeBadge();
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: SessionTimerService.instance.remainingSecondsNotifier,
-      builder: (_, seconds, __) {
-        final mins = (seconds / 60).floor();
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: const Color(0xFFD5C2E8),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.black87, width: 1),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.timer_outlined, size: 16),
-              const SizedBox(width: 4),
-              Text('$mins m', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-            ],
-          ),
-        );
-      },
     );
   }
 }

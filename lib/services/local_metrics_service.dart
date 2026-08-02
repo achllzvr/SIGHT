@@ -3,15 +3,18 @@ import 'dart:math';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lumi/services/api_client_service.dart';
 import 'package:lumi/services/api_config_service.dart';
 import 'package:lumi/services/connectivity_service.dart';
 import 'package:lumi/services/offline_database_service.dart';
 
 import 'active_child_context_service.dart';
+import 'guardian_preferences_service.dart';
 import 'offline_models.dart';
 import 'server_sync_service.dart';
 import 'gamification_service.dart';
+import 'watch_tracking_session.dart';
 
 class LocalMetricsService {
   LocalMetricsService._private();
@@ -19,7 +22,19 @@ class LocalMetricsService {
 
   Timer? _oneMinuteTimer;
   Timer? _thirtyMinuteSyncTimer;
+  Timer? _rawEventFlushTimer;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
   bool _initialized = false;
+  int _syncBackoffSeconds = 30;
+  static const int _maxBackoffSeconds = 30 * 60;
+
+  static const _lastSyncPrefsKey = 'local_metrics_last_successful_sync_at';
+
+  /// Pending raw events coalesced before SQLite write (T3).
+  final List<LocalMetricEvent> _rawEventBuffer = [];
+
+  /// Last time any metric batch synced successfully (local + cloud).
+  final ValueNotifier<DateTime?> lastSuccessfulSyncAt = ValueNotifier<DateTime?>(null);
 
   Future<void> initialize() async {
     if (_initialized) {
@@ -28,6 +43,7 @@ class LocalMetricsService {
 
     await OfflineDatabaseService.instance.initialize();
     await ActiveChildContextService.instance.initialize();
+    await _loadLastSyncTimestamp();
     _initialized = true;
 
     // Per-minute batch creation and raw event reset
@@ -35,28 +51,67 @@ class LocalMetricsService {
       curateOneMinuteBatch();
     });
 
-    // Every 30 minutes, sync ALL unsynced records for the active user
+    // Coalesce raw SQLite writes every 2s (T3)
+    _rawEventFlushTimer ??= Timer.periodic(const Duration(seconds: 2), (_) {
+      unawaited(_flushRawEventBuffer());
+    });
+
+    // Connectivity-triggered sync + periodic backoff (D4)
+    _connectivitySub ??= Connectivity().onConnectivityChanged.listen((results) {
+      final online = results.any((r) => r != ConnectivityResult.none);
+      if (online) unawaited(attemptBackgroundSync());
+    });
+
     _thirtyMinuteSyncTimer ??= Timer.periodic(const Duration(minutes: 30), (_) {
       attemptBackgroundSync();
     });
 
     if (kDebugMode) {
-      debugPrint('[LocalMetricsService] Initialized: 1-min batch timer + 30-min sync timer started');
+      debugPrint('[LocalMetricsService] Initialized: batch + connectivity sync + raw flush');
     }
+  }
+
+  Future<void> _loadLastSyncTimestamp() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_lastSyncPrefsKey);
+    if (raw != null) {
+      lastSuccessfulSyncAt.value = DateTime.tryParse(raw);
+    }
+  }
+
+  Future<void> _recordSuccessfulSync() async {
+    final now = DateTime.now();
+    lastSuccessfulSyncAt.value = now;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastSyncPrefsKey, now.toIso8601String());
   }
 
   Future<void> logRawEvent(String type, double value, DateTime timestamp) async {
     await initialize();
     final childId = await ActiveChildContextService.instance.getActiveChildId();
-    await OfflineDatabaseService.instance.insertRawEvent(
+    _rawEventBuffer.add(
       LocalMetricEvent(childId: childId, type: type, value: value, timestamp: timestamp),
     );
+    if (_rawEventBuffer.length >= 40) {
+      await _flushRawEventBuffer();
+    }
+  }
+
+  Future<void> _flushRawEventBuffer() async {
+    if (_rawEventBuffer.isEmpty) return;
+    final batch = List<LocalMetricEvent>.from(_rawEventBuffer);
+    _rawEventBuffer.clear();
+    for (final event in batch) {
+      await OfflineDatabaseService.instance.insertRawEvent(event);
+    }
   }
 
   /// Creates a per-minute curated batch from raw events and clears them.
-  /// This runs every 60 seconds to maintain a rolling 1-minute window.
+  /// Screen time counts only while Watch Area is active (D2).
+  /// Strain = distance samples below guardian harmful threshold (D6).
   Future<CuratedMetricBatch?> curateOneMinuteBatch() async {
     await initialize();
+    await _flushRawEventBuffer();
     final windowEnd = DateTime.now();
     final windowStart = windowEnd.subtract(const Duration(minutes: 1));
 
@@ -70,6 +125,8 @@ class LocalMetricsService {
     }
 
     final childId = await ActiveChildContextService.instance.getActiveChildId();
+    final prefs = await GuardianPreferencesService.instance.loadPreferences();
+    final harmfulCm = prefs.distanceAlertThresholdCm;
 
     double? averageFor(String type) {
       final values = events.where((event) => event.type == type).map((event) => event.value).toList(growable: false);
@@ -80,8 +137,10 @@ class LocalMetricsService {
       return total / values.length;
     }
 
-    final strainEvents = events.where((event) => event.type == 'strainEvent').length;
-    const screenTimeMinutes = 1;
+    final strainEvents = events
+        .where((e) => e.type == 'distanceCm' && e.value > 0 && e.value < harmfulCm)
+        .length;
+    final screenTimeMinutes = WatchTrackingSession.instance.active.value ? 1 : 0;
 
     final batch = CuratedMetricBatch(
       childId: childId,
@@ -92,7 +151,7 @@ class LocalMetricsService {
       strainEvents: strainEvents,
       screenTimeMinutes: screenTimeMinutes,
       healthScore: GamificationService.instance.healthScoreNotifier.value,
-      coins: GamificationService.instance.coinsNotifier.value,             
+      coins: GamificationService.instance.coinsNotifier.value,
       eventCount: events.length,
       syncState: SyncState.pending,
     );
@@ -106,7 +165,7 @@ class LocalMetricsService {
       debugPrint('[LocalMetricsService] Curated 1-min batch (ID: $batchId): '
           'blink=${batch.averageBlinkRate?.toStringAsFixed(2)}, '
           'distance=${batch.averageDistanceCm?.toStringAsFixed(2)}, '
-          'strain=${batch.strainEvents}, events=${batch.eventCount}');
+          'strain=${batch.strainEvents}, watchScreen=$screenTimeMinutes, events=${batch.eventCount}');
     }
 
     return batch;
@@ -179,6 +238,9 @@ class LocalMetricsService {
     final pending = await OfflineDatabaseService.instance.loadPendingBatches();
 
     if (pending.isEmpty) {
+      if (childId != null) {
+        await ServerSyncService.instance.syncPet(childId);
+      }
       if (kDebugMode) {
         debugPrint('[LocalMetricsService] No pending batches for sync.');
       }
@@ -212,6 +274,7 @@ class LocalMetricsService {
           remoteId: uploadResult.data,
         );
         successCount++;
+        await _recordSuccessfulSync();
 
         if (kDebugMode) {
           debugPrint('[LocalMetricsService] Synced batch ${batch.id}: ${uploadResult.data}');
@@ -230,6 +293,10 @@ class LocalMetricsService {
       }
     }
 
+    if (childId != null) {
+      await ServerSyncService.instance.syncPet(childId);
+    }
+
     if (kDebugMode) {
       debugPrint('[LocalMetricsService] Background sync complete: '
           '$successCount succeeded, $failureCount failed out of ${relevantBatches.length} total');
@@ -241,8 +308,13 @@ class LocalMetricsService {
   Future<void> dispose() async {
     _oneMinuteTimer?.cancel();
     _thirtyMinuteSyncTimer?.cancel();
+    _rawEventFlushTimer?.cancel();
+    await _connectivitySub?.cancel();
+    await _flushRawEventBuffer();
     _oneMinuteTimer = null;
     _thirtyMinuteSyncTimer = null;
+    _rawEventFlushTimer = null;
+    _connectivitySub = null;
     _initialized = false;
 
     if (kDebugMode) {
@@ -251,29 +323,25 @@ class LocalMetricsService {
   }
 
   // TODO: Remove after testing/demo purposes to avoid misuse in production
-  /// Forces an immediate sync of local metrics to the cloud for testing/demos.
+  /// Forces an immediate sync of all unsynced local metrics for [childId] (all days).
   Future<void> forceSyncNow(int childId) async {
-    // 1. Check Connectivity
     if (!await ConnectivityService.instance.isOnline()) {
       throw Exception('No internet connection available. Cannot sync.');
     }
 
-    // 2. Fetch the data we want to sync
-    // Assuming we want to sync today's data for the demo.
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(const Duration(days: 1));
-
-    final batches = await OfflineDatabaseService.instance.loadBatchesForChild(childId, today, tomorrow);
+    final batches = await OfflineDatabaseService.instance.loadPendingBatchesForChild(childId);
 
     if (batches.isEmpty) {
-      throw Exception('No local metrics found to sync today.');
+      final pet = await ServerSyncService.instance.syncPet(childId);
+      if (!pet.success) {
+        throw Exception(pet.error ?? 'Nothing to sync.');
+      }
+      await _recordSuccessfulSync();
+      return;
     }
 
     final List<Map<String, dynamic>> batchPayload = batches.map((b) {
-      
-      // Convert DateTime to 'YYYY-MM-DD HH:MM:SS' for Laravel
-      final String formattedTimestamp = 
+      final String formattedTimestamp =
           "${b.windowEnd.year.toString().padLeft(4, '0')}-"
           "${b.windowEnd.month.toString().padLeft(2, '0')}-"
           "${b.windowEnd.day.toString().padLeft(2, '0')} "
@@ -288,29 +356,75 @@ class LocalMetricsService {
         'avg_distance': b.averageDistanceCm ?? 0.0,
         'strain_events': b.strainEvents,
         'health_score': b.healthScore ?? 100,
-        'coins': b.coins ?? 0, 
+        'coins': b.coins ?? 0,
       };
     }).toList();
 
-    // 4. Send to the Laravel API
-    final uri = ApiConfigService.buildUri('/api/mobile/child/$childId/sync/metrics/batch');
+    final uri = ApiConfigService.buildUri(ApiConfigService.metricsBatchEndpoint(childId));
     final response = await ApiClientService.instance.post(
       uri,
       jsonBody: {
-        'metrics': batchPayload 
+        'metrics': batchPayload,
       },
     );
 
-    // 5. Handle the response
     if (!response.isSuccess) {
       debugPrint('Sync Error Body: ${response.rawBody}');
       throw Exception('Server rejected the sync request. Code: ${response.statusCode}');
     }
 
-    // Optional: If your OfflineDatabaseService has a method to mark rows as "synced" 
-    // to prevent duplicate uploads, you would call it here.
-    // e.g., await OfflineDatabaseService.instance.markAsSynced(batches.map((b) => b.id).toList());
+    for (final batch in batches) {
+      if (batch.id != null) {
+        await OfflineDatabaseService.instance.markBatchSynced(batch.id!);
+      }
+    }
 
-    debugPrint('Force sync completely successfully for child ID: $childId');
+    await ServerSyncService.instance.syncPet(childId);
+    await _recordSuccessfulSync();
+    debugPrint('Force sync completed for child ID: $childId (${batches.length} batches)');
+  }
+
+  /// Summarizes pending/failed curated batches for UI status pills.
+  Future<CloudSyncStatus> getCloudSyncStatus({int? childId}) async {
+    final pending = await OfflineDatabaseService.instance.loadPendingBatches();
+    final scoped = childId == null
+        ? pending
+        : pending.where((b) => b.childId == childId).toList(growable: false);
+
+    final failedCount = scoped.where((b) => b.syncState == SyncState.failed).length;
+    final needsSyncCount = scoped.length;
+
+    if (failedCount > 0) {
+      return CloudSyncStatus(kind: CloudSyncKind.failed, pendingCount: needsSyncCount, failedCount: failedCount);
+    }
+    if (needsSyncCount > 0) {
+      return CloudSyncStatus(kind: CloudSyncKind.needsSync, pendingCount: needsSyncCount, failedCount: 0);
+    }
+    return const CloudSyncStatus(kind: CloudSyncKind.synced, pendingCount: 0, failedCount: 0);
+  }
+}
+
+enum CloudSyncKind { synced, needsSync, failed }
+
+class CloudSyncStatus {
+  final CloudSyncKind kind;
+  final int pendingCount;
+  final int failedCount;
+
+  const CloudSyncStatus({
+    required this.kind,
+    required this.pendingCount,
+    required this.failedCount,
+  });
+
+  String get label {
+    switch (kind) {
+      case CloudSyncKind.synced:
+        return 'Synced';
+      case CloudSyncKind.needsSync:
+        return 'Needs sync ($pendingCount)';
+      case CloudSyncKind.failed:
+        return 'Sync failed';
+    }
   }
 }

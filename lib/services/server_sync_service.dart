@@ -1,5 +1,6 @@
 import 'api_client_service.dart';
 import 'api_config_service.dart';
+import 'gamification_service.dart';
 import 'guardian_preferences_service.dart';
 import 'offline_models.dart';
 
@@ -27,18 +28,29 @@ class ServerSyncService {
     }
 
     try {
-      final uri = ApiConfigService.buildUri(ApiConfigService.metricsEndpoint);
+      final formattedTimestamp =
+          "${batch.windowEnd.year.toString().padLeft(4, '0')}-"
+          "${batch.windowEnd.month.toString().padLeft(2, '0')}-"
+          "${batch.windowEnd.day.toString().padLeft(2, '0')} "
+          "${batch.windowEnd.hour.toString().padLeft(2, '0')}:"
+          "${batch.windowEnd.minute.toString().padLeft(2, '0')}:"
+          "${batch.windowEnd.second.toString().padLeft(2, '0')}";
+
+      final uri = ApiConfigService.buildUri(ApiConfigService.metricsBatchEndpoint(childId));
       final response = await ApiClientService.instance.post(
         uri,
         jsonBody: {
-          'child_id': childId,
-          'avg_blink_rate': batch.averageBlinkRate,
-          'avg_distance': batch.averageDistanceCm,
-          'strain_events': batch.strainEvents,
-          'timestamp': batch.windowEnd.toIso8601String(),
-          'screen_time_minutes': batch.screenTimeMinutes,
-          'health_score': batch.healthScore,
-          'coins': batch.coins,             
+          'metrics': [
+            {
+              'timestamp': formattedTimestamp,
+              'screen_time_minutes': batch.screenTimeMinutes,
+              'avg_blink_rate': batch.averageBlinkRate ?? 0.0,
+              'avg_distance': batch.averageDistanceCm ?? 0.0,
+              'strain_events': batch.strainEvents,
+              'health_score': batch.healthScore ?? 100,
+              'coins': batch.coins ?? 0,
+            }
+          ],
         },
       );
 
@@ -50,14 +62,11 @@ class ServerSyncService {
       }
 
       final data = response.data;
-      String remoteId = '';
+      String remoteId = 'remote-${DateTime.now().millisecondsSinceEpoch}';
       if (data is Map<String, dynamic>) {
-        final candidate = data['metric_id'] ?? data['id'] ?? data['data']?['metric_id'] ?? data['data']?['id'];
-        remoteId = candidate?.toString() ?? '';
-      }
-
-      if (remoteId.isEmpty) {
-        remoteId = 'remote-${DateTime.now().millisecondsSinceEpoch}';
+        final candidate =
+            data['metric_id'] ?? data['id'] ?? data['data']?['metric_id'] ?? data['data']?['id'];
+        if (candidate != null) remoteId = candidate.toString();
       }
 
       return SyncOperationResult(success: true, data: remoteId);
@@ -72,10 +81,8 @@ class ServerSyncService {
     }
 
     try {
-      final uri = ApiConfigService.buildUri(
-        ApiConfigService.sessionLimitsEndpoint,
-        queryParameters: {'child_id': childId.toString()},
-      );
+      // Prefer shared authenticated read when available; fall back to defaults on failure.
+      final uri = ApiConfigService.buildUri('/api/shared/child/$childId/limits');
       final response = await ApiClientService.instance.get(uri);
 
       if (!response.isSuccess) {
@@ -93,12 +100,10 @@ class ServerSyncService {
         } else {
           source = data;
         }
-      } else if (data is List && data.isNotEmpty && data.first is Map<String, dynamic>) {
-        source = data.first as Map<String, dynamic>;
       }
 
       if (source == null) {
-        return const SyncOperationResult(success: false, error: 'No session limits data found in response.');
+        return const SyncOperationResult(success: false, error: 'No session limits data found.');
       }
 
       final preferences = const GuardianPreferences.defaults().copyWith(
@@ -128,17 +133,25 @@ class ServerSyncService {
     }
 
     try {
-      final uri = ApiConfigService.buildUri(ApiConfigService.sessionLimitsEndpoint);
+      final now = DateTime.now();
+      final formatted =
+          "${now.year.toString().padLeft(4, '0')}-"
+          "${now.month.toString().padLeft(2, '0')}-"
+          "${now.day.toString().padLeft(2, '0')} "
+          "${now.hour.toString().padLeft(2, '0')}:"
+          "${now.minute.toString().padLeft(2, '0')}:"
+          "${now.second.toString().padLeft(2, '0')}";
+
+      final uri = ApiConfigService.buildUri(ApiConfigService.sessionLimitsEndpoint(childId));
       final response = await ApiClientService.instance.put(
         uri,
         jsonBody: {
-          'child_id': childId,
           'daily_limit_minutes': preferences.dailyScreenLimitMinutes,
-          'mode': preferences.monitoringMode,
-          'is_active': preferences.isActive ? 1 : 0,
+          'mode': preferences.monitoringMode == 'Relaxed' ? 'Relaxed' : 'Strict',
           'harmful_distance_threshold': preferences.distanceAlertThresholdCm,
           'critical_distance_threshold': preferences.criticalDistanceThresholdCm,
-          'auto_enforce_breaks': preferences.autoEnforceBreaks ? 1 : 0,
+          'auto_enforce_breaks': preferences.autoEnforceBreaks,
+          'device_timestamp': formatted,
         },
       );
 
@@ -152,6 +165,59 @@ class ServerSyncService {
       return const SyncOperationResult(success: true);
     } catch (e) {
       return SyncOperationResult(success: false, error: 'Session limits sync exception: $e');
+    }
+  }
+
+  /// Last-write-wins pet sync (D3) — payload matches Laravel MobileApiController::syncPet.
+  Future<SyncOperationResult<void>> syncPet(int childId) async {
+    if (!ApiConfigService.isConfigured) {
+      return const SyncOperationResult(success: false, error: 'API base URL is not configured.');
+    }
+
+    try {
+      final g = GamificationService.instance;
+      final now = DateTime.now();
+      final formatted =
+          "${now.year.toString().padLeft(4, '0')}-"
+          "${now.month.toString().padLeft(2, '0')}-"
+          "${now.day.toString().padLeft(2, '0')} "
+          "${now.hour.toString().padLeft(2, '0')}:"
+          "${now.minute.toString().padLeft(2, '0')}:"
+          "${now.second.toString().padLeft(2, '0')}";
+
+      final hp = g.healthScoreNotifier.value;
+      final petState = hp >= 70
+          ? 'Healthy'
+          : hp >= 40
+              ? 'Good'
+              : hp > 0
+                  ? 'Critical'
+                  : 'Dead';
+
+      final uri = ApiConfigService.buildUri(ApiConfigService.petSyncEndpoint(childId));
+      final response = await ApiClientService.instance.put(
+        uri,
+        jsonBody: {
+          'xp_points': g.coinsNotifier.value,
+          'currency': g.coinsNotifier.value,
+          'current_streak_days': g.dailyStreakNotifier.value,
+          'last_streak_date':
+              "${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}",
+          'pet_state': petState,
+          'device_timestamp': formatted,
+        },
+      );
+
+      if (!response.isSuccess) {
+        return SyncOperationResult(
+          success: false,
+          error: 'Pet sync failed (${response.statusCode}): ${response.rawBody}',
+        );
+      }
+
+      return const SyncOperationResult(success: true);
+    } catch (e) {
+      return SyncOperationResult(success: false, error: 'Pet sync exception: $e');
     }
   }
 }

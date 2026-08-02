@@ -6,6 +6,7 @@ import '../services/gamification_service.dart';
 import '../services/session_lock_service.dart';
 import '../services/local_metrics_service.dart';
 import '../services/active_child_context_service.dart';
+import '../theme/lumi_theme.dart';
 import '../widgets/rounded_card.dart';
 
 class DailyReportScreen extends StatefulWidget {
@@ -73,69 +74,75 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
     return PopScope(
       canPop: false, // Strict Lock
       child: Scaffold(
-        backgroundColor: isDark ? const Color(0xFF0F0F11) : const Color(0xFFFAFAFC),
+        backgroundColor: isDark ? const Color(0xFF0F172A) : LumiColors.scaffoldLight,
         body: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(LumiSpacing.xl),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.nightlight_round, size: 80, color: Color(0xFFD5C2E8)),
-                const SizedBox(height: 24),
+                const Icon(Icons.nightlight_round, size: 80, color: LumiColors.purpleMid),
+                const SizedBox(height: LumiSpacing.xl),
                 const Text(
                   "Great Job Today!",
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    fontSize: 32,
+                    height: 40 / 32,
+                    letterSpacing: -0.64,
+                    fontWeight: FontWeight.w700,
+                    color: LumiColors.textDark,
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: LumiSpacing.md),
                 const Text(
                   "LUMI is resting. Your screen time limit has been reached to protect your eyes.",
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                  style: TextStyle(fontSize: 16, height: 24 / 16, color: LumiColors.textMuted),
                 ),
-                const SizedBox(height: 40),
-                
+                const SizedBox(height: LumiSpacing.xxl),
+
                 RoundedCard(
                   child: Column(
                     children: [
-                      const Text("Daily Report", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                      const Divider(height: 30),
+                      const Text("Daily Report", style: TextStyle(fontSize: 20, height: 28 / 20, fontWeight: FontWeight.w600, color: LumiColors.textDark)),
+                      const Divider(height: LumiSpacing.xxl, thickness: 1, color: LumiColors.outline),
                       _StatRow(
-                        icon: Icons.favorite, 
-                        color: Colors.redAccent, 
-                        label: "Final HP", 
+                        icon: Icons.favorite,
+                        color: LumiColors.redAlert,
+                        label: "Final Eye Care", 
                         value: "${GamificationService.instance.healthScoreNotifier.value}/100"
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: LumiSpacing.lg),
                       _StatRow(
-                        icon: Icons.monetization_on, 
-                        color: Colors.amber, 
-                        label: "Coins Earned", 
+                        icon: Icons.star_rounded,
+                        color: LumiColors.accent,
+                        label: "Stars Earned", 
                         value: "${GamificationService.instance.coinsNotifier.value}"
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: LumiSpacing.lg),
                       _StatRow(
-                        icon: Icons.local_fire_department, 
-                        color: Colors.orange, 
+                        icon: Icons.local_fire_department,
+                        color: LumiColors.warning,
                         label: "Daily Streak", 
                         value: "${GamificationService.instance.dailyStreakNotifier.value} Days"
                       ),
                     ],
                   ),
                 ),
-                
-                const SizedBox(height: 40),
+
+                const SizedBox(height: LumiSpacing.xxl),
                 Text(
                   "LUMI wakes up in:",
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14, color: isDark ? Colors.white60 : Colors.black54),
+                  style: TextStyle(fontSize: 14, height: 20 / 14, color: isDark ? Colors.white60 : LumiColors.textMuted),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: LumiSpacing.md),
                 Text(
                   _timeUntilMidnight,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, letterSpacing: 2),
+                  style: const TextStyle(fontSize: 32, height: 40 / 32, fontWeight: FontWeight.w700, letterSpacing: 2, color: LumiColors.textDark),
                 ),
                 const Spacer(),
                 TextButton.icon(
@@ -148,8 +155,11 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                     
                     if (context.mounted) Navigator.pushReplacementNamed(context, '/welcome');
                   }, 
-                  icon: const Icon(Icons.logout), 
-                  label: const Text("Log Out")
+                  icon: const Icon(Icons.logout, color: LumiColors.textMuted),
+                  label: const Text(
+                    "Log Out",
+                    style: TextStyle(fontSize: 14, height: 20 / 14, fontWeight: FontWeight.w600, color: LumiColors.textMuted),
+                  ),
                 )
               ],
             ),
@@ -176,11 +186,11 @@ class _StatRow extends StatelessWidget {
         Row(
           children: [
             Icon(icon, color: color),
-            const SizedBox(width: 12),
-            Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(width: LumiSpacing.md),
+            Text(label, style: const TextStyle(fontSize: 16, height: 24 / 16, fontWeight: FontWeight.w500, color: LumiColors.textDark)),
           ],
         ),
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(value, style: const TextStyle(fontSize: 18, height: 24 / 18, fontWeight: FontWeight.w600, color: LumiColors.textDark)),
       ],
     );
   }

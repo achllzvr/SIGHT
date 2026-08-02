@@ -6,7 +6,8 @@ import '../services/detection_service.dart';
 import '../services/metrics_service.dart';
 import '../services/offline_models.dart';
 import '../services/rule_engine_service.dart';
-import '../widgets/rounded_card.dart';
+import '../theme/lumi_theme.dart';
+import '../widgets/arcade/arcade.dart';
 
 class TrackingScreen extends StatefulWidget {
   const TrackingScreen({super.key});
@@ -17,104 +18,104 @@ class TrackingScreen extends StatefulWidget {
 
 class _TrackingScreenState extends State<TrackingScreen> {
   @override
-  void initState() {
-    super.initState();
-    DetectionService.instance.ensureMonitoringWithRetry();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: Colors.transparent,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 8),
-                  const _CameraStatusIndicator(),
-                  const SizedBox(height: 12),
-                  const _OfflineRuleBanner(),
-                  const SizedBox(height: 24),
-                  _TrackingStatCard(
-                    title: 'Blink Analysis',
-                    statusBuilder: (context) => const _StatusPill(label: 'GOOD'),
-                    valueBuilder: (context) => ValueListenableBuilder<int>(
-                      valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
-                      builder: (_, value, __) => Text(
-                        '$value',
-                        style: const TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF7FC86D),
-                          height: 1,
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: LumiSpacing.lg),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Row(
+                      children: [
+                        Expanded(child: _CameraStatusIndicator()),
+                        SizedBox(width: LumiSpacing.sm),
+                        Expanded(child: _OfflineRuleBanner()),
+                      ],
+                    ),
+                    const SizedBox(height: LumiSpacing.xl),
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              LumiTheme.caps('Distance Monitor'),
+                              textAlign: TextAlign.center,
+                              style: LumiTheme.joyful(26, color: LumiColors.textDark),
+                            ),
+                            const SizedBox(height: LumiSpacing.lg),
+                            _TrackingStatCard(
+                              title: 'Eye Blinks',
+                              statusBuilder: (context) => const _StatusPill(label: 'GOOD'),
+                              valueBuilder: (context) => ValueListenableBuilder<int>(
+                                valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
+                                builder: (_, value, __) => Text(
+                                  '$value',
+                                  style: LumiTheme.clanMedium(32, color: LumiColors.primaryGreen, height: 1),
+                                ),
+                              ),
+                              unitText: ' blinks per minute',
+                              footnoteBuilder: (context) => Text(
+                                'Keep blinking — aim for 10 or more each minute',
+                                style: LumiTheme.clanRegular(12),
+                              ),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const BlinkTestScreen()),
+                              ).then((_) => DetectionService.instance.restartMonitoringWithDelay()),
+                            ),
+                            const SizedBox(height: LumiSpacing.lg),
+                            _TrackingStatCard(
+                              title: 'Phone Distance',
+                              statusBuilder: (context) => ValueListenableBuilder<double>(
+                                valueListenable: MetricsService.instance.distanceCmNotifier,
+                                builder: (_, distance, __) => _StatusPill(
+                                  label: distance >= 30 ? 'SAFE' : (distance > 0 ? 'CLOSE' : 'SAFE'),
+                                  safe: distance >= 30 || distance <= 0,
+                                ),
+                              ),
+                              valueBuilder: (context) => ValueListenableBuilder<double>(
+                                valueListenable: MetricsService.instance.distanceCmNotifier,
+                                builder: (_, value, __) => Text(
+                                  value > 0 ? value.toStringAsFixed(0) : '--',
+                                  style: LumiTheme.clanMedium(32, color: LumiColors.primaryGreen, height: 1),
+                                ),
+                              ),
+                              unitText: ' centimeters away',
+                              footnoteBuilder: (context) => GestureDetector(
+                                onTap: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const DistanceTestScreen()),
+                                ).then((_) => DetectionService.instance.restartMonitoringWithDelay()),
+                                child: Text(
+                                  'Recalibrate',
+                                  style: LumiTheme.clanMedium(12, color: LumiColors.primaryGreen),
+                                ),
+                              ),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const DistanceTestScreen()),
+                              ).then((_) => DetectionService.instance.restartMonitoringWithDelay()),
+                            ),
+                            const SizedBox(height: LumiSpacing.xl),
+                          ],
                         ),
                       ),
                     ),
-                    unitText: ' blinks per minute',
-                    footnoteBuilder: (context) => ValueListenableBuilder<int>(
-                      valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
-                      builder: (_, value, __) => Text(
-                        'Good blinks per minute! $value/min',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFFA68AC0),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const BlinkTestScreen()),
-                    ).then((_) => DetectionService.instance.restartMonitoringWithDelay()),
-                  ),
-                  const SizedBox(height: 18),
-                  _TrackingStatCard(
-                    title: 'Screen Distance',
-                    statusBuilder: (context) => ValueListenableBuilder<double>(
-                      valueListenable: MetricsService.instance.distanceCmNotifier,
-                      builder: (_, distance, __) => _StatusPill(
-                        label: distance >= 30 ? 'SAFE' : (distance > 0 ? 'CLOSE' : 'SAFE'),
-                      ),
-                    ),
-                    valueBuilder: (context) => ValueListenableBuilder<double>(
-                      valueListenable: MetricsService.instance.distanceCmNotifier,
-                      builder: (_, value, __) => Text(
-                        value > 0 ? value.toStringAsFixed(0) : '--',
-                        style: const TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF7FC86D),
-                          height: 1,
-                        ),
-                      ),
-                    ),
-                    unitText: ' centimeters away',
-                    footnoteBuilder: (context) => ValueListenableBuilder<double>(
-                      valueListenable: MetricsService.instance.distanceCmNotifier,
-                      builder: (_, value, __) => Text(
-                        value > 0 ? 'Current distance: ${value.toStringAsFixed(1)}cm' : 'Tap to open distance monitor',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFFA68AC0),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const DistanceTestScreen()),
-                    ).then((_) => DetectionService.instance.restartMonitoringWithDelay()),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -140,43 +141,42 @@ class _TrackingStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
+    return ArcadeCard(
       onTap: onTap,
-      child: RoundedCard(
-        borderRadius: 20,
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Text(
+      padding: const EdgeInsets.symmetric(horizontal: LumiSpacing.lg, vertical: LumiSpacing.lg),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
                   title,
-                  style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: LumiTheme.clanMedium(18, color: LumiColors.textDark),
                 ),
-                const Spacer(),
-                statusBuilder(context),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                valueBuilder(context),
-                Text(
+              ),
+              statusBuilder(context),
+            ],
+          ),
+          const SizedBox(height: LumiSpacing.md),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              valueBuilder(context),
+              Flexible(
+                child: Text(
                   unitText,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Theme.of(context).brightness == Brightness.dark ? Colors.white60 : Colors.black54,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: LumiTheme.clanRegular(13),
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Align(alignment: Alignment.centerLeft, child: footnoteBuilder(context)),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: LumiSpacing.md),
+          Align(alignment: Alignment.centerLeft, child: footnoteBuilder(context)),
+        ],
       ),
     );
   }
@@ -184,23 +184,21 @@ class _TrackingStatCard extends StatelessWidget {
 
 class _StatusPill extends StatelessWidget {
   final String label;
-  const _StatusPill({required this.label});
+  final bool safe;
+  const _StatusPill({required this.label, this.safe = true});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
+    final accent = safe ? LumiColors.primaryGreen : LumiColors.redAlert;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFEFD9EE),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isDark ? Colors.white70 : Colors.black54, width: 0.9),
+        color: LumiColors.primaryLight,
+        borderRadius: BorderRadius.circular(LumiRadii.pill),
+        border: Border.all(color: accent, width: 2),
+        boxShadow: LumiShadows.hard(color: accent, offset: const Offset(0, 2)),
       ),
-      child: Text(
-        label,
-        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-      ),
+      child: Text(label, style: LumiTheme.clanMedium(10, color: accent, letterSpacing: 0.5)),
     );
   }
 }
@@ -228,46 +226,37 @@ class _CameraStatusIndicatorState extends State<_CameraStatusIndicator> {
 
   @override
   Widget build(BuildContext context) {
-    final frameFreshness = DetectionService.instance.millisSinceLastFrame;
-    final hasReceivedAnyFrame = DetectionService.instance.hasReceivedAnyFrame;
     final hasFreshFrames = DetectionService.instance.hasFreshFrames;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasReceivedAnyFrame = DetectionService.instance.hasReceivedAnyFrame;
+    final statusColor = hasFreshFrames ? LumiColors.primaryGreen : LumiColors.badgeAmber;
+    final label = hasFreshFrames
+        ? 'CAM ON'
+        : hasReceivedAnyFrame
+            ? 'CAM PAUSE'
+            : 'CAM…';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: hasFreshFrames
-            ? (isDark ? Colors.green.withValues(alpha: 0.15) : Colors.green.withValues(alpha: 0.1))
-            : (isDark ? Colors.orange.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.1)),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: hasFreshFrames ? Colors.green.shade400 : Colors.orange.shade300,
-          width: 1,
-        ),
+        color: LumiColors.primaryLight,
+        borderRadius: BorderRadius.circular(LumiRadii.pill),
+        border: Border.all(color: statusColor, width: 2.5),
+        boxShadow: LumiShadows.hard(color: statusColor, offset: const Offset(0, 3)),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: hasFreshFrames ? Colors.green.shade400 : Colors.orange.shade300,
-              shape: BoxShape.circle,
-            ),
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              hasFreshFrames
-                  ? 'Camera active (${frameFreshness}ms)'
-                  : hasReceivedAnyFrame
-                      ? 'Camera paused (${frameFreshness}ms)'
-                      : 'Starting camera...',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: hasFreshFrames ? Colors.green.shade700 : Colors.orange.shade700,
-              ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label, style: LumiTheme.clanMedium(11, color: statusColor, height: 1)),
             ),
           ),
         ],
@@ -279,28 +268,27 @@ class _CameraStatusIndicatorState extends State<_CameraStatusIndicator> {
 class _OfflineRuleBanner extends StatelessWidget {
   const _OfflineRuleBanner();
 
-  String _friendlyMessage(String raw, AlertLevel alertLevel) {
+  String _shortMessage(String raw, AlertLevel alertLevel) {
     if (raw.isEmpty) {
       return alertLevel == AlertLevel.none
-          ? 'Monitoring is active.'
+          ? 'Stable'
           : alertLevel == AlertLevel.blinkBubble
-              ? 'A small blink correction is needed.'
+              ? 'Blink'
               : alertLevel == AlertLevel.redOverlay
-                  ? 'Please move the device a bit farther away.'
-                  : 'Critical threshold reached. Guardian intervention required.';
+                  ? 'Too close'
+                  : 'Rest';
     }
-
     switch (raw) {
       case 'face temporarily lost':
-        return 'Face not detected. Keep your face centered in view.';
+        return 'No face';
       case 'critical proximity or eye fatigue':
-        return 'Critical threshold reached. Guardian intervention required.';
+        return 'Critical';
       case 'adjust distance or blink rhythm':
-        return 'Move farther from the screen and blink naturally.';
+        return 'Adjust';
       case 'minor correction needed':
-        return 'Small correction needed for healthy viewing.';
+        return 'Nudge';
       default:
-        return raw;
+        return raw.length > 18 ? '${raw.substring(0, 16)}…' : raw;
     }
   }
 
@@ -309,73 +297,56 @@ class _OfflineRuleBanner extends StatelessWidget {
     return ValueListenableBuilder<AlertLevel>(
       valueListenable: RuleEngineService.instance.alertLevelNotifier,
       builder: (_, alertLevel, __) {
-        final message = _friendlyMessage(
+        final message = _shortMessage(
           RuleEngineService.instance.overlayMessageNotifier.value,
           alertLevel,
         );
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        final background = alertLevel == AlertLevel.none
-            ? (isDark ? const Color(0xFF2C2C2E) : Colors.white)
+        final accent = alertLevel == AlertLevel.none
+            ? LumiColors.primaryGreen
             : alertLevel == AlertLevel.blinkBubble
-                ? const Color(0xFFEFD9EE)
+                ? LumiColors.primaryPurple
                 : alertLevel == AlertLevel.redOverlay
-                    ? const Color(0xFFFFE3E1)
-                    : const Color(0xFFFFD6D2);
-
-        final borderColor = isDark ? Colors.white70 : Colors.black87;
+                    ? LumiColors.redAlert
+                    : LumiColors.badgeAmber;
         final title = alertLevel == AlertLevel.none
-            ? 'Monitoring'
+            ? 'OK'
             : alertLevel == AlertLevel.blinkBubble
-                ? 'Blink Reminder'
+                ? 'BLINK'
                 : alertLevel == AlertLevel.redOverlay
-                    ? 'Distance Warning'
-                    : 'Rest Mode';
-        final icon = alertLevel == AlertLevel.none
-            ? Icons.radar
-            : alertLevel == AlertLevel.blinkBubble
-                ? Icons.remove_red_eye_outlined
-                : alertLevel == AlertLevel.redOverlay
-                    ? Icons.warning_amber_rounded
-                    : Icons.lock;
+                    ? 'WARN'
+                    : 'REST';
 
         return Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: borderColor, width: 0.9),
-            boxShadow: const [
-              BoxShadow(color: Color(0xFFB9E3A4), offset: Offset(2, 2), blurRadius: 0),
-              BoxShadow(color: Color(0xFFD5C2E8), offset: Offset(1, 1), blurRadius: 0),
-            ],
+            color: LumiColors.primaryLight,
+            borderRadius: BorderRadius.circular(LumiRadii.pill),
+            border: Border.all(color: accent, width: 2.5),
+            boxShadow: LumiShadows.hard(color: accent, offset: const Offset(0, 3)),
           ),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 19, color: Colors.black87),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      message,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.black87 : Colors.black54,
-                      ),
-                    ),
-                  ],
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(title, style: LumiTheme.clanMedium(11, color: accent, height: 1)),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 12,
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                color: accent.withValues(alpha: 0.35),
+              ),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    message,
+                    style: LumiTheme.clanRegular(11, color: LumiColors.textMuted, height: 1),
+                  ),
                 ),
               ),
             ],

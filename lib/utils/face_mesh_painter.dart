@@ -1,3 +1,5 @@
+// DEBUG / reuse only: production no longer draws the face mesh overlay.
+// Kept so mesh visualization can be re-enabled for local debugging.
 import 'package:flutter/material.dart';
 import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detection.dart';
 import 'package:camera/camera.dart';

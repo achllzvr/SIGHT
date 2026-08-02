@@ -1,48 +1,141 @@
+import 'dart:async';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:google_mlkit_face_mesh_detection/google_mlkit_face_mesh_detection.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'services/detection_service.dart';
 import 'services/metrics_service.dart';
+import 'theme/lumi_theme.dart';
 import 'widgets/rounded_card.dart';
 
 class DistanceTestScreen extends StatefulWidget {
-  const DistanceTestScreen({super.key});
+  final double initialReferenceCm;
+
+  const DistanceTestScreen({super.key, this.initialReferenceCm = 30});
 
   @override
   State<DistanceTestScreen> createState() => _DistanceTestScreenState();
 }
 
 class _DistanceTestScreenState extends State<DistanceTestScreen> {
-  bool _showMesh = true;
+  late double _referenceCm;
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    DetectionService.instance.ensureMonitoringWithRetry();
+    _referenceCm = widget.initialReferenceCm;
+    unawaited(_startCamera());
   }
 
-  void _calibrate() {
-    DetectionService.instance.calibrateReferenceCm(30.0);
+  Future<void> _startCamera() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final permission = await Permission.camera.status;
+    if (!permission.isGranted) {
+      final requested = await Permission.camera.request();
+      if (!requested.isGranted) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = 'Camera is off. Turn it on in Settings so LUMI can set distance.';
+        });
+        return;
+      }
+    }
+
+    try {
+      await DetectionService.instance.acquireMonitoring(resolution: ResolutionPreset.medium);
+      // Give the controller a moment if still initializing
+      for (var i = 0; i < 10; i++) {
+        final c = DetectionService.instance.controller;
+        if (c != null && c.value.isInitialized) break;
+        await Future.delayed(const Duration(milliseconds: 200));
+      }
+      final c = DetectionService.instance.controller;
+      if (!mounted) return;
+      if (c == null || !c.value.isInitialized) {
+        setState(() {
+          _loading = false;
+          _error = 'Could not start the camera. Try again.';
+        });
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Camera error. Try again.';
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(DetectionService.instance.releaseMonitoring());
+    super.dispose();
+  }
+
+  void _calibrate([double? cm]) {
+    final target = cm ?? _referenceCm;
+    DetectionService.instance.calibrateReferenceCm(target);
     final calibrated = MetricsService.instance.calibratedNotifier.value;
     if (calibrated) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Calibrated.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Distance set at ${target.toStringAsFixed(0)} cm.')),
+      );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No face detected. Keep face centered and try again.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No face found. Keep your face in the box and try again.')),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final controller = DetectionService.instance.controller;
-    if (controller == null || !controller.value.isInitialized) {
-      DetectionService.instance.ensureMonitoringWithRetry();
+    if (_loading) {
       return const Scaffold(
-        backgroundColor: Color(0xFF1C1C1E),
-        body: Center(child: CircularProgressIndicator()),
+        backgroundColor: LumiColors.scaffoldLight,
+        body: Center(child: CircularProgressIndicator(color: LumiColors.greenMid)),
       );
     }
 
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: LumiColors.scaffoldLight,
+        appBar: AppBar(
+          title: const Text('Phone Distance'),
+          backgroundColor: Colors.transparent,
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(24),
+          child: RoundedCard(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(_error!, style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 16),
+                ElevatedButton(onPressed: _startCamera, child: const Text('Try again')),
+                TextButton(onPressed: openAppSettings, child: const Text('Open Settings')),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final controller = DetectionService.instance.controller!;
     final size = MediaQuery.of(context).size;
     var scale = size.aspectRatio * controller.value.aspectRatio;
     if (scale < 1) scale = 1 / scale;
@@ -57,35 +150,24 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Distance Monitor', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-        actions: [
-          Switch.adaptive(
-            value: _showMesh,
-            onChanged: (v) => setState(() => _showMesh = v),
-            activeColor: Colors.blueAccent,
-          ),
-        ],
+        title: const Text('Phone Distance', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       ),
       body: Stack(
         fit: StackFit.expand,
         children: [
           Transform.scale(scale: scale, child: Center(child: CameraPreview(controller))),
-          if (_showMesh)
-            ValueListenableBuilder<List<FaceMeshPoint>>(
-              valueListenable: DetectionService.instance.meshPoints,
-              builder: (_, points, __) {
-                if (points.isEmpty) return const SizedBox.shrink();
-                return IgnorePointer(
-                  child: CustomPaint(
-                    painter: FaceMeshPainter(
-                      points: points,
-                      imageSize: Size(controller.value.previewSize!.height, controller.value.previewSize!.width),
-                      widgetSize: size,
-                    ),
-                  ),
-                );
-              },
+          IgnorePointer(
+            child: Center(
+              child: Container(
+                width: size.width * 0.55,
+                height: size.width * 0.7,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: Colors.white70, width: 2),
+                ),
+              ),
             ),
+          ),
           ValueListenableBuilder<bool>(
             valueListenable: DetectionService.instance.faceDetected,
             builder: (_, detected, __) {
@@ -99,7 +181,7 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
                       Icon(Icons.warning_amber_rounded, color: Colors.white, size: 80),
                       SizedBox(height: 20),
                       Text(
-                        'No face detected. Keep your face in frame and retry.',
+                        'No face found. Keep your face in the box.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                       ),
@@ -129,21 +211,48 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
                         return Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text('Calibration Required', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                            const Text('Distance Setup', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
                             const SizedBox(height: 8),
-                            const Text('Place phone exactly 30cm away from face.', style: TextStyle(fontSize: 14, color: Colors.white70)),
+                            Text(
+                              'Hold the phone about ${_referenceCm.toStringAsFixed(0)} cm from your face and put it in the box.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 14, color: Colors.white70),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => setState(() => _referenceCm = 30),
+                                    style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+                                    child: const Text('30 cm'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => setState(() => _referenceCm = 65),
+                                    style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+                                    child: const Text('Arm\'s length'),
+                                  ),
+                                ),
+                              ],
+                            ),
                             const SizedBox(height: 14),
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: _calibrate,
+                                onPressed: () => _calibrate(_referenceCm),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF7FC86D),
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(vertical: 13),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                 ),
-                                child: const Text('Set 30cm Reference', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                                child: Text(
+                                  'Save ${_referenceCm.toStringAsFixed(0)} cm',
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                ),
                               ),
                             ),
                           ],
@@ -189,13 +298,9 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
                               )
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: TextButton(
-                              onPressed: _calibrate,
-                              child: const Text('Recalibrate', style: TextStyle(fontSize: 12.5, color: Color(0xFFA68AC0))),
-                            ),
+                          TextButton(
+                            onPressed: _calibrate,
+                            child: const Text('Set again', style: TextStyle(fontSize: 12.5, color: Color(0xFFA68AC0))),
                           )
                         ],
                       );
@@ -209,32 +314,4 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
       ),
     );
   }
-}
-
-class FaceMeshPainter extends CustomPainter {
-  final List<FaceMeshPoint> points;
-  final Size imageSize;
-  final Size widgetSize;
-
-  FaceMeshPainter({required this.points, required this.imageSize, required this.widgetSize});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.greenAccent.withValues(alpha: 0.5)..strokeWidth = 1.5..style = PaintingStyle.fill;
-    final double scaleX = widgetSize.width / imageSize.width;
-    final double scaleY = widgetSize.height / imageSize.height;
-    final double scale = scaleX > scaleY ? scaleX : scaleY;
-    final double offsetX = (widgetSize.width - imageSize.width * scale) / 2;
-    final double offsetY = (widgetSize.height - imageSize.height * scale) / 2;
-
-    for (var point in points) {
-      double x = point.x * scale + offsetX;
-      double y = point.y * scale + offsetY;
-      x = widgetSize.width - x;
-      canvas.drawCircle(Offset(x, y), 2, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

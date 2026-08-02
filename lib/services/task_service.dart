@@ -3,9 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'task_models.dart';
 import 'gamification_service.dart';
 import 'feedback_service.dart';
-import 'api_client_service.dart';
-import 'api_config_service.dart';
-import 'active_child_context_service.dart';
 
 class TaskService {
   TaskService._private();
@@ -68,39 +65,9 @@ class TaskService {
     final newTasks = <Task>[];
     final now = DateTime.now();
 
-    // Eye Health & Gamification Tasks (Default)
+    // Daily goals: eye health + gamification (prescriptions removed — use clinician share)
     newTasks.addAll(_generateEyeHealthTasks(now));
     newTasks.addAll(_generateGamificationTasks(now));
-
-    // Fetch Doctor Prescriptions from API
-    try {
-      final childId = await ActiveChildContextService.instance.getActiveChildId();
-      if (childId != null) {
-        final uri = ApiConfigService.buildUri('/api/mobile/child/$childId/prescriptions');
-        final response = await ApiClientService.instance.get(uri);
-        
-        if (response.isSuccess && response.data != null) {
-          final List<dynamic> prescriptions = response.data['data'] ?? [];
-          
-          for (var p in prescriptions) {
-            // Insert at index 0 so Doctor's orders appear at the very top
-            newTasks.insert(0, Task(
-              id: 'prescription_${p['recommendation_id']}',
-              title: '🩺 Doctor\'s Orders',
-              description: p['advice_text'], 
-              type: TaskType.eyeHealth,
-              status: TaskStatus.notStarted,
-              category: 'doctor-prescription',
-              rewardHealth: 15, // Bonus HP for following prescription
-              timePeriod: TimePeriod.daily,
-              createdAt: now,
-            ));
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Failed to load prescriptions: $e');
-    }
 
     tasksNotifier.value = newTasks;
     _updateCompletedCount();
@@ -110,30 +77,19 @@ class TaskService {
     return [
       Task(
         id: 'blink-exercise',
-        title: 'Blink Reset',
-        description: 'Complete 15 blinks to restore health.',
+        title: 'Blink with Lumi',
+        description: 'Blink 15 times to help your eyes.',
         type: TaskType.eyeHealth,
         status: TaskStatus.notStarted,
-        category: 'health-restore',
+        category: 'eye-exercise',
         rewardHealth: 10,
         createdAt: now,
         timePeriod: TimePeriod.daily,
       ),
       Task(
-        id: 'blink-exercise',
-        title: 'Blink Exercise',
-        description: 'Complete 15 consecutive blinks to reset your blink rate',
-        type: TaskType.eyeHealth,
-        status: TaskStatus.notStarted,
-        category: 'eye-exercise',
-        rewardHealth: 5,
-        createdAt: now,
-        timePeriod: TimePeriod.daily,
-      ),
-      Task(
         id: 'eye-break-afternoon',
-        title: '20-20-20 Afternoon Break',
-        description: 'Complete 1 eye break by looking 20 feet away for 20 seconds',
+        title: 'Eye Rest Break',
+        description: 'Look far away for 20 seconds for a short break.',
         type: TaskType.eyeHealth,
         status: TaskStatus.notStarted,
         category: 'eye-exercise',
@@ -143,8 +99,8 @@ class TaskService {
       ),
       Task(
         id: 'healthy-distance-session',
-        title: 'Maintain Healthy Distance',
-        description: 'Keep a safe distance (>30cm) from screen for 10 minutes',
+        title: 'Keep a Safe Distance',
+        description: 'Stay farther than 30 cm from the screen for 10 minutes.',
         type: TaskType.eyeHealth,
         status: TaskStatus.notStarted,
         targetValue: 10, // 10 minutes
@@ -164,8 +120,8 @@ class TaskService {
     return [
       Task(
         id: 'coin-goal-easy',
-        title: 'Earn 25 Coins',
-        description: 'Maintain good eye health to earn 25 Coins',
+        title: 'Earn 25 Stars',
+        description: 'Keep it up with good eye habits to earn 25 Stars',
         type: TaskType.gamification,
         status: currentCoins >= 25 ? TaskStatus.completed : TaskStatus.inProgress,
         targetValue: 25,
@@ -179,8 +135,8 @@ class TaskService {
       
       Task(
         id: 'coin-goal-medium',
-        title: 'Earn 50 Coins',
-        description: 'Maintain excellent compliance to earn 50 Coins',
+        title: 'Earn 50 Stars',
+        description: 'Keep up good habits to earn 50 Stars',
         type: TaskType.gamification,
         status: currentCoins >= 50 ? TaskStatus.completed : TaskStatus.inProgress,
         targetValue: 50,
@@ -194,8 +150,8 @@ class TaskService {
       
       Task(
         id: 'streak-goal',
-        title: 'Maintain 3-Day Streak',
-        description: 'Keep your daily compliance streak going for 3 days',
+        title: 'Keep a 3-Day Streak',
+        description: 'Keep your good habits going for 3 days',
         type: TaskType.gamification,
         status: currentStreak >= 3 ? TaskStatus.completed : TaskStatus.inProgress,
         targetValue: 3,
@@ -262,6 +218,17 @@ class TaskService {
   void _updateCompletedCount() {
     final completed = tasksNotifier.value.where((t) => t.isCompleted).length;
     completedCountNotifier.value = completed;
+    _evaluateDailyGoalStreak();
+  }
+
+  /// Core daily eye-health goals — completing all three advances the streak.
+  static const _coreDailyGoalIds = ['blink-exercise', 'eye-break-afternoon', 'healthy-distance-session'];
+
+  void _evaluateDailyGoalStreak() {
+    final coreTasks = tasksNotifier.value.where((t) => _coreDailyGoalIds.contains(t.id)).toList();
+    if (coreTasks.length < GamificationService.dailyGoalCountForStreak) return;
+    final allCoreDone = coreTasks.every((t) => t.isCompleted);
+    unawaited(GamificationService.instance.evaluateDailyStreak(dailyGoalMet: allCoreDone));
   }
 
   /// Manually mark a task as completed (for manual tasks or testing)

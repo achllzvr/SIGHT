@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:camera/camera.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import 'widgets/bottom_pill_nav.dart';
 import 'widgets/tracking_bubble.dart';
-import 'widgets/rounded_card.dart';
+import 'widgets/lumi_game_kit.dart';
+import 'widgets/animated_hue_background.dart';
 
-import 'screens/auth/auth_options_screen.dart';
+import 'screens/auth/child_login_screen.dart';
 import 'screens/child_dashboard_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/tracking_screen.dart';
@@ -20,10 +20,12 @@ import 'screens/guardian_dashboard_screen.dart';
 import 'screens/guardian_child_dashboard_screen.dart';
 import 'screens/store_screen.dart';
 import 'screens/daily_report_screen.dart';
+import 'screens/twenty_twenty_twenty_break_screen.dart';
 
 import 'screens/welcome_screen.dart';
 import 'services/active_child_context_service.dart';
 import 'services/auth_session_service.dart';
+import 'services/detection_service.dart';
 import 'services/session_timer_service.dart';
 import 'services/gamification_service.dart';
 import 'services/guardian_preferences_service.dart';
@@ -34,6 +36,14 @@ import 'services/offline_models.dart';
 import 'services/rule_engine_service.dart';
 import 'services/feedback_service.dart';
 import 'services/app_lifecycle_service.dart';
+import 'services/onboarding_service.dart';
+import 'services/metrics_service.dart';
+import 'services/watch_tracking_session.dart';
+import 'screens/parent_onboarding_screen.dart';
+import 'screens/child_setup_gate_screen.dart';
+import 'theme/lumi_theme.dart';
+import 'copy/lumi_strings.dart';
+import 'widgets/arcade/arcade_icon.dart';
 
 // Global Camera List
 List<CameraDescription> cameras = [];
@@ -50,8 +60,13 @@ final ValueNotifier<bool> mediaHubBubbleTapNotifier = ValueNotifier(false);
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Set preferred orientation to portrait for a consistent test lab
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  // Allow portrait + landscape for Watch Area, tracking, and parent screens
+  await SystemChrome.setPreferredOrientations(const [
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
 
   // Initialize feedback service
   await FeedbackService.instance.initialize();
@@ -75,101 +90,35 @@ class SightFeasibilityApp extends StatelessWidget {
       builder: (_, ThemeMode currentMode, __) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          title: 'SIGHT Lab',
+          title: LumiStrings.brand,
           themeMode: currentMode,
           routes: {
             '/welcome': (_) => const WelcomeScreen(),
-            '/auth': (_) => const AuthOptionsScreen(),
+            '/auth': (_) => const ChildLoginScreen(),
             '/child': (_) => const RootApp(),
             '/guardian': (_) => const GuardianDashboardScreen(),
             '/guardian/child-dashboard': (_) => const GuardianChildDashboardScreen(),
             '/guardian-setup': (_) => const GuardianSetupScreen(mandatory: true),
+            '/parent-onboarding': (_) => const ParentOnboardingScreen(),
+            '/child-setup-gate': (_) => const ChildSetupGateScreen(),
             '/child-dashboard': (_) => const ChildDashboardScreen(),
             '/media-hub': (_) => const MediaHubScreen(),
             '/store': (_) => const StoreScreen(),
             '/daily-report': (_) => const DailyReportScreen(),
           },
-          
-          // --- LIGHT THEME (Apple Style) ---
-          theme: ThemeData(
-            useMaterial3: true,
-            brightness: Brightness.light,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF007AFF),
-              surface: Colors.white,
-            ),
-            scaffoldBackgroundColor: const Color(0xFFF2F2F7),
-            
-            // FIX: Changed 'CardTheme' to 'CardThemeData'
-            cardTheme: CardThemeData(
-              color: Colors.white,
-              elevation: 0, // Flat design
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(color: Colors.grey.shade200, width: 1),
-              ),
-            ),
-            appBarTheme: const AppBarTheme(
-              backgroundColor: Color(0xFFF2F2F7),
-              surfaceTintColor: Colors.transparent,
-            ),
-          ),
-
-          // --- DARK THEME (Apple Style) ---
-          darkTheme: ThemeData(
-            useMaterial3: true,
-            brightness: Brightness.dark,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF0A84FF),
-              brightness: Brightness.dark,
-              surface: const Color(0xFF1C1C1E),
-            ),
-            scaffoldBackgroundColor: const Color(0xFF000000),
-            
-            // FIX: Changed 'CardTheme' to 'CardThemeData'
-            cardTheme: CardThemeData(
-              color: const Color(0xFF1C1C1E),
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            ),
-            appBarTheme: const AppBarTheme(
-              backgroundColor: Color(0xFF000000),
-              surfaceTintColor: Colors.transparent,
-            ),
-          ),
-
+          theme: LumiTheme.light(),
+          darkTheme: LumiTheme.dark(),
           home: const _SessionRouter(),
+          builder: (context, child) {
+            return AnimatedHueBackground(
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
         );
       },
     );
   }
   
-}
-
-class _ManualResumeOverlay extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: Container(
-        color: Colors.black87,
-        child: Center(
-          child: RoundedCard(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text("Session Paused", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => SessionTimerService.instance.startTracking(),
-                  child: const Text("Resume using LUMI"),
-                )
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _SessionRouter extends StatefulWidget {
@@ -189,13 +138,16 @@ class _SessionRouterState extends State<_SessionRouter> {
     }
     if (session.role == AppUserRole.guardian) {
       final hasPin = await GuardianSetupService.instance.hasGuardianPin();
-      return hasPin
+      if (!hasPin) {
+        return const GuardianSetupScreen(mandatory: true);
+      }
+      final onboarded = await OnboardingService.instance.isParentOnboardingDone();
+      return onboarded
           ? const GuardianDashboardScreen()
-          : const GuardianSetupScreen(mandatory: true);
+          : const ParentOnboardingScreen();
     }
     await ActiveChildContextService.instance.setActiveChildId(session.childId);
-    
-    // FIX: Force routing if time is up
+
     await SessionTimerService.instance.initialize();
     if (SessionTimerService.instance.remainingSecondsNotifier.value <= 0) {
       return const DailyReportScreen();
@@ -229,12 +181,14 @@ class RootApp extends StatefulWidget {
 class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
   int _index = 0;
   bool _pendingCriticalLockCheck = false;
+  bool _watchCameraAcquired = false;
 
-  final List<Widget> _pages = const [
-    HomeScreen(),
-    MediaHubScreen(),
-    TrackingScreen(),
-    TasksScreen(),
+  // MediaHub is rebuilt with [active] so WebView is torn down off-tab (M2).
+  List<Widget> get _pages => [
+    const HomeScreen(),
+    MediaHubScreen(active: _index == 1),
+    const TrackingScreen(),
+    const TasksScreen(),
   ];
 
   @override
@@ -242,6 +196,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     RuleEngineService.instance.alertLevelNotifier.addListener(_handleAlertLevelChange);
+    TwentyTwentyBreakService.instance.stateNotifier.addListener(_handleEyeRestStateChange);
 
     SessionTimerService.instance.isTimeUpNotifier.addListener(_onTimeUp);
     unawaited(LocalMetricsService.instance.initialize());
@@ -256,24 +211,48 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
 
     unawaited(_initializeGuardianPolicyState());
 
-    Permission.notification.request();
-
-    // Initialize tracking services (only for child users - DetectionService initialized here)
+    // Camera + notifications are requested during parent onboarding, not on child entry.
     try {
-      unawaited(TwentyTwentyBreakService.instance.initialize());
+      unawaited(TwentyTwentyBreakService.instance.initialize(startDetection: false));
     } catch (e) {
       debugPrint('TwentyTwentyBreakService init error: $e');
     }
 
-    // Background notification service removed (deprecated)
+    _syncCameraForTab(_index);
   }
 
   @override
   void dispose() {
     SessionTimerService.instance.isTimeUpNotifier.removeListener(_onTimeUp);
     RuleEngineService.instance.alertLevelNotifier.removeListener(_handleAlertLevelChange);
+    TwentyTwentyBreakService.instance.stateNotifier.removeListener(_handleEyeRestStateChange);
     WidgetsBinding.instance.removeObserver(this);
+    if (_watchCameraAcquired) {
+      unawaited(DetectionService.instance.releaseMonitoring());
+      _watchCameraAcquired = false;
+    }
+    unawaited(DetectionService.instance.stopMonitoring());
     super.dispose();
+  }
+
+  bool _eyeRestRouteOpen = false;
+
+  void _handleEyeRestStateChange() {
+    if (!WatchTrackingSession.instance.active.value) {
+      return;
+    }
+    final state = TwentyTwentyBreakService.instance.stateNotifier.value;
+    if (state == BreakState.askingPermission && !_eyeRestRouteOpen && mounted) {
+      _eyeRestRouteOpen = true;
+      Navigator.of(context)
+          .push(
+            MaterialPageRoute(builder: (_) => const TwentyTwentyBreakScreen()),
+          )
+          .whenComplete(() async {
+            _eyeRestRouteOpen = false;
+            await _restoreWatchTrackingAfterIntervention();
+          });
+    }
   }
 
   void _onTimeUp() {
@@ -282,7 +261,22 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _restoreWatchTrackingAfterIntervention() async {
+    if (!WatchTrackingSession.instance.active.value) return;
+    RuleEngineService.instance.triggerOverlay(AlertLevel.none, 'intervention complete');
+    MetricsService.instance.beginWatchEvaluationGrace();
+    if (!_watchCameraAcquired) {
+      await DetectionService.instance.acquireMonitoring(resolution: ResolutionPreset.low);
+      _watchCameraAcquired = true;
+    } else {
+      await DetectionService.instance.ensureMonitoringWithRetry(resolution: ResolutionPreset.low);
+    }
+  }
+
   void _handleAlertLevelChange() {
+    if (!WatchTrackingSession.instance.active.value) {
+      return;
+    }
     if (_pendingCriticalLockCheck || !mounted) {
       return;
     }
@@ -294,7 +288,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     _pendingCriticalLockCheck = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
-        if (!mounted) {
+        if (!mounted || !WatchTrackingSession.instance.active.value) {
           return;
         }
 
@@ -303,6 +297,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
             context,
             skipIfJustCompleted: TwentyTwentyBreakService.instance.breakJustCompleted,
           );
+          await _restoreWatchTrackingAfterIntervention();
         }
       } finally {
         _pendingCriticalLockCheck = false;
@@ -315,20 +310,68 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     await RuleEngineService.instance.applyGuardianPreferences(preferences);
   }
 
+  void _syncCameraForTab(int index) {
+    // Watch Area (1) = tracking + penalties. Eyes (2) = camera only (no interventions).
+    if (index == 1) {
+      final wasActive = WatchTrackingSession.instance.active.value;
+      WatchTrackingSession.instance.setActive(true);
+      if (!wasActive) {
+        TwentyTwentyBreakService.instance.resumeWatchSession();
+        MetricsService.instance.beginWatchEvaluationGrace();
+      }
+      if (!_watchCameraAcquired) {
+        _watchCameraAcquired = true;
+        unawaited(
+          DetectionService.instance.acquireMonitoring(resolution: ResolutionPreset.low),
+        );
+      } else {
+        unawaited(
+          DetectionService.instance.ensureMonitoringWithRetry(resolution: ResolutionPreset.low),
+        );
+      }
+      unawaited(DetectionService.instance.enableWakelockForMonitoring());
+    } else if (index == 2) {
+      _deactivateWatchTracking();
+      unawaited(
+        DetectionService.instance.ensureMonitoringWithRetry(resolution: ResolutionPreset.medium),
+      );
+      unawaited(DetectionService.instance.disableWakelock());
+    } else {
+      _deactivateWatchTracking();
+      unawaited(DetectionService.instance.disableWakelock());
+      unawaited(DetectionService.instance.stopMonitoring());
+    }
+  }
+
+  void _deactivateWatchTracking() {
+    if (!WatchTrackingSession.instance.active.value && !_watchCameraAcquired) return;
+    WatchTrackingSession.instance.setActive(false);
+    TwentyTwentyBreakService.instance.pauseWatchSession();
+    MetricsService.instance.clearLiveTrackingState();
+    if (_watchCameraAcquired) {
+      _watchCameraAcquired = false;
+      unawaited(DetectionService.instance.releaseMonitoring());
+    }
+  }
+
+  void _onNavTap(int i) {
+    setState(() => _index = i);
+    _syncCameraForTab(i);
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     debugPrint('AppLifecycleState changed: $state');
     try {
       unawaited(AppLifecycleService.instance.trackScreenState(state));
-      
+
       if (state == AppLifecycleState.resumed) {
-        // Show the manual resume overlay
-        SessionTimerService.instance.isPausedNotifier.value = true; 
-      } else if (state == AppLifecycleState.inactive || 
-                 state == AppLifecycleState.paused || 
-                 state == AppLifecycleState.hidden) {
-        // Ensure the timer is actually stopped in the service
-        SessionTimerService.instance.pauseTracking(); 
+        // Resume quietly — no Session Paused gate
+        SessionTimerService.instance.startTracking();
+      } else if (state == AppLifecycleState.inactive ||
+          state == AppLifecycleState.paused ||
+          state == AppLifecycleState.hidden) {
+        SessionTimerService.instance.pauseTrackingQuietly();
       }
     } catch (e) {
       debugPrint('App lifecycle tracking error: $e');
@@ -340,8 +383,9 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     return Stack(
       children: [
         Scaffold(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          backgroundColor: Colors.transparent,
           body: SafeArea(
+            bottom: false,
             child: IndexedStack(
               index: _index,
               children: _pages,
@@ -353,11 +397,14 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
               if (isFullscreen) {
                 return const SizedBox.shrink();
               }
-              return SizedBox(
-                height: 88,
-                child: BottomPillNav(
-                  currentIndex: _index,
-                  onTap: (i) => setState(() => _index = i),
+              return ColoredBox(
+                color: Colors.transparent,
+                child: SizedBox(
+                  height: 110,
+                  child: BottomPillNav(
+                    currentIndex: _index,
+                    onTap: _onNavTap,
+                  ),
                 ),
               );
             },
@@ -365,51 +412,30 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
         ),
         if (_index != 0) TrackingBubble(currentPageIndex: _index),
         const _OfflineAlertOverlay(),
-        
-        // NEW: The 2-Minute Wrap Up Warning
         ValueListenableBuilder<bool>(
           valueListenable: SessionTimerService.instance.showWrapUpWarningNotifier,
           builder: (_, showWarning, __) {
             if (!showWarning) return const SizedBox.shrink();
-            return Positioned.fill(
-              child: Container(
-                color: Colors.black87,
-                child: Center(
-                  child: RoundedCard(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.timer, size: 48, color: Colors.orange),
-                        const SizedBox(height: 16),
-                        const Text("2 Minutes Left!", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        const Text(
-                          "Wrap up now for a +20 Coin Early Bird Bonus, or use your remaining time.",
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
-                        ElevatedButton(
-                          onPressed: () => SessionTimerService.instance.wrapUpEarly(),
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF7FC86D), foregroundColor: Colors.white),
-                          child: const Text("Wrap Up Now (+20 Coins)"),
-                        ),
-                        TextButton(
-                          onPressed: () => SessionTimerService.instance.ignoreWrapUp(),
-                          child: const Text("Use Remaining Time", style: TextStyle(color: Colors.grey)),
-                        )
-                      ],
-                    ),
+            return ValueListenableBuilder<int>(
+              valueListenable: SessionTimerService.instance.remainingSecondsNotifier,
+              builder: (_, seconds, __) {
+                return Positioned.fill(
+                  child: LumiInterventionModal(
+                    title: '${LumiTheme.formatRemainingFriendly(seconds)} left!',
+                    message:
+                        'Finish early for +20 Stars, or keep watching — you\'re almost there!',
+                    mascotAsset: 'assets/mascot/mascot_great_v1.png',
+                    barrierColor: Colors.black54,
+                    ignorePointer: false,
+                    primaryLabel: 'FINISH NOW (+20 STARS)',
+                    onPrimary: () => SessionTimerService.instance.wrapUpEarly(),
+                    secondaryLabel: 'USE REMAINING TIME',
+                    onSecondary: () => SessionTimerService.instance.ignoreWrapUp(),
                   ),
-                ),
-              ),
+                );
+              },
             );
           },
-        ),
-
-        ValueListenableBuilder<bool>(
-          valueListenable: SessionTimerService.instance.isPausedNotifier,
-          builder: (_, isPaused, __) => isPaused ? _ManualResumeOverlay() : const SizedBox.shrink(),
         ),
       ],
     );
@@ -422,25 +448,26 @@ class _OfflineAlertOverlay extends StatelessWidget {
   String _friendlyMessage(String raw, AlertLevel alertLevel) {
     if (raw.isEmpty) {
       return alertLevel == AlertLevel.blinkBubble
-          ? 'Try a few natural blinks.'
+          ? 'Try a few blinks — you\'re doing great!'
           : alertLevel == AlertLevel.redOverlay
-              ? 'Please move the device a bit farther away.'
-              : 'Time for a short rest to protect your eyes.';
+              ? LumiStrings.movePhoneFarther
+              : 'Take a short rest for your eyes.';
     }
 
     switch (raw) {
       case 'face temporarily lost':
-        return 'Face not detected. Hold the device steady and look at the screen.';
+      case 'face not detected - critical tracking state':
+        return 'I can\'t see you! Look at the screen so we can keep going.';
       case 'blink suppression detected':
-        return 'Blink rhythm dropped below healthy range. Complete the blink reset to continue.';
+        return 'Blink more with Lumi to keep watching.';
       case 'critical proximity detected':
-        return 'You are too close to the screen. Please move the device farther away.';
+        return LumiStrings.movePhoneFarther;
       case 'critical proximity or eye fatigue':
-        return 'Critical eye-strain threshold reached. Please take a rest.';
+        return 'Your eyes need a short rest.';
       case 'adjust distance or blink rhythm':
-        return 'Move the screen farther and blink naturally.';
+        return 'Move the phone a little farther and blink.';
       case 'minor correction needed':
-        return 'Small adjustment needed. Keep healthy blink rhythm.';
+        return 'Small tip: blink and keep a safe distance.';
       default:
         return raw;
     }
@@ -448,228 +475,88 @@ class _OfflineAlertOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<AlertLevel>(
-      valueListenable: RuleEngineService.instance.alertLevelNotifier,
-      builder: (_, alertLevel, __) {
-        if (alertLevel == AlertLevel.none) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: WatchTrackingSession.instance.active,
+      builder: (_, trackingActive, __) {
+        if (!trackingActive) {
           return const SizedBox.shrink();
         }
+        return ValueListenableBuilder<AlertLevel>(
+          valueListenable: RuleEngineService.instance.alertLevelNotifier,
+          builder: (_, alertLevel, __) {
+            if (alertLevel == AlertLevel.none) {
+              return const SizedBox.shrink();
+            }
 
-        final message = _friendlyMessage(
-          RuleEngineService.instance.overlayMessageNotifier.value,
-          alertLevel,
-        );
-        final isDark = Theme.of(context).brightness == Brightness.dark;
+            final message = _friendlyMessage(
+              RuleEngineService.instance.overlayMessageNotifier.value,
+              alertLevel,
+            );
 
-        if (alertLevel == AlertLevel.blinkBubble) {
-          return Positioned(
-            top: MediaQuery.of(context).padding.top + 12,
-            left: 16,
-            right: 16,
-            child: IgnorePointer(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: isDark 
-                    ? const Color(0xFF2A3A2A).withValues(alpha: 0.96)
-                    : const Color(0xFFE3F1D6).withValues(alpha: 0.96),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isDark ? Colors.white70 : Colors.black87,
-                    width: 1.2,
+            if (alertLevel == AlertLevel.blinkBubble) {
+              return Positioned(
+                top: MediaQuery.of(context).padding.top + 12,
+                left: 16,
+                right: 16,
+                child: IgnorePointer(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                    color: LumiColors.primaryLight,
+                    borderRadius: BorderRadius.circular(LumiRadii.pill),
+                    border: Border.all(color: LumiColors.primaryPurple, width: ArcadeSizes.cardBorder),
+                    boxShadow: LumiShadows.hard(color: LumiColors.primaryPurple, offset: const Offset(0, 4)),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFB9E3A4).withValues(alpha: 0.6),
-                      offset: const Offset(2, 2),
-                      blurRadius: 8,
-                      spreadRadius: 1,
-                    ),
-                    BoxShadow(
-                      color: const Color(0xFFD5C2E8).withValues(alpha: 0.4),
-                      offset: const Offset(1, 1),
-                      blurRadius: 4,
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.remove_red_eye_outlined,
-                      size: 20,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        message,
-                        textAlign: TextAlign.left,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white70 : Colors.black87,
-                          fontSize: 14,
+                  child: Row(
+                    children: [
+                      Image.asset(
+                        'assets/mascot/mascot_head_v1.png',
+                        width: 32,
+                        height: 32,
+                        errorBuilder: (_, __, ___) =>
+                            const ArcadeIcon('like', size: 22),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          message,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: LumiTheme.clanMedium(13, color: LumiColors.textDark),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        }
-
-        // For redOverlay and screenLock alerts
-        late Color accentColor;
-        late Color backgroundColor;
-        late IconData alertIcon;
-        late String alertTitle;
-
-        if (alertLevel == AlertLevel.redOverlay) {
-          accentColor = isDark ? const Color(0xFFFF6B6B) : const Color(0xFFFF3B30);
-          backgroundColor = isDark ? Colors.black87 : Colors.white;
-          alertIcon = Icons.warning_amber_rounded;
-          alertTitle = 'Distance Warning';
-        } else {
-          // screenLock alert
-          accentColor = isDark
-              ? const Color(0xFF0A84FF)
-              : const Color(0xFF007AFF);
-          backgroundColor = isDark ? Colors.black87 : Colors.white;
-          alertIcon = Icons.lock_outline_rounded;
-          alertTitle = 'Time for a Break';
-        }
-
-        final overlayColor = alertLevel == AlertLevel.redOverlay
-            ? (isDark
-                ? Colors.red.withValues(alpha: 0.3)
-                : Colors.red.withValues(alpha: 0.2))
-            : (isDark
-                ? Colors.black.withValues(alpha: 0.92)
-                : Colors.black.withValues(alpha: 0.85));
-
-        return Positioned.fill(
-          child: IgnorePointer(
-            child: Container(
-              color: overlayColor,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.all(24),
-              child: Container(
-                width: double.infinity,
-                constraints: const BoxConstraints(maxWidth: 420),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-                decoration: BoxDecoration(
-                  color: backgroundColor,
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(
-                    color: accentColor.withValues(alpha: 0.5),
-                    width: 1.5,
+                    ],
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFB9E3A4).withValues(alpha: 0.4),
-                      offset: const Offset(3, 3),
-                      blurRadius: 12,
-                      spreadRadius: 2,
-                    ),
-                    BoxShadow(
-                      color: const Color(0xFFD5C2E8).withValues(alpha: 0.3),
-                      offset: const Offset(1, 1),
-                      blurRadius: 6,
-                    ),
-                  ],
+                  ),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: Icon(
-                        alertIcon,
-                        size: 40,
-                        color: accentColor,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      alertTitle,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      message,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: isDark ? Colors.white70 : Colors.black54,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                ),
+              );
+            }
+
+            final isFaceLoss = RuleEngineService.instance.overlayMessageNotifier.value.contains('face');
+            final title = alertLevel == AlertLevel.redOverlay
+                ? (isFaceLoss ? 'Where did you go?' : 'Let\'s move back a little')
+                : 'Blink with Lumi!';
+            final mascot = alertLevel == AlertLevel.screenLock
+                ? 'assets/mascot/mascot_great_v1.png'
+                : 'assets/mascot/mascot_head_v1.png';
+            final barrier = alertLevel == AlertLevel.redOverlay
+                ? LumiColors.coralTrack.withValues(alpha: 0.38)
+                : Colors.black.withValues(alpha: 0.35);
+
+            return Positioned.fill(
+              child: LumiInterventionModal(
+                title: title,
+                message: message,
+                mascotAsset: mascot,
+                barrierColor: barrier,
+                ignorePointer: true,
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
   }
 }
 
-// ignore: unused_element
-class _TimeLimitOverlay extends StatelessWidget {
-  const _TimeLimitOverlay();
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: SessionTimerService.instance.isTimeUpNotifier,
-      builder: (_, isTimeUp, __) {
-        if (!isTimeUp) return const SizedBox.shrink();
-
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        
-        return Positioned.fill(
-          child: Container(
-            color: isDark ? Colors.black.withValues(alpha: 0.95) : Colors.white.withValues(alpha: 0.95),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.timer_off_outlined, size: 80, color: Color(0xFF8F5A88)),
-                const SizedBox(height: 24),
-                Text(
-                  "Time's Up!",
-                  style: TextStyle(
-                    fontSize: 32, 
-                    fontWeight: FontWeight.w900,
-                    color: isDark ? Colors.white : Colors.black87
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  "You've reached your daily screen limit.\nGreat job protecting your eyes today!",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16, 
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? Colors.white70 : Colors.black54,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
+// Dead _TimeLimitOverlay removed — daily lock uses DailyReportScreen.

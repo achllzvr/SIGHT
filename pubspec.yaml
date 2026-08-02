@@ -29,11 +29,10 @@ dependencies:
   
   # --- AI & ML ---
   google_mlkit_face_detection: ^0.11.0
-  google_mlkit_face_mesh_detection: ^0.2.1
+  # face_mesh_detection removed — dual pipeline disabled for performance (T1)
   
-  # --- WEBVIEW & BACKGROUND NOTIFICATIONS (PHASE 2) ---
+  # --- WEBVIEW ---
   webview_flutter: ^4.4.2
-  # flutter_local_notifications removed (background notifications deprecated)
   
   # --- HAPTIC & AUDIO FEEDBACK ---
   vibration: ^3.0.0
@@ -42,6 +41,7 @@ dependencies:
   # --- CHARTS & VISUALIZATION ---
   fl_chart: ^0.68.0
   shared_preferences: ^2.5.3
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
@@ -56,3 +56,15 @@ flutter:
     - assets/mascot/
     - assets/media_hub/
     - assets/app_icons/
+    - assets/icons/arcade/
+
+  fonts:
+    - family: SuperJoyful
+      fonts:
+        - asset: assets/fonts/SuperJoyful-lxwPq.ttf
+    - family: ClanPro
+      fonts:
+        - asset: assets/fonts/FFClanProRegular.TTF
+          weight: 400
+        - asset: assets/fonts/FFClanProMedium.TTF
+          weight: 500

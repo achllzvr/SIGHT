@@ -25,6 +25,17 @@ class SessionTimerService {
     if (_initialized) return;
     
     final prefs = await GuardianPreferencesService.instance.loadPreferences();
+    await _applyDailyLimit(prefs.dailyScreenLimitMinutes);
+    _initialized = true;
+  }
+
+  /// Re-read guardian prefs and refresh remaining time (call after limit changes).
+  Future<void> reloadFromPreferences() async {
+    final prefs = await GuardianPreferencesService.instance.loadPreferences();
+    await _applyDailyLimit(prefs.dailyScreenLimitMinutes);
+  }
+
+  Future<void> _applyDailyLimit(int dailyLimitMinutes) async {
     final childId = await ActiveChildContextService.instance.getActiveChildId();
     
     int elapsedMinutes = 0;
@@ -33,16 +44,13 @@ class SessionTimerService {
       final today = DateTime(now.year, now.month, now.day);
       final tomorrow = today.add(const Duration(days: 1));
       
-      // Calculate screen time already spent today
       final todayBatches = await OfflineDatabaseService.instance.loadBatchesForChild(childId, today, tomorrow);
       elapsedMinutes = todayBatches.fold<int>(0, (sum, b) => sum + b.screenTimeMinutes);
     }
 
-    final remainingMins = prefs.dailyScreenLimitMinutes - elapsedMinutes;
+    final remainingMins = dailyLimitMinutes - elapsedMinutes;
     remainingSecondsNotifier.value = remainingMins > 0 ? remainingMins * 60 : 0;
     isTimeUpNotifier.value = remainingSecondsNotifier.value <= 0;
-    
-    _initialized = true;
   }
 
   void startTracking() {
@@ -84,6 +92,13 @@ class SessionTimerService {
     _ticker?.cancel();
     _isRunning = false;
     isPausedNotifier.value = true;
+  }
+
+  /// Pause timer without the Session Paused gate (silent background pause).
+  void pauseTrackingQuietly() {
+    _ticker?.cancel();
+    _isRunning = false;
+    isPausedNotifier.value = false;
   }
 
   void dispose() {

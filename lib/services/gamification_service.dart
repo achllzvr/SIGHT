@@ -6,6 +6,8 @@ import 'active_child_context_service.dart';
 import 'offline_database_service.dart';
 import 'offline_models.dart';
 import 'feedback_service.dart';
+import 'watch_tracking_session.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class GamificationService {
   GamificationService._private();
@@ -19,13 +21,23 @@ class GamificationService {
   final ValueNotifier<PetMood> petMoodNotifier = ValueNotifier<PetMood>(PetMood.happy);
 
   final ValueNotifier<String> mascotNameNotifier = ValueNotifier<String>('LUMI');
+  final ValueNotifier<String?> equippedItemKeyNotifier = ValueNotifier<String?>(null);
+
+  static const _equippedPrefsKey = 'lumi_equipped_item';
 
   Timer? _faceLossTimer;
 
-  // Improvement #3: Deduct 0.2 HP per second when face is lost
+  // Improvement #3: Deduct 0.2 HP per second when face is lost (Watch Area only)
   void startFaceLossPenalty() {
+    if (!WatchTrackingSession.instance.active.value) {
+      return;
+    }
     _faceLossTimer?.cancel();
     _faceLossTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!WatchTrackingSession.instance.active.value) {
+        timer.cancel();
+        return;
+      }
       double newHp = healthScoreNotifier.value - 0.2;
       healthScoreNotifier.value = newHp.clamp(0, 100).toInt();
       if (newHp <= 0) timer.cancel();
@@ -53,22 +65,16 @@ class GamificationService {
   int _pendingHpRecovery = 0;
   int _pendingCoins = 0;
 
-  // === Clinical Multipliers ===
-  // TODO: Tune Dioptric Multiplier (M1) if distance penalty is too harsh/weak
+  // === Gamification tuning (Phase 4) ===
+  // M1/M2 scale how harshly distance (diopters) and low blink rate drain HP per minute.
+  // Rewards: break/blink exercises restore HP; safe viewing minutes earn Stars (coins).
+  // Streak increments when all 3 daily eye-health goals complete (see TaskService).
   static const double _m1DioptricMultiplier = 4.0;
-  
-  // TODO: Tune Blink Multiplier (M2) if blink suppression penalty is too harsh/weak
   static const double _m2BlinkMultiplier = 4.0;
-
-  // === Recovery & Rewards ===
-  // TODO: Adjust HP recovered after completing a 20-20-20 break
   static const int _breakCompletedHpReward = 10;
-  
-  // TODO: Adjust HP recovered after completing a Blink Reset exercise
   static const int _blinkExerciseHpReward = 5;
-  
-  // TODO: Adjust Coins earned per 1 minute of completely safe viewing
   static const int _safeMinuteCoinReward = 1;
+  static const int dailyGoalCountForStreak = 3;
 
   static const int _minuteWindowSeconds = 60;
 
@@ -84,6 +90,9 @@ class GamificationService {
     dailyStreakNotifier.value = state.dailyStreak;
     petMoodNotifier.value = state.petMood;
     mascotNameNotifier.value = state.mascotName;
+
+    final prefs = await SharedPreferences.getInstance();
+    equippedItemKeyNotifier.value = prefs.getString(_equippedPrefsKey);
 
     _startMinuteBufferTimer();
     _initialized = true;
@@ -145,6 +154,9 @@ class GamificationService {
     required bool faceDetected,
   }) async {
     await initialize();
+    if (!WatchTrackingSession.instance.active.value) {
+      return;
+    }
     if (!faceDetected) {
       return;
     }
@@ -181,26 +193,30 @@ class GamificationService {
     _isFlushingMinuteBuffer = true;
 
     try {
-      final averageDistance = _distanceSamples.isEmpty
+      // Only apply Watch-Area tracking damage while session is active.
+      // Still allow pending recovery/coins from exercises breaks.
+      final trackingActive = WatchTrackingSession.instance.active.value;
+
+      final averageDistance = (!trackingActive || _distanceSamples.isEmpty)
           ? 0.0
           : _distanceSamples.reduce((a, b) => a + b) / _distanceSamples.length;
 
-      final averageBlinkRate = _blinkRateSamples.isEmpty
+      final averageBlinkRate = (!trackingActive || _blinkRateSamples.isEmpty)
           ? 0.0
           : _blinkRateSamples.reduce((a, b) => a + b) / _blinkRateSamples.length;
 
-      final int hpLoss = _calculateHpLoss(
-        averageDistanceCm: averageDistance,
-        averageBlinkRatePerMin: averageBlinkRate,
-      );
+      final int hpLoss = trackingActive
+          ? _calculateHpLoss(
+              averageDistanceCm: averageDistance,
+              averageBlinkRatePerMin: averageBlinkRate,
+            )
+          : 0;
 
-      // Economy Loop: +1 Coin for a completely safe minute
       int coinsEarned = 0;
-      if (hpLoss == 0 && _distanceSamples.isNotEmpty) {
+      if (trackingActive && hpLoss == 0 && _distanceSamples.isNotEmpty) {
         coinsEarned = _safeMinuteCoinReward;
       }
 
-      // Health Loop: Apply Damage and Recovery
       int newHp = healthScoreNotifier.value - hpLoss + _pendingHpRecovery;
       newHp = newHp.clamp(0, 100);
 
@@ -241,9 +257,29 @@ class GamificationService {
       itemName: itemName,
       cost: itemCost,
     );
-    
+
+    await equipItem(itemKey);
     await _persistState();
     return true;
+  }
+
+  Future<bool> ownsItem(String itemKey) async {
+    await initialize();
+    final childId = await ActiveChildContextService.instance.getActiveChildId();
+    return OfflineDatabaseService.instance.hasInventoryItem(childId: childId, itemKey: itemKey);
+  }
+
+  Future<void> equipItem(String itemKey) async {
+    await initialize();
+    equippedItemKeyNotifier.value = itemKey;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_equippedPrefsKey, itemKey);
+  }
+
+  Future<void> unequipItem() async {
+    equippedItemKeyNotifier.value = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_equippedPrefsKey);
   }
 
   Future<int> evaluateDailyStreak({required bool dailyGoalMet}) async {

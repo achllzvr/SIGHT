@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/guardian_setup_service.dart';
-import '../widgets/rounded_card.dart';
+import '../services/onboarding_service.dart';
+import '../theme/lumi_theme.dart';
+import '../widgets/arcade/arcade.dart';
+import '../widgets/lumi_form.dart';
+import '../widgets/lumi_shell.dart';
 import 'guardian_dashboard_screen.dart';
+import 'parent_onboarding_screen.dart';
 
 class GuardianSetupScreen extends StatefulWidget {
   final bool mandatory;
@@ -56,111 +61,80 @@ class _GuardianSetupScreenState extends State<GuardianSetupScreen> {
 
     FocusManager.instance.primaryFocus?.unfocus();
 
+    if (!mounted) return;
+    final onboarded = await OnboardingService.instance.isParentOnboardingDone();
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const GuardianDashboardScreen()),
+      MaterialPageRoute(
+        builder: (_) => onboarded
+            ? const GuardianDashboardScreen()
+            : const ParentOnboardingScreen(),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return PopScope(
       canPop: !widget.mandatory,
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: isDark
-            ? [const Color.fromARGB(255, 208, 174, 245), const Color.fromARGB(255, 163, 138, 214)]
-            : [const Color.fromARGB(255, 208, 174, 245), const Color.fromARGB(255, 163, 138, 214)],
-          ),
-        ),
       child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: SafeArea(
+        body: LumiShell(
           child: Center(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(LumiSpacing.lg),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 430),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    RoundedCard(
-                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Guardian Setup',
-                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Create a 4-digit guardian PIN. This PIN is required to access guardian controls and unlock strict rest mode.',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                          ),
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _pinController,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                            maxLength: 4,
-                            obscureText: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Guardian PIN',
-                              border: OutlineInputBorder(),
-                              counterText: '',
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: _confirmPinController,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                            maxLength: 4,
-                            obscureText: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Confirm PIN',
-                              border: OutlineInputBorder(),
-                              counterText: '',
-                            ),
-                          ),
-                          if (_error != null) ...[
-                            const SizedBox(height: 10),
-                            Text(
-                              _error!,
-                              style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                          const SizedBox(height: 14),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                              onPressed: _isSaving ? null : _savePin,
-                              child: _isSaving
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : const Text('Save Guardian PIN'),
-                            ),
-                          ),
-                        ],
+                child: ArcadeCard(
+                  padding: const EdgeInsets.all(LumiSpacing.xl),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        LumiTheme.caps('Parent Setup'),
+                        textAlign: TextAlign.center,
+                        style: LumiTheme.joyful(26, color: LumiColors.primaryPurple),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: LumiSpacing.md),
+                      Text(
+                        'Create a 4-digit parent PIN. You will need it for parent controls and to unlock strong rest mode.',
+                        style: LumiTheme.clanRegular(14, color: LumiColors.textMuted, height: 1.45),
+                      ),
+                      const SizedBox(height: LumiSpacing.lg),
+                      LumiPillField(
+                        label: 'Guardian PIN',
+                        controller: _pinController,
+                        obscureText: true,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        maxLength: 4,
+                      ),
+                      const SizedBox(height: LumiSpacing.md),
+                      LumiPillField(
+                        label: 'Confirm PIN',
+                        controller: _confirmPinController,
+                        obscureText: true,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        maxLength: 4,
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: LumiSpacing.md),
+                        Text(_error!, style: LumiTheme.clanMedium(13, color: LumiColors.redAlert)),
+                      ],
+                      const SizedBox(height: LumiSpacing.lg),
+                      ArcadeButton(
+                        text: _isSaving ? 'SAVING…' : 'SAVE GUARDIAN PIN',
+                        onTap: _isSaving ? null : _savePin,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 }

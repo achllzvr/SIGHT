@@ -232,6 +232,18 @@ class OfflineDatabaseService {
     return rows.map(CuratedMetricBatch.fromMap).toList(growable: false);
   }
 
+  /// Pending + failed curated batches for one child (all historical days).
+  Future<List<CuratedMetricBatch>> loadPendingBatchesForChild(int childId) async {
+    await initialize();
+    final rows = await _db.query(
+      'curated_batches',
+      where: 'childId = ? AND (syncState != ? OR syncState IS NULL)',
+      whereArgs: [childId, SyncState.synced.key],
+      orderBy: 'windowEnd ASC',
+    );
+    return rows.map(CuratedMetricBatch.fromMap).toList(growable: false);
+  }
+
   /// Load curated batches for a specific child within a date range
   Future<List<CuratedMetricBatch>> loadBatchesForChild(int childId, DateTime start, DateTime end) async {
     await initialize();
@@ -304,5 +316,16 @@ class OfflineDatabaseService {
       'acquiredAt': DateTime.now().millisecondsSinceEpoch,
       'syncState': SyncState.pending.key,
     });
+  }
+
+  Future<bool> hasInventoryItem({int? childId, required String itemKey}) async {
+    await initialize();
+    final rows = await _db.query(
+      'child_inventory',
+      where: childId == null ? 'itemKey = ?' : 'childId = ? AND itemKey = ?',
+      whereArgs: childId == null ? [itemKey] : [childId, itemKey],
+      limit: 1,
+    );
+    return rows.isNotEmpty;
   }
 }

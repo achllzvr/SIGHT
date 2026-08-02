@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../services/twenty_twenty_twenty_service.dart';
+import '../theme/lumi_theme.dart';
+import '../widgets/lumi_form.dart';
+import '../widgets/lumi_game_kit.dart';
 
 class TwentyTwentyBreakScreen extends StatefulWidget {
   const TwentyTwentyBreakScreen({super.key});
@@ -19,510 +23,239 @@ class _TwentyTwentyBreakScreenState extends State<TwentyTwentyBreakScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return PopScope(
       canPop: _breakService.canCancel || _breakService.stateNotifier.value == BreakState.completed,
-      onPopInvokedWithResult: (didPop, _) {
+      onPopInvokedWithResult: (didPop, _) async {
         if (didPop) {
           if (_breakService.stateNotifier.value == BreakState.completed) {
-            _breakService.resetBreakState();
+            await _breakService.resetBreakState();
           } else {
-            _breakService.cancelBreak();
+            await _breakService.cancelBreak();
           }
         } else if (!_breakService.canCancel) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Complete your break to continue.'),
+              content: Text('Finish your eye rest to keep going.'),
               duration: Duration(seconds: 2),
             ),
           );
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF1C1C1E),
-        extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          automaticallyImplyLeading: _breakService.canCancel,
-          title: const Text(
-            '20-20-20 Eye Break',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-          ),
-        ),
-        body: ValueListenableBuilder<BreakState>(
-          valueListenable: _breakService.stateNotifier,
-          builder: (context, state, _) {
-            // Show permission dialog first
-            if (state == BreakState.askingPermission) {
-              return _buildPermissionDialog(context, isDark);
-            }
-
-            // Show break activity
-            if (state == BreakState.running || state == BreakState.countdown) {
-              return _buildBreakActivity(context, screenSize, isDark);
-            }
-
-            // Show completion screen
-            if (state == BreakState.completed) {
-              return _buildCompletionScreen(context, screenSize, isDark);
-            }
-
-            return const SizedBox.expand();
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPermissionDialog(BuildContext context, bool isDark) {
-    return Center(
-      child: Dialog(
-        backgroundColor: isDark ? Colors.grey[900] : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.visibility_off, size: 48, color: Color(0xFFFF6B6B)),
-              const SizedBox(height: 16),
-              const Text(
-                'Time for an Eye Break!',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Look away from the screen at something 20 feet away for 20 seconds.',
-                style: TextStyle(fontSize: 14, color: isDark ? Colors.white70 : Colors.black54),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'When should you come back?',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildTimeButton(
-                    onPressed: () => _breakService.confirmBreakWithRecoveryTime(1),
-                    label: '1 Minute',
-                    subtitle: 'Quick',
-                  ),
-                  _buildTimeButton(
-                    onPressed: () => _breakService.confirmBreakWithRecoveryTime(2),
-                    label: '2 Minutes',
-                    subtitle: 'Extended',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'This is your only choice.',
-                style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black45, fontStyle: FontStyle.italic),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTimeButton({
-    required VoidCallback onPressed,
-    required String label,
-    required String subtitle,
-  }) {
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF7FC86D),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      child: Column(
-        children: [
-          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-          Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 11)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBreakActivity(BuildContext context, Size screenSize, bool isDark) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Background with gradient
-        Container(
+        body: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF1C1C1E), Color(0xFF2C2C2E)],
+              colors: [LumiColors.gradientTop, LumiColors.gradientBottom],
+            ),
+          ),
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(LumiSpacing.lg),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  child: ValueListenableBuilder<BreakState>(
+                    valueListenable: _breakService.stateNotifier,
+                    builder: (context, state, _) {
+                      if (state == BreakState.askingPermission) {
+                        return _buildStartCard(context);
+                      }
+                      if (state == BreakState.running || state == BreakState.countdown) {
+                        return _buildBreakActivity(context);
+                      }
+                      if (state == BreakState.completed) {
+                        return _buildCompletionScreen(context);
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ),
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
 
-        // Main timer and game area
-        Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Timer Circle
-              ValueListenableBuilder<BreakState>(
-                valueListenable: _breakService.stateNotifier,
-                builder: (_, state, __) {
-                  if (state == BreakState.countdown) {
-                    return _buildCountdownCircle();
-                  }
-                  return _buildTimerCircle();
-                },
-              ),
-              const SizedBox(height: 40),
+  Widget _modalCard({required Widget child}) {
+    return LumiGameCard(
+      borderRadius: LumiRadii.xl,
+      padding: const EdgeInsets.symmetric(horizontal: LumiSpacing.xl, vertical: LumiSpacing.xl),
+      child: child,
+    );
+  }
 
-              // Face Detection Status
-              ValueListenableBuilder<bool>(
-                valueListenable: _breakService.faceDetectedNotifier,
-                builder: (_, faceDetected, __) {
+  Widget _buildStartCard(BuildContext context) {
+    return _modalCard(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            'assets/mascot/mascot_head_v1.png',
+            width: 72,
+            height: 72,
+            errorBuilder: (_, __, ___) => const Icon(Icons.visibility_off, size: 56, color: LumiColors.greenMid),
+          ),
+          const SizedBox(height: LumiSpacing.lg),
+          const Text(
+            'Time for an Eye Rest!',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 24, height: 32 / 24, letterSpacing: -0.24, fontWeight: FontWeight.w600, color: LumiColors.textDark),
+          ),
+          const SizedBox(height: LumiSpacing.md),
+          const Text(
+            'Look at something far away for 20 seconds. Keep your face off the phone so the timer can count down.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: LumiColors.textMuted, height: 20 / 14),
+          ),
+          const SizedBox(height: LumiSpacing.lg),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(LumiSpacing.md),
+            decoration: BoxDecoration(
+              color: LumiColors.tipYellow,
+              borderRadius: BorderRadius.circular(LumiRadii.md),
+              border: Border.all(color: LumiColors.outline, width: 1),
+              boxShadow: LumiShadows.card(LumiColors.shadowFor(LumiColors.tipYellow)),
+            ),
+            child: const Text(
+              '20-20-20 tip: every 20 minutes, look 20 feet away for 20 seconds.',
+              style: TextStyle(fontSize: 12, height: 16 / 12, fontWeight: FontWeight.w500, color: LumiColors.textDark),
+            ),
+          ),
+          const SizedBox(height: LumiSpacing.xl),
+          LumiPillButton(
+            label: 'Start Eye Rest',
+            backgroundColor: LumiColors.greenSoft,
+            onPressed: () => _breakService.startBreak(),
+          ),
+          if (_breakService.canCancel) ...[
+            const SizedBox(height: LumiSpacing.md),
+            LumiPillButton(
+              label: 'Not now',
+              backgroundColor: LumiColors.cardWhite,
+              onPressed: () async {
+                await _breakService.cancelBreak();
+                if (context.mounted) Navigator.of(context).pop();
+              },
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBreakActivity(BuildContext context) {
+    return _modalCard(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Look far away',
+            style: TextStyle(fontSize: 20, height: 28 / 20, fontWeight: FontWeight.w600, color: LumiColors.textDark),
+          ),
+          const SizedBox(height: LumiSpacing.lg),
+          ValueListenableBuilder<BreakState>(
+            valueListenable: _breakService.stateNotifier,
+            builder: (_, state, __) {
+              if (state == BreakState.countdown) {
+                return const Icon(Icons.check_circle, size: 72, color: LumiColors.greenMid);
+              }
+              return ValueListenableBuilder<int>(
+                valueListenable: _breakService.secondsRemainingNotifier,
+                builder: (_, seconds, __) {
                   return Column(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: faceDetected ? const Color(0xFF7FC86D).withValues(alpha: 0.2) : const Color(0xFFFF6B6B).withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: faceDetected ? const Color(0xFF7FC86D) : const Color(0xFFFF6B6B),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              faceDetected ? Icons.check_circle : Icons.visibility_off,
-                              color: faceDetected ? const Color(0xFF7FC86D) : const Color(0xFFFF6B6B),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              faceDetected ? 'Face Detected' : 'Look Away (20 feet)',
-                              style: TextStyle(
-                                color: faceDetected ? const Color(0xFF7FC86D) : const Color(0xFFFF6B6B),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                      Text(
+                        '$seconds',
+                        style: const TextStyle(
+                          fontSize: 64,
+                          letterSpacing: -0.64,
+                          fontWeight: FontWeight.w700,
+                          color: LumiColors.greenMid,
+                          height: 1,
                         ),
                       ),
-                      const SizedBox(height: 16),
                       const Text(
-                        'When your face reappears, the timer resets.',
-                        style: TextStyle(fontSize: 12, color: Colors.white60),
+                        'seconds left',
+                        style: TextStyle(fontSize: 14, height: 20 / 14, color: LumiColors.textMuted, fontWeight: FontWeight.w500),
                       ),
                     ],
                   );
                 },
-              ),
-            ],
+              );
+            },
           ),
-        ),
-
-        // Recovery time badge (top right)
-        ValueListenableBuilder<int>(
-          valueListenable: _breakService.recoverySecondsNotifier,
-          builder: (_, recoverySeconds, __) {
-            if (recoverySeconds == 0) {
-              return const SizedBox.shrink();
-            }
-            return Positioned(
-              top: 80,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          const SizedBox(height: LumiSpacing.xl),
+          ValueListenableBuilder<bool>(
+            valueListenable: _breakService.faceDetectedNotifier,
+            builder: (_, lookingAtPhone, __) {
+              final good = !lookingAtPhone;
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: LumiSpacing.lg, vertical: LumiSpacing.md),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF7FC86D),
-                  borderRadius: BorderRadius.circular(12),
+                  color: good ? LumiColors.greenBg : LumiColors.pinkUnsafe,
+                  borderRadius: BorderRadius.circular(LumiRadii.pill),
+                  border: Border.all(color: LumiColors.outline, width: 1),
+                  boxShadow: LumiShadows.card(
+                    LumiColors.shadowFor(good ? LumiColors.greenBg : LumiColors.pinkUnsafe),
+                  ),
                 ),
                 child: Text(
-                  '${recoverySeconds ~/ 60} min break',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12),
-                ),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTimerCircle() {
-    return ValueListenableBuilder<int>(
-      valueListenable: _breakService.secondsRemainingNotifier,
-      builder: (_, seconds, __) {
-        return TweenAnimationBuilder<double>(
-          tween: Tween<double>(begin: 0, end: 1),
-          duration: const Duration(seconds: 1),
-          builder: (context, value, child) {
-            return Stack(
-              alignment: Alignment.center,
-              children: [
-                // Background circle
-                Container(
-                  width: 200,
-                  height: 200,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFF7FC86D).withValues(alpha: 0.1),
-                    border: Border.all(
-                      color: const Color(0xFF7FC86D).withValues(alpha: 0.3),
-                      width: 3,
-                    ),
-                  ),
-                ),
-                // Countdown text
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      seconds.toString(),
-                      style: const TextStyle(
-                        fontSize: 64,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF7FC86D),
-                      ),
-                    ),
-                    const Text(
-                      'seconds',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.white70,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildCountdownCircle() {
-    return ValueListenableBuilder<int>(
-      valueListenable: _breakService.countdownNotifier,
-      builder: (_, countdown, __) {
-        return SizedBox(
-          width: 200,
-          height: 200,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Animated circle
-              TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: 1, end: (20 - countdown) / 20),
-                duration: const Duration(milliseconds: 100),
-                builder: (context, progress, child) {
-                  return CustomPaint(
-                    size: const Size(200, 200),
-                    painter: CountdownPainter(progress),
-                  );
-                },
-              ),
-              // Victory icon
-              const Icon(
-                Icons.check_circle_outline,
-                color: Color(0xFF7FC86D),
-                size: 80,
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCompletionScreen(BuildContext context, Size screenSize, bool isDark) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        _breakService.resetBreakState();
-        if (context.mounted) Navigator.of(context).pop();
-      },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Background
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF1C1C1E), Color(0xFF2C2C2E)],
-              ),
-            ),
-          ),
-          // Close button (top right)
-          Positioned(
-            top: 16,
-            right: 16,
-            child: GestureDetector(
-              onTap: () {
-                _breakService.resetBreakState();
-                Navigator.of(context).pop();
-              },
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.1),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: const Icon(Icons.close, color: Colors.white, size: 24),
-              ),
-            ),
-          ),
-          // Main content
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFF7FC86D).withValues(alpha: 0.1),
-                    border: Border.all(color: const Color(0xFF7FC86D), width: 3),
-                  ),
-                  child: const Icon(
-                    Icons.check_circle,
-                    size: 80,
-                    color: Color(0xFF7FC86D),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                const Text(
-                  'Eye Break Complete!',
+                  good ? 'SAFE — looking far away' : 'Still looking at phone',
                   style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    fontSize: 12,
+                    height: 16 / 12,
+                    letterSpacing: 0.5,
+                    fontWeight: FontWeight.w600,
+                    color: good ? LumiColors.safeText : LumiColors.redAlert,
                   ),
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Your eyes are refreshed. Great job!',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white70,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 48),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    border: Border.all(color: Colors.white12),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'You can continue using the app now',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white60,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: 200,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            _breakService.resetBreakState();
-                            Navigator.of(context).pop();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF7FC86D),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          child: const Text(
-                            'Continue',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
+          ),
+          const SizedBox(height: LumiSpacing.lg),
+          const Text(
+            'Looking back at the phone resets the timer.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, height: 16 / 12, color: LumiColors.textMuted, fontWeight: FontWeight.w500),
           ),
         ],
       ),
     );
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
-}
-
-/// Custom painter for countdown progress circle
-class CountdownPainter extends CustomPainter {
-  final double progress; // 0.0 to 1.0
-
-  CountdownPainter(this.progress);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-
-    // Draw outer circle
-    canvas.drawCircle(
-      center,
-      radius,
-      Paint()
-        ..color = const Color(0xFF7FC86D).withValues(alpha: 0.2)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
+  Widget _buildCompletionScreen(BuildContext context) {
+    return _modalCard(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle, size: 80, color: LumiColors.greenMid),
+          const SizedBox(height: LumiSpacing.lg),
+          const Text(
+            'Eye Rest Done!',
+            style: TextStyle(fontSize: 24, height: 32 / 24, letterSpacing: -0.24, fontWeight: FontWeight.w600, color: LumiColors.textDark),
+          ),
+          const SizedBox(height: LumiSpacing.md),
+          const Text(
+            'Nice job — your eyes got a short break.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14, height: 20 / 14, color: LumiColors.textMuted, fontWeight: FontWeight.w400),
+          ),
+          const SizedBox(height: LumiSpacing.xl),
+          LumiPillButton(
+            label: 'Keep Going',
+            backgroundColor: LumiColors.greenSoft,
+            onPressed: () async {
+              await _breakService.resetBreakState();
+              if (context.mounted) Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
     );
-
-    // Draw progress arc
-    final paint = Paint()
-      ..color = const Color(0xFF7FC86D)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round;
-
-    final angle = progress * 2 * 3.14159;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -3.14159 / 2,
-      angle,
-      false,
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(CountdownPainter oldDelegate) {
-    return oldDelegate.progress != progress;
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../theme/lumi_theme.dart';
 import 'rounded_card.dart';
 
 class StatCard extends StatelessWidget {
@@ -17,38 +19,49 @@ class StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RoundedCard(
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: LumiSpacing.lg),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.black54,
-                      )),
-              const SizedBox(height: 6),
-              Text(value,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: Colors.green[700],
-                        fontWeight: FontWeight.bold,
-                      )),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: LumiColors.textMuted,
+                    ),
+              ),
+              const SizedBox(height: LumiSpacing.md),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: LumiColors.safeText,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
               if (subtitle != null) ...[
-                const SizedBox(height: 6),
-                Text(subtitle!, style: TextStyle(color: Colors.pink[200]))
+                const SizedBox(height: LumiSpacing.md),
+                Text(subtitle!, style: const TextStyle(color: LumiColors.accent, fontSize: 12)),
               ]
             ],
           ),
           if (status != null)
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+              padding: const EdgeInsets.symmetric(vertical: LumiSpacing.sm, horizontal: 10),
               decoration: BoxDecoration(
-                color: Colors.green[50],
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.black12),
+                color: LumiColors.greenSoft,
+                borderRadius: BorderRadius.circular(LumiRadii.pill),
+                border: Border.all(color: LumiColors.outline),
               ),
-              child: Text(status!, style: TextStyle(color: Colors.green[800])),
+              child: Text(
+                status!,
+                style: const TextStyle(
+                  color: LumiColors.safeText,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             )
         ],
       ),
