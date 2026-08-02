@@ -28,7 +28,7 @@ class GuardianAuthService {
 
     try {
       return await _localAuth.authenticate(
-        localizedReason: 'Guardian Override Required to unlock SIGHT.',
+        localizedReason: 'Guardian Override Required to unlock LUMI.',
         options: const AuthenticationOptions(
           biometricOnly: true,
           stickyAuth: true,

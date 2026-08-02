@@ -14,9 +14,9 @@ class LegalDocumentService {
       'id': -1,
       'document_type': 'terms',
       'version_number': '1.0',
-      'content_text': '''SIGHT (LUMI) Terms & Conditions
+      'content_text': '''LUMI Terms & Conditions
 
-By creating an account and using SIGHT, you agree to allow the application to collect eye-health telemetry (blink rate, viewing distance, screen time, and derived health scores) for dependent children under your guardianship for the purpose of parental monitoring and on-site clinical review via temporary access tokens.
+By creating an account and using LUMI, you agree to allow the application to collect eye-health telemetry (blink rate, viewing distance, screen time, and derived health scores) for dependent children under your guardianship for the purpose of parental monitoring and on-site clinical review via temporary access tokens.
 
 You acknowledge that temporary clinician access is granted only through parent-generated codes that expire after fifteen (15) minutes, and that you may end any active viewing session at any time from the mobile application.
 
@@ -28,7 +28,7 @@ You agree not to misuse the platform, attempt to bypass role-based access contro
       'id': -2,
       'document_type': 'privacy',
       'version_number': '1.0',
-      'content_text': '''SIGHT (LUMI) Privacy Policy
+      'content_text': '''LUMI Privacy Policy
 
 We collect account identity data, child profile data, device calibration settings, and eye-health metrics required to operate the service. Metrics are stored in our cloud database and may be cached offline on the guardian/child device.
 

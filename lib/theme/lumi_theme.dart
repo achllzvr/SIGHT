@@ -205,6 +205,8 @@ class LumiTheme {
   LumiTheme._();
 
   /// Headers / display — Super Joyful, always ALL CAPS.
+  /// Prefer [joyfulText] so casing is enforced. Prefer [caps] when passing
+  /// strings into a plain [Text] that uses [joyful].
   static TextStyle joyful(double size, {Color? color, double? height, double? letterSpacing}) =>
       TextStyle(
         fontFamily: LumiFonts.joyful,
@@ -219,6 +221,27 @@ class LumiTheme {
 
   /// Convenience: wraps [text] in ALL CAPS for Super Joyful labels.
   static String caps(String text) => text.toUpperCase();
+
+  /// Super Joyful label with forced ALL CAPS (except when [raw] is true for codes/numbers).
+  static Text joyfulText(
+    String text, {
+    required double size,
+    Color? color,
+    double? height,
+    double? letterSpacing,
+    TextAlign? textAlign,
+    int? maxLines,
+    TextOverflow? overflow,
+    bool raw = false,
+  }) {
+    return Text(
+      raw ? text : caps(text),
+      textAlign: textAlign,
+      maxLines: maxLines,
+      overflow: overflow,
+      style: joyful(size, color: color, height: height, letterSpacing: letterSpacing),
+    );
+  }
 
   /// Live countdown from remaining seconds — `M:SS` or `H:MM:SS`.
   static String formatRemaining(int seconds) {

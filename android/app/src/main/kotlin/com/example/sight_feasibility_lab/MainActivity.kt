@@ -79,7 +79,7 @@ class MainActivity : FlutterFragmentActivity() {
 		}
 
 		val subtitle = TextView(this).apply {
-			text = "Open SIGHT to complete guardian override."
+			text = "Open LUMI to complete guardian override."
 			setTextColor(Color.parseColor("#CCFFFFFF"))
 			textSize = 16f
 			gravity = Gravity.CENTER
@@ -87,7 +87,7 @@ class MainActivity : FlutterFragmentActivity() {
 		}
 
 		val button = Button(this).apply {
-			text = "Open SIGHT"
+			text = "Open LUMI"
 			textSize = 18f
 			setOnClickListener {
 				hideCriticalOverlay()
