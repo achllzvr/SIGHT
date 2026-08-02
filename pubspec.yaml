@@ -62,7 +62,7 @@ flutter:
     # AI model assets removed
     - assets/mascot/
     - assets/media_hub/
-    - assets/app_icons/
+    - assets/app_icons/lumi_app_icon.png
     - assets/icons/arcade/
 
   fonts:
