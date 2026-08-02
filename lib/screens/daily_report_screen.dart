@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:lumi/services/detection_service.dart';
-import '../services/auth_session_service.dart';
+import '../services/cleanup_service.dart';
 import '../services/gamification_service.dart';
 import '../services/session_lock_service.dart';
 import '../services/local_metrics_service.dart';
@@ -147,14 +146,11 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                 const Spacer(),
                 TextButton.icon(
                   onPressed: () async {
-                    // 1. Explicitly kill the camera and background isolates!
-                    await DetectionService.instance.dispose();
-                    
-                    // 2. Clear the session
-                    await AuthSessionService.instance.clearUserSession();
-                    
-                    if (context.mounted) Navigator.pushReplacementNamed(context, '/welcome');
-                  }, 
+                    await CleanupService.instance.performCompleteCleanup();
+                    if (context.mounted) {
+                      Navigator.of(context).pushNamedAndRemoveUntil('/welcome', (route) => false);
+                    }
+                  },
                   icon: const Icon(Icons.logout, color: LumiColors.textMuted),
                   label: const Text(
                     "Log Out",

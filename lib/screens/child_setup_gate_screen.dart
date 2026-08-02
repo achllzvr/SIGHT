@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../copy/lumi_strings.dart';
-import '../services/auth_session_service.dart';
+import '../services/cleanup_service.dart';
 import '../theme/lumi_theme.dart';
 import '../widgets/lumi_shell.dart';
 import '../widgets/rounded_card.dart';
@@ -30,7 +30,7 @@ class ChildSetupGateScreen extends StatelessWidget {
                   const SizedBox(height: LumiSpacing.lg),
                   ElevatedButton(
                     onPressed: () async {
-                      await AuthSessionService.instance.clearSession();
+                      await CleanupService.instance.performCompleteCleanup();
                       if (!context.mounted) return;
                       Navigator.of(context).pushAndRemoveUntil(
                         MaterialPageRoute(builder: (_) => const WelcomeScreen()),

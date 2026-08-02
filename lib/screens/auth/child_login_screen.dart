@@ -94,8 +94,7 @@ class _ChildLoginScreenState extends State<ChildLoginScreen> {
         label: 'Parent Login',
         onTap: _openParentLogin,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: AuthStagger(
         children: [
           const AuthHeader(title: 'Login', showUserIcon: true),
           const SizedBox(height: LumiSpacing.lg),

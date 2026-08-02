@@ -67,8 +67,7 @@ class _LegalGateScreenState extends State<LegalGateScreen> {
         enabled: _accepted && !_loading && _docs.isNotEmpty,
         onTap: _continue,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: AuthStagger(
         children: [
           AuthHeader(
             title: 'Terms & Privacy',

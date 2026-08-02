@@ -187,45 +187,63 @@ class _ChildDashboardSettingsTabState extends State<ChildDashboardSettingsTab> {
               children: [
                 Row(
                   children: [
-                    const Expanded(child: GuardianSectionTitle('Cloud Sync', size: 17)),
+                    const Expanded(child: GuardianSectionTitle('Keep data up to date', size: 17)),
+                    const SizedBox(width: LumiSpacing.sm),
                     if (_syncStatus != null)
-                      CloudSyncStatusPill(label: _syncStatus!.label, kind: _pillKind(_syncStatus!.kind)),
+                      CloudSyncStatusPill(
+                        label: _syncStatus!.shortLabel,
+                        kind: _pillKind(_syncStatus!.kind),
+                        maxWidth: 88,
+                      ),
                   ],
                 ),
                 const SizedBox(height: LumiSpacing.md),
                 ValueListenableBuilder<DateTime?>(
                   valueListenable: LocalMetricsService.instance.lastSuccessfulSyncAt,
                   builder: (_, at, __) => Text(
-                    'Last sync: ${formatLastSync(at)}',
+                    'Last updated: ${formatLastSync(at)}',
                     style: LumiTheme.clanRegular(14, color: LumiColors.textMuted),
                   ),
                 ),
+                const SizedBox(height: LumiSpacing.sm),
+                Text(
+                  'This keeps eye-care info matching between this phone and the cloud.',
+                  style: LumiTheme.clanRegular(13, color: LumiColors.textMuted, height: 1.4),
+                ),
                 const SizedBox(height: LumiSpacing.md),
                 ArcadeButton(
-                  text: 'FORCE CLOUD SYNC NOW',
+                  text: 'UPDATE NOW',
                   fontSize: 14,
                   onTap: () async {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Syncing data to cloud…'), duration: Duration(seconds: 1)),
+                    final messenger = ScaffoldMessenger.of(context);
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('Updating…'), duration: Duration(seconds: 2)),
                     );
                     try {
                       final childId = widget.childId ?? await ActiveChildContextService.instance.getActiveChildId();
-                      if (childId != null) {
-                        await LocalMetricsService.instance.forceSyncNow(childId);
+                      if (childId == null) {
+                        throw Exception('Pick a child first.');
                       }
+                      final result = await LocalMetricsService.instance.forceSyncFamily([childId]);
                       await _refreshSyncStatus();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Sync complete!'), backgroundColor: LumiColors.primaryGreen),
-                        );
-                      }
+                      if (!context.mounted) return;
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(result.message),
+                          backgroundColor: LumiColors.primaryGreen,
+                        ),
+                      );
                     } catch (e) {
                       await _refreshSyncStatus();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Sync failed: $e'), backgroundColor: LumiColors.redAlert),
-                        );
-                      }
+                      if (!context.mounted) return;
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            e.toString().replaceAll('Exception: ', ''),
+                          ),
+                          backgroundColor: LumiColors.redAlert,
+                        ),
+                      );
                     }
                   },
                 ),

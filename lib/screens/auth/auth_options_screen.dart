@@ -13,8 +13,7 @@ class AuthOptionsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AuthLandingShell(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: AuthStagger(
         children: [
           const AuthHeader(title: 'LUMI', showUserIcon: true),
           const SizedBox(height: LumiSpacing.lg),

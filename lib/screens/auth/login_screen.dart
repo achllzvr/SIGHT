@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/active_child_context_service.dart';
 import '../../services/auth_account_service.dart';
 import '../../services/auth_session_service.dart';
+import '../../services/guardian_login_sync_service.dart';
 import '../../services/guardian_setup_service.dart';
 import '../../services/onboarding_service.dart';
 import '../../theme/lumi_theme.dart';
@@ -21,6 +22,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   String? _error;
+  String _status = '';
 
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -37,6 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _status = 'Signing in…';
     });
 
     final email = _emailController.text.trim();
@@ -52,6 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!success) {
         setState(() {
           _loading = false;
+          _status = '';
           _error = 'Wrong email or password.';
         });
         return;
@@ -59,6 +63,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
       await ActiveChildContextService.instance.clearActiveChild();
       await AuthSessionService.instance.saveGuardianSession(guardianEmail: email);
+
+      if (!mounted) return;
+      setState(() => _status = 'Getting your family’s data ready…');
+
+      final sync = await GuardianLoginSyncService.instance.syncAfterLogin(
+        email,
+        onStatus: (status) {
+          if (!mounted) return;
+          setState(() => _status = status);
+        },
+      );
+
+      if (!mounted) return;
+
+      if (!sync.success) {
+        setState(() {
+          _loading = false;
+          _status = '';
+          _error = sync.message.isNotEmpty
+              ? sync.message
+              : 'We couldn’t finish updating. Check your connection and try again.';
+        });
+        return;
+      }
+
       final hasPin = await GuardianSetupService.instance.hasGuardianPin();
       final onboarded = await OnboardingService.instance.isParentOnboardingDone();
 
@@ -70,8 +99,10 @@ class _LoginScreenState extends State<LoginScreen> {
           : (onboarded ? '/guardian' : '/parent-onboarding');
       Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _loading = false;
+        _status = '';
         _error = e.toString().replaceAll('Exception: ', '');
       });
     }
@@ -99,8 +130,7 @@ class _LoginScreenState extends State<LoginScreen> {
         buttonLabel: 'Register',
         onTap: _openRegister,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: AuthStagger(
         children: [
           AuthHeader(
             title: 'Parent Login',
@@ -134,9 +164,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: LumiTheme.clanMedium(13, color: LumiColors.redAlert),
                   ),
                 ],
+                if (_loading && _status.isNotEmpty) ...[
+                  const SizedBox(height: LumiSpacing.md),
+                  Text(
+                    _status,
+                    textAlign: TextAlign.center,
+                    style: LumiTheme.clanMedium(13, color: LumiColors.textMuted),
+                  ),
+                ],
                 const SizedBox(height: LumiSpacing.xl),
                 AuthPrimaryButton(
-                  label: _loading ? 'Please wait…' : 'Login',
+                  label: _loading ? (_status.isNotEmpty ? _status : 'Please wait…') : 'Login',
                   enabled: !_loading,
                   onTap: _login,
                 ),

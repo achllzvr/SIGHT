@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../services/auth_session_service.dart';
 import '../services/cleanup_service.dart';
 import '../services/feedback_service.dart';
 import '../services/gamification_service.dart';
@@ -443,9 +442,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   Future<void> _performLogout(BuildContext context) async {
     await CleanupService.instance.performCompleteCleanup();
-    await AuthSessionService.instance.clearSession();
     if (!context.mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil('/auth', (route) => false);
+    Navigator.of(context).pushNamedAndRemoveUntil('/welcome', (route) => false);
   }
 }
 

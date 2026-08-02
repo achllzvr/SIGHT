@@ -599,6 +599,8 @@ class AuthAccountService {
       final local = accounts.firstWhere(
         (a) => a.loginCode == normalizedCode && a.passwordHash.isNotEmpty && a.passwordHash == hash,
       );
+      // Drop any prior guardian/API token so it cannot ride along with offline child auth.
+      await AuthSessionService.instance.clearAccessToken();
       return local;
     } catch (_) {
       return null;

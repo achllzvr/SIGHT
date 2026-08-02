@@ -27,7 +27,6 @@ class AuthLandingShell extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           const ColoredBox(color: _mint),
-          // Faint repeating LUMI watermark (matches mock).
           Positioned(
             top: topPad,
             left: -24,
@@ -52,16 +51,10 @@ class AuthLandingShell extends StatelessWidget {
             left: 0,
             right: 0,
             bottom: 0,
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: 1),
-              duration: const Duration(milliseconds: 420),
-              curve: Curves.easeOutCubic,
-              builder: (context, t, sheet) {
-                return Transform.translate(
-                  offset: Offset(0, (1 - t) * 28),
-                  child: Opacity(opacity: t.clamp(0.0, 1.0), child: sheet ?? const SizedBox.shrink()),
-                );
-              },
+            child: AuthFadeUp(
+              delay: const Duration(milliseconds: 40),
+              offsetY: 28,
+              duration: const Duration(milliseconds: 480),
               child: Container(
                 width: double.infinity,
                 decoration: const BoxDecoration(
@@ -99,7 +92,11 @@ class AuthLandingShell extends StatelessWidget {
                           child: Center(
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(maxWidth: 420),
-                              child: footer!,
+                              child: AuthFadeUp(
+                                delay: const Duration(milliseconds: 220),
+                                offsetY: 14,
+                                child: footer!,
+                              ),
                             ),
                           ),
                         ),
@@ -111,6 +108,98 @@ class AuthLandingShell extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Soft fade + rise entrance used across auth cards and controls.
+class AuthFadeUp extends StatefulWidget {
+  const AuthFadeUp({
+    super.key,
+    required this.child,
+    this.delay = Duration.zero,
+    this.duration = const Duration(milliseconds: 420),
+    this.offsetY = 18,
+  });
+
+  final Widget child;
+  final Duration delay;
+  final Duration duration;
+  final double offsetY;
+
+  @override
+  State<AuthFadeUp> createState() => _AuthFadeUpState();
+}
+
+class _AuthFadeUpState extends State<AuthFadeUp> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: widget.duration,
+  );
+  late final Animation<double> _opacity = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+  late final Animation<Offset> _slide = Tween<Offset>(
+    begin: Offset(0, widget.offsetY / 100),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.delayed(widget.delay, () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _slide,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Staggers children with successive fade-up delays.
+class AuthStagger extends StatelessWidget {
+  const AuthStagger({
+    super.key,
+    required this.children,
+    this.step = const Duration(milliseconds: 80),
+    this.initialDelay = const Duration(milliseconds: 90),
+  });
+
+  final List<Widget> children;
+  final Duration step;
+  final Duration initialDelay;
+
+  @override
+  Widget build(BuildContext context) {
+    var animIndex = 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final child in children)
+          if (child is SizedBox)
+            child
+          else
+            AuthFadeUp(
+              delay: initialDelay + (step * (animIndex++)),
+              offsetY: 16,
+              child: child,
+            ),
+      ],
     );
   }
 }
@@ -144,7 +233,7 @@ class AuthHeader extends StatelessWidget {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.12),
+                  color: LumiColors.primaryPurple.withValues(alpha: 0.28),
                   blurRadius: 0,
                   offset: const Offset(0, 4),
                 ),
@@ -180,11 +269,11 @@ class AuthFormCard extends StatelessWidget {
         color: LumiColors.primaryLight,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: LumiColors.secondaryLight, width: ArcadeSizes.cardBorder),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
-            color: LumiColors.secondaryLight.withValues(alpha: 0.85),
+            color: LumiColors.secondaryLight,
             blurRadius: 0,
-            offset: const Offset(0, 6),
+            offset: Offset(0, 6),
           ),
         ],
       ),
@@ -208,6 +297,7 @@ class AuthPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = enabled && onTap != null;
+    const accent = LumiColors.primaryPurple;
     return GestureDetector(
       onTap: active ? onTap : null,
       child: AnimatedOpacity(
@@ -220,20 +310,20 @@ class AuthPrimaryButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: LumiColors.secondaryPurple,
             borderRadius: BorderRadius.circular(LumiRadii.pill),
-            border: Border.all(color: LumiColors.primaryPurple, width: ArcadeSizes.buttonBorder),
+            border: Border.all(color: accent, width: ArcadeSizes.buttonBorder),
             boxShadow: active
-                ? [
+                ? const [
                     BoxShadow(
-                      color: LumiColors.primaryPurple.withValues(alpha: 0.45),
+                      color: accent,
                       blurRadius: 0,
-                      offset: const Offset(0, 4),
+                      offset: Offset(0, 4),
                     ),
                   ]
                 : const [],
           ),
           child: Text(
             LumiTheme.caps(label),
-            style: LumiTheme.clanMedium(16, color: LumiColors.primaryPurple, letterSpacing: 1.1),
+            style: LumiTheme.clanMedium(16, color: accent, letterSpacing: 1.1),
           ),
         ),
       ),
@@ -241,15 +331,18 @@ class AuthPrimaryButton extends StatelessWidget {
   }
 }
 
+/// White fill + colored border/text — secondary auth option CTA.
 class AuthOutlineButton extends StatelessWidget {
   const AuthOutlineButton({
     super.key,
     required this.label,
     required this.onTap,
+    this.accent = LumiColors.primaryPurple,
   });
 
   final String label;
   final VoidCallback? onTap;
+  final Color accent;
 
   @override
   Widget build(BuildContext context) {
@@ -262,17 +355,25 @@ class AuthOutlineButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: LumiColors.primaryLight,
           borderRadius: BorderRadius.circular(LumiRadii.pill),
-          border: Border.all(color: LumiColors.primaryPurple, width: ArcadeSizes.buttonBorder),
+          border: Border.all(color: accent, width: ArcadeSizes.buttonBorder),
+          boxShadow: [
+            BoxShadow(
+              color: accent,
+              blurRadius: 0,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Text(
           LumiTheme.caps(label),
-          style: LumiTheme.clanMedium(16, color: LumiColors.primaryPurple, letterSpacing: 1.1),
+          style: LumiTheme.clanMedium(16, color: accent, letterSpacing: 1.1),
         ),
       ),
     );
   }
 }
 
+/// Secondary option button — white background, green border/text/shadow.
 class AuthGreenButton extends StatelessWidget {
   const AuthGreenButton({
     super.key,
@@ -285,29 +386,10 @@ class AuthGreenButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return AuthOutlineButton(
+      label: label,
       onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: LumiColors.secondaryGreen,
-          borderRadius: BorderRadius.circular(LumiRadii.pill),
-          border: Border.all(color: LumiColors.primaryGreen, width: ArcadeSizes.buttonBorder),
-          boxShadow: [
-            BoxShadow(
-              color: LumiColors.primaryGreen.withValues(alpha: 0.35),
-              blurRadius: 0,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Text(
-          LumiTheme.caps(label),
-          style: LumiTheme.clanMedium(16, color: LumiColors.primaryGreen, letterSpacing: 1.1),
-        ),
-      ),
+      accent: LumiColors.primaryGreen,
     );
   }
 }
@@ -358,14 +440,14 @@ class _AuthRoundButton extends StatelessWidget {
         width: 48,
         height: 48,
         alignment: Alignment.center,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: LumiColors.primaryPurple,
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.14),
+              color: LumiColors.primaryPurple,
               blurRadius: 0,
-              offset: const Offset(0, 4),
+              offset: Offset(0, 4),
             ),
           ],
         ),
@@ -375,28 +457,39 @@ class _AuthRoundButton extends StatelessWidget {
   }
 }
 
-/// Shared page transition for auth screens.
+/// Shared auth page transition — soft fade + rise.
 Route<T> authSlideRoute<T extends Object?>(
   Widget page, {
   bool reverse = false,
 }) {
   return PageRouteBuilder<T>(
     pageBuilder: (_, __, ___) => page,
-    transitionDuration: const Duration(milliseconds: 380),
-    reverseTransitionDuration: const Duration(milliseconds: 300),
+    transitionDuration: const Duration(milliseconds: 420),
+    reverseTransitionDuration: const Duration(milliseconds: 280),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
-      final outCurved = CurvedAnimation(parent: secondaryAnimation, curve: Curves.easeInCubic);
-      final begin = Offset(reverse ? -0.1 : 0.1, 0.03);
-      return SlideTransition(
-        position: Tween<Offset>(begin: Offset.zero, end: Offset(reverse ? 0.06 : -0.06, 0))
-            .animate(outCurved),
-        child: FadeTransition(
-          opacity: Tween<double>(begin: 1, end: 0.86).animate(outCurved),
+      final curved = CurvedAnimation(
+        parent: animation,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+      final outgoing = CurvedAnimation(
+        parent: secondaryAnimation,
+        curve: Curves.easeInCubic,
+      );
+
+      final enterBegin = reverse ? const Offset(0, -0.025) : const Offset(0, 0.045);
+
+      return FadeTransition(
+        opacity: Tween<double>(begin: 1, end: 0.92).animate(outgoing),
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: Offset.zero,
+            end: reverse ? const Offset(0, 0.02) : const Offset(0, -0.015),
+          ).animate(outgoing),
           child: FadeTransition(
             opacity: curved,
             child: SlideTransition(
-              position: Tween<Offset>(begin: begin, end: Offset.zero).animate(curved),
+              position: Tween<Offset>(begin: enterBegin, end: Offset.zero).animate(curved),
               child: child,
             ),
           ),

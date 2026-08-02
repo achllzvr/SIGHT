@@ -83,8 +83,7 @@ class _VerifyEmailOtpScreenState extends State<VerifyEmailOtpScreen> {
   @override
   Widget build(BuildContext context) {
     return AuthLandingShell(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: AuthStagger(
         children: [
           const AuthHeader(title: 'Verify Email', showUserIcon: true),
           const SizedBox(height: LumiSpacing.lg),

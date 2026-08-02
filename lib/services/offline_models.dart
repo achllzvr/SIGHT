@@ -207,7 +207,7 @@ class CuratedMetricBatch {
   factory CuratedMetricBatch.fromMap(Map<String, dynamic> map) {
     final fallbackSynced = (map['synced'] as num?)?.toInt() == 1;
     return CuratedMetricBatch(
-      id: map['id'] as int?,
+      id: (map['id'] as num?)?.toInt(),
       childId: (map['childId'] as num?)?.toInt(),
       windowStart: DateTime.fromMillisecondsSinceEpoch(map['windowStart'] as int),
       windowEnd: DateTime.fromMillisecondsSinceEpoch(map['windowEnd'] as int),

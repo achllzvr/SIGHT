@@ -256,17 +256,60 @@ class OfflineDatabaseService {
     return rows.map(CuratedMetricBatch.fromMap).toList(growable: false);
   }
 
+  /// All curated batches for a child (any date).
+  Future<List<CuratedMetricBatch>> loadAllBatchesForChild(int childId) async {
+    await initialize();
+    final rows = await _db.query(
+      'curated_batches',
+      where: 'childId = ?',
+      whereArgs: [childId],
+      orderBy: 'windowEnd ASC',
+    );
+    return rows.map(CuratedMetricBatch.fromMap).toList(growable: false);
+  }
+
+  /// True if a local batch already represents this remote metric (by remoteId or exact windowEnd).
+  Future<bool> hasLocalBatchMatching({
+    required int childId,
+    String? remoteId,
+    required DateTime windowEnd,
+  }) async {
+    await initialize();
+    if (remoteId != null && remoteId.isNotEmpty) {
+      final byRemote = await _db.query(
+        'curated_batches',
+        where: 'childId = ? AND remoteId = ?',
+        whereArgs: [childId, remoteId],
+        limit: 1,
+      );
+      if (byRemote.isNotEmpty) return true;
+    }
+
+    final endMs = windowEnd.millisecondsSinceEpoch;
+    // Match within the same second (server timestamps are second-precision).
+    final byTime = await _db.query(
+      'curated_batches',
+      where: 'childId = ? AND windowEnd >= ? AND windowEnd < ?',
+      whereArgs: [childId, endMs - (endMs % 1000), endMs - (endMs % 1000) + 1000],
+      limit: 1,
+    );
+    return byTime.isNotEmpty;
+  }
+
   Future<int> markBatchSynced(int id, {String? remoteId}) async {
     await initialize();
+    final values = <String, Object?>{
+      'synced': 1,
+      'syncState': SyncState.synced.key,
+      'lastError': null,
+      'lastSyncAttemptAt': DateTime.now().millisecondsSinceEpoch,
+    };
+    if (remoteId != null) {
+      values['remoteId'] = remoteId;
+    }
     return _db.update(
       'curated_batches',
-      {
-        'synced': 1,
-        'syncState': SyncState.synced.key,
-        'lastError': null,
-        'lastSyncAttemptAt': DateTime.now().millisecondsSinceEpoch,
-        'remoteId': remoteId,
-      },
+      values,
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -297,6 +340,78 @@ class OfflineDatabaseService {
       },
       where: 'id = ?',
       whereArgs: [id],
+    );
+  }
+
+  /// Marks every pending/failed batch for [childId] as synced (after a successful upload).
+  Future<int> markAllPendingSyncedForChild(int childId) async {
+    await initialize();
+    return _db.update(
+      'curated_batches',
+      {
+        'synced': 1,
+        'syncState': SyncState.synced.key,
+        'lastError': null,
+        'lastSyncAttemptAt': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'childId = ? AND (syncState != ? OR syncState IS NULL)',
+      whereArgs: [childId, SyncState.synced.key],
+    );
+  }
+
+  /// Pending/failed batches with no child attached (can’t be uploaded until claimed).
+  Future<List<CuratedMetricBatch>> loadOrphanPendingBatches() async {
+    await initialize();
+    final rows = await _db.query(
+      'curated_batches',
+      where: 'childId IS NULL AND (syncState != ? OR syncState IS NULL)',
+      whereArgs: [SyncState.synced.key],
+      orderBy: 'windowEnd ASC',
+    );
+    return rows.map(CuratedMetricBatch.fromMap).toList(growable: false);
+  }
+
+  /// Attach orphan pending batches to [childId] so they can be uploaded.
+  Future<int> claimOrphanBatchesForChild(int childId) async {
+    await initialize();
+    return _db.update(
+      'curated_batches',
+      {'childId': childId},
+      where: 'childId IS NULL AND (syncState != ? OR syncState IS NULL)',
+      whereArgs: [SyncState.synced.key],
+    );
+  }
+
+  /// Moves pending/failed rows with missing or unknown child IDs onto [targetChildId].
+  ///
+  /// Stale local rows (from wiped/reseeded server data, childId 0, etc.) otherwise
+  /// try to upload to children that no longer exist ("Child not found").
+  Future<int> reassignUnlinkedPendingBatches({
+    required List<int> validChildIds,
+    required int targetChildId,
+  }) async {
+    await initialize();
+    if (targetChildId <= 0) return 0;
+
+    final valid = validChildIds.where((id) => id > 0).toSet().toList(growable: false);
+    if (valid.isEmpty) {
+      return _db.update(
+        'curated_batches',
+        {'childId': targetChildId},
+        where: '(syncState != ? OR syncState IS NULL) AND (childId IS NULL OR childId <= 0)',
+        whereArgs: [SyncState.synced.key],
+      );
+    }
+
+    final placeholders = List.filled(valid.length, '?').join(',');
+    return _db.rawUpdate(
+      '''
+      UPDATE curated_batches
+      SET childId = ?
+      WHERE (syncState != ? OR syncState IS NULL)
+        AND (childId IS NULL OR childId <= 0 OR childId NOT IN ($placeholders))
+      ''',
+      [targetChildId, SyncState.synced.key, ...valid],
     );
   }
 

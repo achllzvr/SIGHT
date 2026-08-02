@@ -2,12 +2,14 @@ import 'package:flutter/foundation.dart';
 
 import 'active_child_context_service.dart';
 import 'app_lifecycle_service.dart';
+import 'auth_session_service.dart';
 import 'detection_service.dart';
 import 'gamification_service.dart';
 import 'local_metrics_service.dart';
 import 'metrics_service.dart';
 import 'offline_models.dart';
 import 'rule_engine_service.dart';
+import 'session_timer_service.dart';
 import 'task_service.dart';
 import 'twenty_twenty_twenty_service.dart';
 
@@ -16,8 +18,8 @@ class CleanupService {
   CleanupService._private();
   static final CleanupService instance = CleanupService._private();
 
-  /// Complete cleanup - stops all tracking, timers, services
-  /// Call this when user logs out to prevent background tracking
+  /// Complete cleanup - stops all tracking, timers, services, and auth identity.
+  /// Call this when user logs out to prevent background tracking / session leaks.
   Future<void> performCompleteCleanup() async {
     if (kDebugMode) {
       debugPrint('[CleanupService] Starting complete cleanup...');
@@ -54,27 +56,40 @@ class CleanupService {
         debugPrint('[CleanupService] ✓ TwentyTwentyBreakService disposed');
       }
 
-      // 6. Clear gamification notifiers
+      // 6. Stop session timer
+      SessionTimerService.instance.dispose();
+      if (kDebugMode) {
+        debugPrint('[CleanupService] ✓ SessionTimerService disposed');
+      }
+
+      // 7. Clear gamification notifiers
       GamificationService.instance.healthScoreNotifier.value = 100;
       GamificationService.instance.coinsNotifier.value = 0;
       GamificationService.instance.dailyStreakNotifier.value = 0;
+      GamificationService.instance.equippedItemKeyNotifier.value = null;
       if (kDebugMode) {
         debugPrint('[CleanupService] ✓ GamificationService cleared');
       }
 
-      // 7. Clear metrics notifiers
+      // 8. Clear metrics notifiers
       MetricsService.instance.clearAllMetrics();
       if (kDebugMode) {
         debugPrint('[CleanupService] ✓ MetricsService cleared');
       }
 
-      // 8. Clear active child context
+      // 9. Clear active child context
       await ActiveChildContextService.instance.clearActiveChild();
       if (kDebugMode) {
         debugPrint('[CleanupService] ✓ ActiveChildContextService cleared');
       }
 
-      // 9. Reset rule engine state
+      // 10. Clear auth token + role identity (prevents cold-start auto-login)
+      await AuthSessionService.instance.clearAllAuthState();
+      if (kDebugMode) {
+        debugPrint('[CleanupService] ✓ AuthSessionService cleared');
+      }
+
+      // 11. Reset rule engine state
       RuleEngineService.instance.triggerOverlay(AlertLevel.none, 'session cleared');
       if (kDebugMode) {
         debugPrint('[CleanupService] ✓ RuleEngineService reset');
@@ -87,6 +102,11 @@ class CleanupService {
       if (kDebugMode) {
         debugPrint('[CleanupService] ❌ Error during cleanup: $e');
       }
+      // Always attempt auth wipe even if earlier steps fail.
+      try {
+        await AuthSessionService.instance.clearAllAuthState();
+        await ActiveChildContextService.instance.clearActiveChild();
+      } catch (_) {}
     }
   }
 

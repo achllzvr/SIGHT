@@ -585,6 +585,15 @@ class DailyUsagePatternChart extends StatelessWidget {
     required this.batchesByDay,
   });
 
+  double _axisInterval(double maxY) {
+    if (maxY <= 15) return 5;
+    if (maxY <= 30) return 5;
+    if (maxY <= 60) return 10;
+    if (maxY <= 90) return 15;
+    if (maxY <= 120) return 20;
+    return (maxY / 4).ceilToDouble().clamp(10, 60);
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
@@ -622,6 +631,14 @@ class DailyUsagePatternChart extends StatelessWidget {
       ));
     }
 
+    // Scale the Y-axis to today's peak block so bars never overflow the chart.
+    final dataMax = chartData.fold<int>(
+      0,
+      (max, d) => d.screenTimeMinutes > max ? d.screenTimeMinutes : max,
+    );
+    final maxY = (dataMax <= 0 ? 60 : dataMax).toDouble();
+    final interval = _axisInterval(maxY);
+
     return RoundedCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -641,7 +658,8 @@ class DailyUsagePatternChart extends StatelessWidget {
             child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
-                maxY: 60,
+                minY: 0,
+                maxY: maxY,
                 barTouchData: BarTouchData(
                   enabled: true,
                   touchTooltipData: BarTouchTooltipData(
@@ -658,9 +676,13 @@ class DailyUsagePatternChart extends StatelessWidget {
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 40,
+                      interval: interval,
                       getTitlesWidget: (value, meta) {
+                        if (value < 0 || value > maxY + 0.001) {
+                          return const SizedBox.shrink();
+                        }
                         return Text(
-                          '${value.toInt()}m',
+                          '${value.round()}m',
                           style: const TextStyle(fontSize: 10, color: LumiColors.textMuted),
                         );
                       },
@@ -670,8 +692,12 @@ class DailyUsagePatternChart extends StatelessWidget {
                     sideTitles: SideTitles(
                       showTitles: true,
                       getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index < 0 || index >= chartData.length) {
+                          return const SizedBox.shrink();
+                        }
                         return Text(
-                          chartData[value.toInt()].label,
+                          chartData[index].label,
                           style: const TextStyle(fontSize: 10, color: LumiColors.textMuted),
                         );
                       },
@@ -681,7 +707,7 @@ class DailyUsagePatternChart extends StatelessWidget {
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  horizontalInterval: 10,
+                  horizontalInterval: interval,
                   getDrawingHorizontalLine: (value) {
                     return const FlLine(
                       color: LumiColors.outline,
@@ -696,10 +722,10 @@ class DailyUsagePatternChart extends StatelessWidget {
                     x: index,
                     barRods: [
                       BarChartRodData(
-                        toY: chartData[index].screenTimeMinutes.toDouble(),
+                        toY: chartData[index].screenTimeMinutes.toDouble().clamp(0, maxY),
                         color: LumiColors.purpleMid,
                         width: 14,
-                        borderRadius: const BorderRadius.all(Radius.circular(LumiRadii.sm)),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(LumiRadii.sm)),
                       ),
                     ],
                   ),

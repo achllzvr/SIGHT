@@ -10,6 +10,7 @@ import 'widgets/lumi_game_kit.dart';
 import 'widgets/animated_hue_background.dart';
 
 import 'screens/auth/child_login_screen.dart';
+import 'screens/auth/login_screen.dart';
 import 'screens/child_dashboard_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/tracking_screen.dart';
@@ -28,6 +29,7 @@ import 'services/auth_session_service.dart';
 import 'services/detection_service.dart';
 import 'services/session_timer_service.dart';
 import 'services/gamification_service.dart';
+import 'services/guardian_login_sync_service.dart';
 import 'services/guardian_preferences_service.dart';
 import 'services/guardian_setup_service.dart';
 import 'services/local_metrics_service.dart';
@@ -134,9 +136,28 @@ class _SessionRouterState extends State<_SessionRouter> {
   Future<Widget> _resolveInitialScreen() async {
     final session = await AuthSessionService.instance.loadUserSession();
     if (session == null) {
+      // Ensure leftover active-child / token crumbs cannot affect a fresh start.
+      await ActiveChildContextService.instance.clearActiveChild();
       return const WelcomeScreen();
     }
+
     if (session.role == AppUserRole.guardian) {
+      final email = session.guardianEmail;
+      if (email == null || email.isEmpty) {
+        await AuthSessionService.instance.clearAllAuthState();
+        await ActiveChildContextService.instance.clearActiveChild();
+        return const WelcomeScreen();
+      }
+
+      // Parent sessions should never keep a child context hot.
+      await ActiveChildContextService.instance.clearActiveChild();
+
+      final sync = await GuardianLoginSyncService.instance.syncAfterLogin(email);
+      if (!sync.success) {
+        debugPrint('[SessionRouter] guardian resume sync failed: ${sync.message}');
+        // Keep identity so they can retry login, but do not open the dashboard.
+        return const LoginScreen();
+      }
       final hasPin = await GuardianSetupService.instance.hasGuardianPin();
       if (!hasPin) {
         return const GuardianSetupScreen(mandatory: true);
@@ -146,6 +167,15 @@ class _SessionRouterState extends State<_SessionRouter> {
           ? const GuardianDashboardScreen()
           : const ParentOnboardingScreen();
     }
+
+    // Child session requires a login code (loadUserSession already enforces this).
+    final code = session.childLoginCode;
+    if (code == null || code.isEmpty) {
+      await AuthSessionService.instance.clearAllAuthState();
+      await ActiveChildContextService.instance.clearActiveChild();
+      return const WelcomeScreen();
+    }
+
     await ActiveChildContextService.instance.setActiveChildId(session.childId);
 
     await SessionTimerService.instance.initialize();

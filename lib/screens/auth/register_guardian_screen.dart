@@ -147,12 +147,12 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
 
   Widget _stepTransition(Widget child) {
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 360),
+      duration: const Duration(milliseconds: 380),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (widget, animation) {
         final offset = Tween<Offset>(
-          begin: Offset(_step == 1 ? 0.12 : -0.12, 0),
+          begin: const Offset(0, 0.04),
           end: Offset.zero,
         ).animate(animation);
         return FadeTransition(
@@ -177,8 +177,7 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
               onTap: _goToLogin,
             )
           : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: AuthStagger(
         children: [
           AuthHeader(
             title: 'Create an Account',

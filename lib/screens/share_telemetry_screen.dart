@@ -49,20 +49,22 @@ class _ShareTelemetryScreenState extends State<ShareTelemetryScreen> {
       _loading = true;
       _error = null;
     });
-    final token = await TemporaryAccessService.instance.generateToken(widget.childId);
+    final result = await TemporaryAccessService.instance.generateToken(widget.childId);
     if (!mounted) return;
-    if (token == null) {
+    if (!result.success || result.data == null) {
       setState(() {
         _loading = false;
-        _error = 'Could not generate access code. Try again.';
+        _error = result.message ?? 'Could not generate access code. Try again.';
       });
       return;
     }
+    final token = result.data!;
     setState(() {
       _token = token;
       _loading = false;
       final expires = DateTime.tryParse(token['expires_at']?.toString() ?? '');
       _remaining = expires?.difference(DateTime.now()) ?? const Duration(minutes: 15);
+      if (_remaining.isNegative) _remaining = Duration.zero;
     });
     _countdown?.cancel();
     _countdown = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -107,7 +109,10 @@ class _ShareTelemetryScreenState extends State<ShareTelemetryScreen> {
     final payload = _token?['qr_payload']?.toString() ?? '';
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       body: LumiShell(
+        // Expanded layout below — must not wrap in SingleChildScrollView.
+        scrollable: false,
         child: Padding(
           padding: const EdgeInsets.all(LumiSpacing.lg),
           child: ArcadeCard(
@@ -176,7 +181,7 @@ class _ShareTelemetryScreenState extends State<ShareTelemetryScreen> {
                         Text(
                           _error!,
                           textAlign: TextAlign.center,
-                          style: LumiTheme.clanRegular(14, color: LumiColors.textDark, height: 1.45),
+                          style: LumiTheme.clanRegular(14, color: LumiColors.redAlert, height: 1.45),
                         ),
                         const SizedBox(height: LumiSpacing.md),
                         ArcadeButton(text: 'RETRY', expand: false, onTap: _generate),
@@ -205,21 +210,23 @@ class _ShareTelemetryScreenState extends State<ShareTelemetryScreen> {
                         ),
                         const SizedBox(height: LumiSpacing.lg),
                         if (payload.isNotEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(LumiSpacing.md),
-                            decoration: BoxDecoration(
-                              color: LumiColors.cardWhite,
-                              borderRadius: BorderRadius.circular(LumiRadii.lg),
-                              border: Border.all(
-                                color: LumiColors.secondaryLight,
-                                width: ArcadeSizes.cardBorder,
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.all(LumiSpacing.md),
+                              decoration: BoxDecoration(
+                                color: LumiColors.cardWhite,
+                                borderRadius: BorderRadius.circular(LumiRadii.lg),
+                                border: Border.all(
+                                  color: LumiColors.secondaryLight,
+                                  width: ArcadeSizes.cardBorder,
+                                ),
+                                boxShadow: LumiShadows.card(),
                               ),
-                              boxShadow: LumiShadows.card(),
-                            ),
-                            child: QrImageView(
-                              data: payload,
-                              version: QrVersions.auto,
-                              size: 200,
+                              child: QrImageView(
+                                data: payload,
+                                version: QrVersions.auto,
+                                size: 200,
+                              ),
                             ),
                           ),
                         const Spacer(),

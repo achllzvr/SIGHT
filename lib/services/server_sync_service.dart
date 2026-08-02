@@ -75,6 +75,64 @@ class ServerSyncService {
     }
   }
 
+  /// Pulls all cloud metrics for a child (paginated). Used on guardian login.
+  Future<SyncOperationResult<List<Map<String, dynamic>>>> fetchAllChildMetrics(int childId) async {
+    if (!ApiConfigService.isConfigured) {
+      return const SyncOperationResult(success: false, error: 'API base URL is not configured.');
+    }
+
+    try {
+      final all = <Map<String, dynamic>>[];
+      var page = 1;
+      var totalPages = 1;
+
+      while (page <= totalPages) {
+        final uri = ApiConfigService.buildUri(
+          '/api/shared/child/$childId/metrics',
+          queryParameters: {
+            'page': '$page',
+            'per_page': '100',
+          },
+        );
+        final response = await ApiClientService.instance.get(uri);
+        if (!response.isSuccess) {
+          return SyncOperationResult(
+            success: false,
+            error: 'Metrics fetch failed (${response.statusCode})',
+          );
+        }
+
+        final data = response.data;
+        if (data is! Map) {
+          return const SyncOperationResult(success: false, error: 'Invalid metrics response.');
+        }
+
+        final items = data['data'];
+        if (items is List) {
+          for (final item in items) {
+            if (item is Map<String, dynamic>) {
+              all.add(item);
+            } else if (item is Map) {
+              all.add(Map<String, dynamic>.from(item));
+            }
+          }
+        }
+
+        final pagination = data['pagination'];
+        if (pagination is Map) {
+          totalPages = (pagination['total_pages'] as num?)?.toInt() ?? page;
+        } else {
+          break;
+        }
+        page++;
+      }
+
+      return SyncOperationResult(success: true, data: all);
+    } catch (e) {
+      return SyncOperationResult(success: false, error: 'Metrics fetch exception: $e');
+    }
+  }
+
   Future<SyncOperationResult<GuardianPreferences>> fetchSessionLimits(int childId) async {
     if (!ApiConfigService.isConfigured) {
       return const SyncOperationResult(success: false, error: 'API base URL is not configured.');
@@ -94,11 +152,12 @@ class ServerSyncService {
 
       Map<String, dynamic>? source;
       final data = response.data;
-      if (data is Map<String, dynamic>) {
-        if (data['data'] is Map<String, dynamic>) {
-          source = data['data'] as Map<String, dynamic>;
+      if (data is Map) {
+        final root = Map<String, dynamic>.from(data);
+        if (root['data'] is Map) {
+          source = Map<String, dynamic>.from(root['data'] as Map);
         } else {
-          source = data;
+          source = root;
         }
       }
 
@@ -106,14 +165,25 @@ class ServerSyncService {
         return const SyncOperationResult(success: false, error: 'No session limits data found.');
       }
 
+      bool asBool(dynamic value, {bool fallback = true}) {
+        if (value is bool) return value;
+        if (value is num) return value != 0;
+        if (value is String) {
+          final normalized = value.trim().toLowerCase();
+          if (normalized == '1' || normalized == 'true') return true;
+          if (normalized == '0' || normalized == 'false') return false;
+        }
+        return fallback;
+      }
+
       final preferences = const GuardianPreferences.defaults().copyWith(
         selectedChildId: childId,
         dailyScreenLimitMinutes: (source['daily_limit_minutes'] as num?)?.toInt() ?? 120,
         monitoringMode: (source['mode'] as String?) ?? 'Moderate',
-        isActive: (source['is_active'] as num?)?.toInt() != 0,
+        isActive: asBool(source['is_active']),
         distanceAlertThresholdCm: (source['harmful_distance_threshold'] as num?)?.toDouble() ?? 30,
         criticalDistanceThresholdCm: (source['critical_distance_threshold'] as num?)?.toDouble() ?? 10,
-        autoEnforceBreaks: (source['auto_enforce_breaks'] as num?)?.toInt() != 0,
+        autoEnforceBreaks: asBool(source['auto_enforce_breaks']),
       );
 
       return SyncOperationResult(success: true, data: preferences);

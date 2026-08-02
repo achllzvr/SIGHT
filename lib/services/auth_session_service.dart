@@ -44,6 +44,10 @@ class AuthSessionService {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   Future<void> saveAccessToken(String token) async {
+    if (token.trim().isEmpty) {
+      await _storage.delete(key: _accessTokenKey);
+      return;
+    }
     await _storage.write(key: _accessTokenKey, value: token);
   }
 
@@ -51,9 +55,26 @@ class AuthSessionService {
     return _storage.read(key: _accessTokenKey);
   }
 
-  Future<void> clearSession() async {
+  Future<void> clearAccessToken() async {
     await _storage.delete(key: _accessTokenKey);
   }
+
+  /// Clears access token + role identity. Prefer this on every logout.
+  Future<void> clearAllAuthState() async {
+    await Future.wait([
+      _storage.delete(key: _accessTokenKey),
+      _storage.delete(key: _userRoleKey),
+      _storage.delete(key: _guardianEmailKey),
+      _storage.delete(key: _childLoginCodeKey),
+      _storage.delete(key: _childIdKey),
+    ]);
+  }
+
+  /// @deprecated Use [clearAllAuthState] — kept so old call sites clear fully.
+  Future<void> clearSession() => clearAllAuthState();
+
+  /// @deprecated Use [clearAllAuthState] — kept so old call sites clear fully.
+  Future<void> clearUserSession() => clearAllAuthState();
 
   Future<void> saveGuardianSession({required String guardianEmail}) async {
     await _storage.write(key: _userRoleKey, value: AppUserRole.guardian.key);
@@ -85,6 +106,8 @@ class AuthSessionService {
     if (role == AppUserRole.guardian) {
       final email = await _storage.read(key: _guardianEmailKey);
       if (email == null || email.isEmpty) {
+        // Orphaned role key — wipe so cold start cannot half-restore.
+        await clearAllAuthState();
         return null;
       }
 
@@ -93,6 +116,7 @@ class AuthSessionService {
 
     final code = await _storage.read(key: _childLoginCodeKey);
     if (code == null || code.isEmpty) {
+      await clearAllAuthState();
       return null;
     }
 
@@ -102,12 +126,5 @@ class AuthSessionService {
       childLoginCode: code,
       childId: int.tryParse(childIdRaw ?? ''),
     );
-  }
-
-  Future<void> clearUserSession() async {
-    await _storage.delete(key: _userRoleKey);
-    await _storage.delete(key: _guardianEmailKey);
-    await _storage.delete(key: _childLoginCodeKey);
-    await _storage.delete(key: _childIdKey);
   }
 }

@@ -414,6 +414,60 @@ class LumiTheme {
         titleTextStyle: joyful(22, color: LumiColors.textDark),
         contentTextStyle: clanRegular(14, color: LumiColors.textMuted),
       ),
+      datePickerTheme: DatePickerThemeData(
+        backgroundColor: LumiColors.cardWhite,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(LumiRadii.lg),
+          side: const BorderSide(color: LumiColors.secondaryLight, width: ArcadeSizes.cardBorder),
+        ),
+        headerBackgroundColor: LumiColors.secondaryPurple,
+        headerForegroundColor: LumiColors.primaryPurple,
+        headerHeadlineStyle: joyful(24, color: LumiColors.primaryPurple),
+        headerHelpStyle: clanMedium(13, color: LumiColors.primaryPurple),
+        weekdayStyle: clanMedium(12, color: LumiColors.textMuted),
+        dayStyle: clanMedium(14, color: LumiColors.textDark),
+        yearStyle: clanMedium(14, color: LumiColors.textDark),
+        dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) return LumiColors.textDisabled;
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          return LumiColors.textDark;
+        }),
+        dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return LumiColors.primaryPurple;
+          return Colors.transparent;
+        }),
+        todayForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          return LumiColors.primaryPurple;
+        }),
+        todayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return LumiColors.primaryPurple;
+          return LumiColors.secondaryPurple;
+        }),
+        todayBorder: const BorderSide(color: LumiColors.primaryPurple, width: 1.5),
+        yearForegroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.disabled)) return LumiColors.textDisabled;
+          if (states.contains(WidgetState.selected)) return Colors.white;
+          return LumiColors.textDark;
+        }),
+        yearBackgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return LumiColors.primaryPurple;
+          return Colors.transparent;
+        }),
+        rangePickerHeaderBackgroundColor: LumiColors.secondaryPurple,
+        rangePickerHeaderForegroundColor: LumiColors.primaryPurple,
+        dividerColor: LumiColors.outline,
+        confirmButtonStyle: TextButton.styleFrom(
+          foregroundColor: LumiColors.primaryPurple,
+          textStyle: clanMedium(14, color: LumiColors.primaryPurple, letterSpacing: 0.6),
+        ),
+        cancelButtonStyle: TextButton.styleFrom(
+          foregroundColor: LumiColors.textMuted,
+          textStyle: clanMedium(14, color: LumiColors.textMuted, letterSpacing: 0.6),
+        ),
+      ),
     );
   }
 
@@ -444,6 +498,51 @@ class LumiTheme {
         toolbarHeight: 64,
         titleTextStyle: joyful(20, color: Colors.white),
       ),
+    );
+  }
+
+  /// Themed Material date picker matching LUMI arcade surfaces and typography.
+  static Future<DateTime?> pickDate(
+    BuildContext context, {
+    required DateTime initialDate,
+    required DateTime firstDate,
+    required DateTime lastDate,
+    String? helpText,
+    String? cancelText,
+    String? confirmText,
+  }) {
+    final clampedInitial = initialDate.isBefore(firstDate)
+        ? firstDate
+        : (initialDate.isAfter(lastDate) ? lastDate : initialDate);
+
+    return showDatePicker(
+      context: context,
+      initialDate: clampedInitial,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      helpText: helpText,
+      cancelText: cancelText ?? 'CANCEL',
+      confirmText: confirmText ?? 'OK',
+      builder: (context, child) {
+        final base = light();
+        return Theme(
+          data: base.copyWith(
+            colorScheme: base.colorScheme.copyWith(
+              primary: LumiColors.primaryPurple,
+              onPrimary: Colors.white,
+              secondary: LumiColors.primaryGreen,
+              surface: LumiColors.cardWhite,
+              onSurface: LumiColors.textDark,
+              outline: LumiColors.outline,
+            ),
+            textTheme: base.textTheme,
+            dialogTheme: base.dialogTheme,
+            datePickerTheme: base.datePickerTheme,
+            textButtonTheme: base.textButtonTheme,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }

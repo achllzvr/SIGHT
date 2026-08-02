@@ -20,7 +20,7 @@ class WelcomeScreen extends StatelessWidget {
           );
         },
       ),
-      child: Column(
+      child: AuthStagger(
         children: [
           const SizedBox(height: LumiSpacing.xl),
           Text(
