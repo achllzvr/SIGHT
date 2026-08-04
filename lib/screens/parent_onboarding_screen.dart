@@ -99,6 +99,9 @@ class _ParentOnboardingScreenState extends State<ParentOnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: LumiShell(
+        // Must be false: this screen uses Expanded. A scrollable shell gives
+        // unbounded height and the step body renders blank.
+        scrollable: false,
         watermark: LumiStrings.brand,
         child: SafeArea(
           child: Padding(

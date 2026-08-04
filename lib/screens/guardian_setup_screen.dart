@@ -64,12 +64,14 @@ class _GuardianSetupScreenState extends State<GuardianSetupScreen> {
     if (!mounted) return;
     final onboarded = await OnboardingService.instance.isParentOnboardingDone();
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => onboarded
-            ? const GuardianDashboardScreen()
-            : const ParentOnboardingScreen(),
-      ),
+
+    final Widget next = onboarded
+        ? const GuardianDashboardScreen()
+        : const ParentOnboardingScreen();
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => next),
+      (_) => false,
     );
   }
 

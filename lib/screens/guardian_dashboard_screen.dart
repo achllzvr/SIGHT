@@ -684,7 +684,7 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
               child: Tooltip(
                 message: 'Share with doctor',
                 child: ArcadeIconBadge(
-                  arcadeIcon: 'users',
+                  arcadeIcon: 'user',
                   accentColor: LumiColors.primaryPurple,
                   onTap: _showShareModal,
                 ),

@@ -9,7 +9,10 @@ import '../../services/onboarding_service.dart';
 import '../../theme/lumi_theme.dart';
 import '../../widgets/arcade/arcade.dart';
 import '../../widgets/auth_landing_shell.dart';
+import '../guardian_dashboard_screen.dart';
+import '../guardian_setup_screen.dart';
 import '../legal_gate_screen.dart';
+import '../parent_onboarding_screen.dart';
 import 'child_login_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -77,27 +80,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      if (!sync.success) {
-        setState(() {
-          _loading = false;
-          _status = '';
-          _error = sync.message.isNotEmpty
-              ? sync.message
-              : 'We couldn’t finish updating. Check your connection and try again.';
-        });
-        return;
-      }
-
       final hasPin = await GuardianSetupService.instance.hasGuardianPin();
       final onboarded = await OnboardingService.instance.isParentOnboardingDone();
 
       if (!mounted) return;
       FocusManager.instance.primaryFocus?.unfocus();
 
-      final route = !hasPin
-          ? '/guardian-setup'
-          : (onboarded ? '/guardian' : '/parent-onboarding');
-      Navigator.of(context).pushNamedAndRemoveUntil(route, (route) => false);
+      if (!sync.success) {
+        debugPrint('[LoginScreen] post-login sync failed: ${sync.message}');
+      }
+
+      final Widget nextScreen;
+      if (!hasPin) {
+        nextScreen = const GuardianSetupScreen(mandatory: true);
+      } else if (!onboarded) {
+        nextScreen = const ParentOnboardingScreen();
+      } else {
+        nextScreen = const GuardianDashboardScreen();
+      }
+
+      // Explicit page route — named pushAndRemoveUntil against `home` was
+      // leaving MaterialApp.builder with a null child (blank screen).
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => nextScreen),
+        (_) => false,
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {

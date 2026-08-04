@@ -112,8 +112,13 @@ class SightFeasibilityApp extends StatelessWidget {
           darkTheme: LumiTheme.dark(),
           home: const _SessionRouter(),
           builder: (context, child) {
+            // Never render an empty child — after pushAndRemoveUntil, `child`
+            // can briefly (or incorrectly) be null and look like a blank screen.
             return AnimatedHueBackground(
-              child: child ?? const SizedBox.shrink(),
+              child: child ??
+                  const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  ),
             );
           },
         );
@@ -155,8 +160,7 @@ class _SessionRouterState extends State<_SessionRouter> {
       final sync = await GuardianLoginSyncService.instance.syncAfterLogin(email);
       if (!sync.success) {
         debugPrint('[SessionRouter] guardian resume sync failed: ${sync.message}');
-        // Keep identity so they can retry login, but do not open the dashboard.
-        return const LoginScreen();
+        // Still open the guardian flow — sync can retry from the dashboard.
       }
       final hasPin = await GuardianSetupService.instance.hasGuardianPin();
       if (!hasPin) {
@@ -190,6 +194,10 @@ class _SessionRouterState extends State<_SessionRouter> {
     return FutureBuilder<Widget>(
       future: _initialScreenFuture,
       builder: (_, snapshot) {
+        if (snapshot.hasError) {
+          debugPrint('[SessionRouter] resolve failed: ${snapshot.error}');
+          return const WelcomeScreen();
+        }
         if (!snapshot.hasData) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
