@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import 'services/critical_overlay_service.dart';
 import 'services/detection_service.dart';
+import 'services/gamification_service.dart';
 import 'services/metrics_service.dart';
 import 'services/task_service.dart';
 import 'theme/lumi_theme.dart';
@@ -118,8 +119,15 @@ class _BlinkTestScreenState extends State<BlinkTestScreen> {
       return;
     }
     _unlockHandled = true;
+    // Instant HP + mark blink task (or an explicit override) done on Tasks page.
     if (widget.taskIdToComplete != null) {
-      TaskService.instance.completeTask(widget.taskIdToComplete!);
+      await GamificationService.instance.recordBlinkExerciseCompleted();
+      await TaskService.instance.completeTask(
+        widget.taskIdToComplete!,
+        grantRewards: false,
+      );
+    } else {
+      await TaskService.instance.onBlinkExerciseFinished();
     }
     await CriticalOverlayService.instance.hideCriticalOverlay();
     if (mounted) Navigator.of(context).pop();

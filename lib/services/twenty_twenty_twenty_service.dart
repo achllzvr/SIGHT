@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'detection_service.dart';
 import 'feedback_service.dart';
-import 'gamification_service.dart';
+import 'task_service.dart';
 import 'watch_tracking_session.dart';
 
 enum BreakState {
@@ -238,8 +238,8 @@ class TwentyTwentyBreakService {
       _watchSegmentStartedAt = DateTime.now();
     }
     _enforceCompletion = false;
-    FeedbackService.instance.exerciseCompleted();
-    unawaited(GamificationService.instance.recordBreakCompleted202020());
+    // Instant HP + mark "Eye Rest Break" task done on the Tasks page.
+    unawaited(TaskService.instance.onEyeBreakFinished());
 
     _breakJustCompleted = true;
     Future.delayed(const Duration(seconds: 2), () {

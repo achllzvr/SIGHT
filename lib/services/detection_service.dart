@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -10,6 +11,14 @@ import 'local_metrics_service.dart';
 import 'metrics_service.dart';
 import 'offline_database_service.dart';
 import 'watch_tracking_session.dart';
+
+/// DeviceOrientation → degrees for ML Kit Android compensation.
+const Map<DeviceOrientation, int> _deviceOrientationDegrees = {
+  DeviceOrientation.portraitUp: 0,
+  DeviceOrientation.landscapeLeft: 90,
+  DeviceOrientation.portraitDown: 180,
+  DeviceOrientation.landscapeRight: 270,
+};
 
 /// Isolate-safe YUV→NV21 conversion (T4). Args must be SendPort-safe (Map + typed lists).
 Uint8List _yuv420ToNv21Isolate(Map<String, dynamic> args) {
@@ -127,10 +136,14 @@ class DetectionService {
     _resolutionPreset = resolution;
     final cameras = await availableCameras();
     final cam = cameras.firstWhere((c) => c.lensDirection == preferred, orElse: () => cameras.first);
+    final formatGroup = defaultTargetPlatform == TargetPlatform.iOS
+        ? ImageFormatGroup.bgra8888
+        : ImageFormatGroup.nv21;
     controller = CameraController(
       cam,
       _resolutionPreset,
       enableAudio: false,
+      imageFormatGroup: formatGroup,
     );
     await controller!.initialize();
     await controller!.startImageStream(_processCameraImage);
@@ -354,25 +367,66 @@ class DetectionService {
     MetricsService.instance.setCalibrated(true);
   }
 
-  Future<InputImage?> _inputImageFromCameraImage(CameraImage image) async {
+  /// ML Kit rotation: iOS uses sensorOrientation; Android compensates for
+  /// deviceOrientation so landscape frames stay upright for the detector.
+  InputImageRotation _inputImageRotation() {
     final camera = controller!.description;
-    final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation) ?? InputImageRotation.rotation270deg;
+    final sensorOrientation = camera.sensorOrientation;
+
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return InputImageRotationValue.fromRawValue(sensorOrientation) ??
+          InputImageRotation.rotation0deg;
+    }
+
+    final compensation =
+        _deviceOrientationDegrees[controller!.value.deviceOrientation];
+    if (compensation == null) {
+      return InputImageRotationValue.fromRawValue(sensorOrientation) ??
+          InputImageRotation.rotation0deg;
+    }
+
+    final int rotationDegrees;
+    if (camera.lensDirection == CameraLensDirection.front) {
+      rotationDegrees = (sensorOrientation + compensation) % 360;
+    } else {
+      rotationDegrees = (sensorOrientation - compensation + 360) % 360;
+    }
+    return InputImageRotationValue.fromRawValue(rotationDegrees) ??
+        InputImageRotation.rotation0deg;
+  }
+
+  Future<InputImage?> _inputImageFromCameraImage(CameraImage image) async {
+    final rotation = _inputImageRotation();
+    final size = Size(image.width.toDouble(), image.height.toDouble());
+
+    if (image.format.group == ImageFormatGroup.nv21) {
+      return InputImage.fromBytes(
+        bytes: image.planes[0].bytes,
+        metadata: InputImageMetadata(
+          size: size,
+          rotation: rotation,
+          format: InputImageFormat.nv21,
+          bytesPerRow: image.planes[0].bytesPerRow,
+        ),
+      );
+    }
     if (image.format.group == ImageFormatGroup.yuv420) {
       final bytes = await _yuv420ToNv21Async(image);
       return InputImage.fromBytes(
         bytes: bytes,
         metadata: InputImageMetadata(
-          size: Size(image.width.toDouble(), image.height.toDouble()),
+          size: size,
           rotation: rotation,
           format: InputImageFormat.nv21,
           bytesPerRow: image.width,
         ),
       );
-    } else if (image.format.group == ImageFormatGroup.bgra8888) {
+    }
+    if (image.format.group == ImageFormatGroup.bgra8888) {
       return InputImage.fromBytes(
         bytes: image.planes[0].bytes,
         metadata: InputImageMetadata(
-          size: Size(image.width.toDouble(), image.height.toDouble()),
+          size: size,
           rotation: rotation,
           format: InputImageFormat.bgra8888,
           bytesPerRow: image.planes[0].bytesPerRow,
@@ -437,6 +491,8 @@ class DetectionService {
         final face = faces.first;
         _currentFaceWidth = face.boundingBox.width;
         faceDetected.value = true;
+        // Face presence must not wait on distance calibration (Watch Area tracking).
+        MetricsService.instance.setFaceDetected(true);
         if (face.leftEyeOpenProbability != null || face.rightEyeOpenProbability != null) {
           final scores = <double>[
             if (face.leftEyeOpenProbability != null) face.leftEyeOpenProbability!,
@@ -458,7 +514,6 @@ class DetectionService {
           final cm = calculateDistance(faceWidthPixels: _currentFaceWidth, calibrationData: _calibrationConstant!);
           distanceCm.value = cm;
           MetricsService.instance.setDistance(cm);
-          MetricsService.instance.setFaceDetected(true);
           unawaited(LocalMetricsService.instance.logRawEvent('distanceCm', cm, DateTime.now()));
         }
       } else {

@@ -14,6 +14,7 @@ import '../guardian_setup_screen.dart';
 import '../legal_gate_screen.dart';
 import '../parent_onboarding_screen.dart';
 import 'child_login_screen.dart';
+import 'verify_email_otp_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -49,17 +50,35 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text;
 
     try {
-      final success = await AuthAccountService.instance.authenticateGuardian(
+      final auth = await AuthAccountService.instance.authenticateGuardian(
         email: email,
         password: password,
       );
       if (!mounted) return;
 
-      if (!success) {
+      if (!auth.success) {
+        if (auth.needsEmailVerification) {
+          if (!mounted) return;
+          FocusManager.instance.primaryFocus?.unfocus();
+          Navigator.of(context).pushAndRemoveUntil(
+            authSlideRoute(
+              VerifyEmailOtpScreen(
+                email: email,
+                password: password,
+                autoResendOnOpen: true,
+              ),
+            ),
+            (_) => false,
+          );
+          return;
+        }
+
         setState(() {
           _loading = false;
           _status = '';
-          _error = 'Wrong email or password.';
+          _error = auth.message.isNotEmpty
+              ? auth.message
+              : 'Wrong email or password.';
         });
         return;
       }

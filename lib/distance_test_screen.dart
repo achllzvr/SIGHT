@@ -158,13 +158,18 @@ class _DistanceTestScreenState extends State<DistanceTestScreen> {
           Transform.scale(scale: scale, child: Center(child: CameraPreview(controller))),
           IgnorePointer(
             child: Center(
-              child: Container(
-                width: size.width * 0.55,
-                height: size.width * 0.7,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: Colors.white70, width: 2),
-                ),
+              child: Builder(
+                builder: (_) {
+                  final shortSide = size.shortestSide;
+                  return Container(
+                    width: shortSide * 0.55,
+                    height: shortSide * 0.7,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(28),
+                      border: Border.all(color: Colors.white70, width: 2),
+                    ),
+                  );
+                },
               ),
             ),
           ),

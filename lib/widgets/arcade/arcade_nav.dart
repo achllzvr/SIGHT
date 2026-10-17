@@ -18,14 +18,21 @@ class ArcadeNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scale = ArcadeSizes.chromeScale(context);
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(LumiSpacing.lg, LumiSpacing.sm, LumiSpacing.lg, LumiSpacing.md),
+        padding: EdgeInsets.fromLTRB(
+          LumiSpacing.lg * scale,
+          LumiSpacing.sm * scale,
+          LumiSpacing.lg * scale,
+          LumiSpacing.md * scale,
+        ),
         child: Align(
           alignment: Alignment.topCenter,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            constraints: BoxConstraints(maxWidth: 520 * scale),
+            padding: EdgeInsets.symmetric(horizontal: 8 * scale, vertical: 12 * scale),
             decoration: BoxDecoration(
               color: LumiColors.navFill,
               borderRadius: BorderRadius.circular(LumiRadii.pill),
@@ -49,7 +56,7 @@ class ArcadeNavBar extends StatelessWidget {
                       child: Center(
                         child: ArcadeIcon(
                           _icons[i],
-                          size: ArcadeSizes.navIcon,
+                          size: ArcadeSizes.navIcon * scale,
                           lightMono: !selected,
                         ),
                       ),

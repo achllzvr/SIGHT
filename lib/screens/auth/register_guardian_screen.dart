@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../services/active_child_context_service.dart';
 import '../../services/auth_account_service.dart';
-import '../../services/auth_session_service.dart';
 import '../../services/legal_document_service.dart';
 import '../../theme/lumi_theme.dart';
 import '../../widgets/arcade/arcade.dart';
@@ -133,14 +132,14 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
       return;
     }
 
+    // Do not save guardian session until OTP succeeds (prevents OTP bypass on cold start).
     await ActiveChildContextService.instance.clearActiveChild();
-    await AuthSessionService.instance.saveGuardianSession(guardianEmail: email);
 
     if (!mounted) return;
     FocusManager.instance.primaryFocus?.unfocus();
 
     Navigator.of(context).pushAndRemoveUntil(
-      authSlideRoute(VerifyEmailOtpScreen(email: email)),
+      authSlideRoute(VerifyEmailOtpScreen(email: email, password: password)),
       (route) => false,
     );
   }

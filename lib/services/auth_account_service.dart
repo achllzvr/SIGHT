@@ -65,7 +65,15 @@ class ChildAccount {
 class AccountActionResult {
   final bool success;
   final String message;
-  const AccountActionResult({required this.success, required this.message});
+
+  /// Login rejected because guardian email OTP is still pending.
+  final bool needsEmailVerification;
+
+  const AccountActionResult({
+    required this.success,
+    required this.message,
+    this.needsEmailVerification = false,
+  });
 }
 
 class ChildAccountCreationResult extends AccountActionResult {
@@ -149,31 +157,86 @@ class AuthAccountService {
     }
   }
 
-  // STRICT ONLINE AUTHENTICATION
-  Future<bool> authenticateGuardian({required String email, required String password}) async {
+  // STRICT ONLINE AUTHENTICATION — requires Sanctum token + verified email (server-enforced).
+  Future<AccountActionResult> authenticateGuardian({
+    required String email,
+    required String password,
+  }) async {
     final normalizedEmail = email.trim().toLowerCase();
-    
+
     if (!await ConnectivityService.instance.isOnline()) {
-      throw Exception('Internet connection is required to login as a Guardian.');
+      return const AccountActionResult(
+        success: false,
+        message: 'Internet connection is required to login as a Guardian.',
+      );
     }
 
     final uri = ApiConfigService.buildUri('/api/shared/login');
-    final response = await ApiClientService.instance.post(uri, jsonBody: {'email': normalizedEmail, 'password': password});
-    
-    if (response.isSuccess) {
-      final token = response.data['token'];
-      if (token != null && token.isNotEmpty) {
-        await AuthSessionService.instance.saveAccessToken(token);
+    final response = await ApiClientService.instance.post(
+      uri,
+      jsonBody: {'email': normalizedEmail, 'password': password},
+    );
+
+    if (!response.isSuccess) {
+      if (_isUnverifiedGuardianLogin(response)) {
+        // Keep local cache in sync so cold-start SessionRouter also routes to OTP.
+        final accounts = await _loadGuardianAccounts();
+        final index = accounts.indexWhere((a) => a.email == normalizedEmail);
+        final unverified = GuardianAccount(
+          email: normalizedEmail,
+          passwordHash: _hashPassword(password),
+          createdAt: index >= 0 ? accounts[index].createdAt : DateTime.now(),
+          isEmailVerified: false,
+        );
+        if (index >= 0) {
+          accounts[index] = unverified;
+        } else {
+          accounts.add(unverified);
+        }
+        await _saveGuardianAccounts(accounts);
+
+        return const AccountActionResult(
+          success: false,
+          needsEmailVerification: true,
+          message: 'Verify your email before signing in.',
+        );
       }
 
-      final accounts = await _loadGuardianAccounts();
-      if (!accounts.any((a) => a.email == normalizedEmail)) {
-        accounts.add(GuardianAccount(email: normalizedEmail, passwordHash: _hashPassword(password), createdAt: DateTime.now(), isEmailVerified: true));
-        await _saveGuardianAccounts(accounts);
-      }
-      return true;
+      return AccountActionResult(
+        success: false,
+        message: _friendlyErrorMessage(
+          response,
+          fallback: 'Wrong email or password.',
+        ),
+      );
     }
-    return false;
+
+    final token = response.data is Map ? response.data['token'] : null;
+    if (token == null || token.toString().isEmpty) {
+      return const AccountActionResult(
+        success: false,
+        message: 'Could not start a secure session. Please try again.',
+      );
+    }
+
+    await AuthSessionService.instance.saveAccessToken(token.toString());
+
+    final accounts = await _loadGuardianAccounts();
+    final index = accounts.indexWhere((a) => a.email == normalizedEmail);
+    final verifiedAccount = GuardianAccount(
+      email: normalizedEmail,
+      passwordHash: _hashPassword(password),
+      createdAt: index >= 0 ? accounts[index].createdAt : DateTime.now(),
+      isEmailVerified: true,
+    );
+    if (index >= 0) {
+      accounts[index] = verifiedAccount;
+    } else {
+      accounts.add(verifiedAccount);
+    }
+    await _saveGuardianAccounts(accounts);
+
+    return const AccountActionResult(success: true, message: 'Login successful.');
   }
 
   // --- STRICT ONLINE CHILD CREATION (requires Sanctum token) ---
@@ -206,6 +269,9 @@ class AuthAccountService {
       });
 
       if (!response.isSuccess) {
+        if (response.statusCode == 401) {
+          await AuthSessionService.instance.clearAllAuthState();
+        }
         return ChildAccountCreationResult(
           success: false,
           message: _friendlyErrorMessage(
@@ -259,8 +325,11 @@ class AuthAccountService {
 
     final uri = ApiConfigService.buildUri(ApiConfigService.guardianChildrenEndpoint);
     final response = await ApiClientService.instance.get(uri);
-    
+
     if (!response.isSuccess) {
+      if (response.statusCode == 401) {
+        await AuthSessionService.instance.clearAllAuthState();
+      }
       throw Exception(
         _friendlyErrorMessage(
           response,
@@ -279,19 +348,31 @@ class AuthAccountService {
         // Preserve local SHA256 only — never cache server bcrypt into passwordHash
         // (offline login compares SHA256 of the typed password).
         String preservedHash = '';
+        DateTime? preservedBirthdate;
         try {
-          preservedHash = localAccounts.firstWhere((a) => a.loginCode == serverCode).passwordHash;
+          final local = localAccounts.firstWhere((a) => a.loginCode == serverCode);
+          preservedHash = local.passwordHash;
+          preservedBirthdate = local.birthdate;
           // Reject leaked bcrypt hashes from older app versions
           if (preservedHash.startsWith(r'$2y$') || preservedHash.startsWith(r'$2a$') || preservedHash.startsWith(r'$2b$')) {
             preservedHash = '';
           }
         } catch (_) {}
 
+        final serverBirth = c['birthdate'] != null
+            ? DateTime.tryParse(c['birthdate'].toString())
+            : null;
+
         return ChildAccount(
           loginCode: serverCode,
           displayName: '${c['first_name']} ${c['last_name']}'.trim(),
           passwordHash: preservedHash,
-          guardianEmail: normalizedEmail, childId: c['child_id'], createdAt: DateTime.now(),
+          guardianEmail: normalizedEmail,
+          childId: c['child_id'] is int
+              ? c['child_id'] as int
+              : int.tryParse(c['child_id']?.toString() ?? ''),
+          createdAt: DateTime.now(),
+          birthdate: serverBirth ?? preservedBirthdate,
         );
       }).toList();
       
@@ -312,6 +393,7 @@ class AuthAccountService {
   }
 
   /// Submit Gmail SMTP OTP to verify guardian email.
+  /// On success, saves Sanctum token when the API returns one (Mobile Bugs 2.0).
   Future<AccountActionResult> verifyEmailOtp({required String email, required String otp}) async {
     if (!await ConnectivityService.instance.isOnline()) {
       return const AccountActionResult(success: false, message: 'Internet required to verify email.');
@@ -327,6 +409,11 @@ class AuthAccountService {
           success: false,
           message: _friendlyErrorMessage(response, fallback: 'Invalid or expired code.'),
         );
+      }
+
+      final token = response.data is Map ? response.data['token'] : null;
+      if (token != null && token.toString().isNotEmpty) {
+        await AuthSessionService.instance.saveAccessToken(token.toString());
       }
 
       final accounts = await _loadGuardianAccounts();
@@ -376,9 +463,14 @@ class AuthAccountService {
   Future<AccountActionResult> resetParentPassword(String email, String currentPassword, String newPassword) async {
     if (!await ConnectivityService.instance.isOnline()) return const AccountActionResult(success: false, message: 'Internet connection required.');
 
-    final isValid = await authenticateGuardian(email: email, password: currentPassword);
-    if (!isValid) return const AccountActionResult(success: false, message: 'Current password is incorrect.');
-    
+    final auth = await authenticateGuardian(email: email, password: currentPassword);
+    if (!auth.success) {
+      return AccountActionResult(
+        success: false,
+        message: auth.message.isNotEmpty ? auth.message : 'Current password is incorrect.',
+      );
+    }
+
     try {
       final uri = ApiConfigService.buildUri(ApiConfigService.resetPasswordEndpoint);
       final response = await ApiClientService.instance.post(uri, jsonBody: {'email': email.trim().toLowerCase(), 'current_password': currentPassword, 'new_password': newPassword});
@@ -452,6 +544,7 @@ class AuthAccountService {
           guardianEmail: old.guardianEmail,
           childId: old.childId,
           createdAt: old.createdAt,
+          birthdate: old.birthdate,
         );
         await _saveChildAccounts(accounts);
       }
@@ -460,6 +553,19 @@ class AuthAccountService {
     } catch (e) {
       return AccountActionResult(success: false, message: _friendlyException(e));
     }
+  }
+
+  /// Server blocks unverified guardians with 403 + email_verified: false.
+  bool _isUnverifiedGuardianLogin(ApiClientResponse response) {
+    if (response.statusCode != 403) return false;
+    final data = response.data;
+    if (data is Map) {
+      final verified = data['email_verified'];
+      if (verified == false) return true;
+      final message = (data['message'] as String?)?.toLowerCase() ?? '';
+      if (message.contains('verify your email')) return true;
+    }
+    return false;
   }
 
   /// Prefer short, user-safe copy — never dump Laravel stack traces / SQL into the UI.
@@ -473,8 +579,19 @@ class AuthAccountService {
     }
 
     final status = response.statusCode;
-    if (status == 401 || status == 403) {
-      return 'Wrong email or password.';
+    if (status == 401) {
+      final lower = (extracted ?? '').toLowerCase();
+      if (lower.contains('unauthenticated') || lower.contains('unauth')) {
+        return 'Session expired. Please sign in again.';
+      }
+      return extracted != null && !_looksLikeInternalError(extracted)
+          ? extracted
+          : 'Wrong email or password.';
+    }
+    if (status == 403) {
+      return extracted != null && !_looksLikeInternalError(extracted)
+          ? extracted
+          : 'Access denied.';
     }
     if (status == 409) {
       return 'An account with this email already exists.';

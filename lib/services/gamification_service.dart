@@ -62,18 +62,16 @@ class GamificationService {
   final List<double> _distanceSamples = <double>[];
   final List<int> _blinkRateSamples = <int>[];
 
-  int _pendingHpRecovery = 0;
-  int _pendingCoins = 0;
-
   // === Gamification tuning (Phase 4) ===
   // M1/M2 scale how harshly distance (diopters) and low blink rate drain HP per minute.
-  // Rewards: break/blink exercises restore HP; safe viewing minutes earn Stars (coins).
+  // Rewards: break/blink exercises restore HP instantly; safe viewing minutes earn Stars.
   // Streak increments when all 3 daily eye-health goals complete (see TaskService).
   static const double _m1DioptricMultiplier = 4.0;
   static const double _m2BlinkMultiplier = 4.0;
   static const int _breakCompletedHpReward = 10;
-  static const int _blinkExerciseHpReward = 5;
+  static const int _blinkExerciseHpReward = 10;
   static const int _safeMinuteCoinReward = 1;
+  static const double _safeDistanceCm = 30.0;
   static const int dailyGoalCountForStreak = 3;
 
   static const int _minuteWindowSeconds = 60;
@@ -116,6 +114,23 @@ class GamificationService {
         mascotName: mascotNameNotifier.value,
       ),
     );
+  }
+
+  /// Instant HP change (clamped 0–100), mood refresh, and persist.
+  Future<void> applyHealthDelta(int delta) async {
+    await initialize();
+    if (delta == 0) return;
+    healthScoreNotifier.value =
+        (healthScoreNotifier.value + delta).clamp(0, 100);
+    await updatePetState();
+  }
+
+  /// Instant Stars (coins) change and persist.
+  Future<void> applyCoinsDelta(int delta) async {
+    await initialize();
+    if (delta == 0) return;
+    coinsNotifier.value = (coinsNotifier.value + delta).clamp(0, 1 << 30);
+    await _persistState();
   }
 
   // === THE CLINICAL SCORING ALGORITHM ===
@@ -174,15 +189,15 @@ class GamificationService {
     // Handled in bulk by blink exercises, but hook remains open.
   }
 
+  /// Instant +10 HP when a 20-20-20 break is finished.
   Future<void> recordBreakCompleted202020() async {
-    await initialize();
-    _pendingHpRecovery += _breakCompletedHpReward;
+    await applyHealthDelta(_breakCompletedHpReward);
     FeedbackService.instance.exerciseCompleted();
   }
-  
+
+  /// Instant +10 HP when the blink game is finished.
   Future<void> recordBlinkExerciseCompleted() async {
-    await initialize();
-    _pendingHpRecovery += _blinkExerciseHpReward;
+    await applyHealthDelta(_blinkExerciseHpReward);
     FeedbackService.instance.exerciseCompleted();
   }
 
@@ -193,8 +208,8 @@ class GamificationService {
     _isFlushingMinuteBuffer = true;
 
     try {
-      // Only apply Watch-Area tracking damage while session is active.
-      // Still allow pending recovery/coins from exercises breaks.
+      // Watch-Area tracking damage / safe-minute Stars only.
+      // Exercise HP is applied immediately via applyHealthDelta / record*.
       final trackingActive = WatchTrackingSession.instance.active.value;
 
       final averageDistance = (!trackingActive || _distanceSamples.isEmpty)
@@ -212,30 +227,49 @@ class GamificationService {
             )
           : 0;
 
+      final bool safeMinute = trackingActive &&
+          hpLoss == 0 &&
+          _distanceSamples.isNotEmpty &&
+          averageDistance >= _safeDistanceCm;
+
       int coinsEarned = 0;
-      if (trackingActive && hpLoss == 0 && _distanceSamples.isNotEmpty) {
+      if (safeMinute) {
         coinsEarned = _safeMinuteCoinReward;
       }
 
-      int newHp = healthScoreNotifier.value - hpLoss + _pendingHpRecovery;
-      newHp = newHp.clamp(0, 100);
-
       if (hpLoss > 0) {
         FeedbackService.instance.interventionTriggered();
+        healthScoreNotifier.value =
+            (healthScoreNotifier.value - hpLoss).clamp(0, 100);
       }
 
-      healthScoreNotifier.value = newHp;
-      coinsNotifier.value += coinsEarned + _pendingCoins;
+      if (coinsEarned > 0) {
+        coinsNotifier.value += coinsEarned;
+      }
 
       await updatePetState();
       await _persistState();
 
+      if (safeMinute) {
+        // Lazy import path: TaskService listens via callback registered at init,
+        // but a direct call keeps wiring simple (Dart allows the cycle).
+        await _notifySafeViewingMinute();
+      }
+
       _distanceSamples.clear();
       _blinkRateSamples.clear();
-      _pendingHpRecovery = 0;
-      _pendingCoins = 0;
     } finally {
       _isFlushingMinuteBuffer = false;
+    }
+  }
+
+  /// Optional hook so TaskService can credit the safe-distance daily goal.
+  Future<void> Function()? onSafeViewingMinute;
+
+  Future<void> _notifySafeViewingMinute() async {
+    final hook = onSafeViewingMinute;
+    if (hook != null) {
+      await hook();
     }
   }
 

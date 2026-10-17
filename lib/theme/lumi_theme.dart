@@ -147,6 +147,16 @@ class ArcadeSizes {
   static const navIcon = 36.0;
   static const navBorder = 4.0;
   static const navShadow = Offset(2, 6);
+  static const navBarHeight = 110.0;
+
+  /// Phone layouts stay at 1.0. Tablets (shortestSide ≥ 600) scale up so
+  /// HUD/nav icons don't look tiny on large canvases.
+  static double chromeScale(BuildContext context) {
+    final shortest = MediaQuery.sizeOf(context).shortestSide;
+    if (shortest < 600) return 1.0;
+    // 600 → 1.15, 900 → ~1.45 (capped)
+    return (1.15 + (shortest - 600) / 1000).clamp(1.15, 1.45);
+  }
 }
 
 class LumiShadows {

@@ -11,6 +11,7 @@ import 'widgets/animated_hue_background.dart';
 
 import 'screens/auth/child_login_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/verify_email_otp_screen.dart';
 import 'screens/child_dashboard_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/tracking_screen.dart';
@@ -25,6 +26,7 @@ import 'screens/twenty_twenty_twenty_break_screen.dart';
 
 import 'screens/welcome_screen.dart';
 import 'services/active_child_context_service.dart';
+import 'services/auth_account_service.dart';
 import 'services/auth_session_service.dart';
 import 'services/detection_service.dart';
 import 'services/session_timer_service.dart';
@@ -33,6 +35,7 @@ import 'services/guardian_login_sync_service.dart';
 import 'services/guardian_preferences_service.dart';
 import 'services/guardian_setup_service.dart';
 import 'services/local_metrics_service.dart';
+import 'services/task_service.dart';
 import 'services/twenty_twenty_twenty_service.dart';
 import 'services/offline_models.dart';
 import 'services/rule_engine_service.dart';
@@ -157,6 +160,19 @@ class _SessionRouterState extends State<_SessionRouter> {
       // Parent sessions should never keep a child context hot.
       await ActiveChildContextService.instance.clearActiveChild();
 
+      // Leftover sessions from older builds may skip OTP — force verify.
+      final account = await AuthAccountService.instance.getGuardianAccount(email);
+      if (account == null || !account.isEmailVerified) {
+        await AuthSessionService.instance.clearAccessToken();
+        return VerifyEmailOtpScreen(email: email);
+      }
+
+      final token = await AuthSessionService.instance.loadAccessToken();
+      if (token == null || token.isEmpty) {
+        await AuthSessionService.instance.clearAllAuthState();
+        return const LoginScreen();
+      }
+
       final sync = await GuardianLoginSyncService.instance.syncAfterLogin(email);
       if (!sync.success) {
         debugPrint('[SessionRouter] guardian resume sync failed: ${sync.message}');
@@ -240,6 +256,8 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
     unawaited(LocalMetricsService.instance.initialize());
     unawaited(RuleEngineService.instance.initialize());
     unawaited(GamificationService.instance.initialize());
+    // Registers daily tasks + safe-distance minute hook before Watch Area runs.
+    unawaited(TaskService.instance.initialize());
     unawaited(ActiveChildContextService.instance.initialize());
 
     // Initialize and start the session timer
@@ -435,10 +453,11 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
               if (isFullscreen) {
                 return const SizedBox.shrink();
               }
+              final navH = ArcadeSizes.navBarHeight * ArcadeSizes.chromeScale(context);
               return ColoredBox(
                 color: Colors.transparent,
                 child: SizedBox(
-                  height: 110,
+                  height: navH,
                   child: BottomPillNav(
                     currentIndex: _index,
                     onTap: _onNavTap,

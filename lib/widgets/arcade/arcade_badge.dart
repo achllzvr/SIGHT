@@ -24,19 +24,23 @@ class ArcadeScoreBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconSize = compact ? 16.0 : ArcadeSizes.badgeIcon;
-    final fontSize = compact ? 11.0 : ArcadeSizes.badgeFont;
-    final padH = compact ? 8.0 : ArcadeSizes.badgePadH;
+    final scale = ArcadeSizes.chromeScale(context);
+    final iconSize = (compact ? 16.0 : ArcadeSizes.badgeIcon) * scale;
+    final fontSize = (compact ? 11.0 : ArcadeSizes.badgeFont) * scale;
+    final padH = (compact ? 8.0 : ArcadeSizes.badgePadH) * scale;
+    final padV = ArcadeSizes.badgePadV * scale;
+    final minH = (compact ? 36.0 : ArcadeSizes.badgeHeight) * scale;
+    final gap = (compact ? 4.0 : 6.0) * scale;
 
     return _ArcadePressable(
       onTap: onTap,
       child: Container(
         width: expand ? double.infinity : null,
         constraints: BoxConstraints(
-          minHeight: compact ? 36 : ArcadeSizes.badgeHeight,
+          minHeight: minH,
           maxWidth: expand ? double.infinity : double.infinity,
         ),
-        padding: EdgeInsets.symmetric(horizontal: padH, vertical: ArcadeSizes.badgePadV),
+        padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
         decoration: BoxDecoration(
           color: LumiColors.primaryLight,
           borderRadius: BorderRadius.circular(LumiRadii.pill),
@@ -49,7 +53,7 @@ class ArcadeScoreBadge extends StatelessWidget {
           children: [
             ArcadeIcon(arcadeIcon, size: iconSize),
             if (label != null) ...[
-              SizedBox(width: compact ? 4 : 6),
+              SizedBox(width: gap),
               Flexible(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
@@ -86,11 +90,13 @@ class ArcadeIconBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scale = ArcadeSizes.chromeScale(context);
+    final size = 40.0 * scale;
     return _ArcadePressable(
       onTap: onTap,
       child: Container(
-        width: expand ? double.infinity : 40,
-        height: 40,
+        width: expand ? double.infinity : size,
+        height: size,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: LumiColors.primaryLight,
@@ -98,7 +104,7 @@ class ArcadeIconBadge extends StatelessWidget {
           border: Border.all(color: accentColor, width: ArcadeSizes.badgeBorder),
           boxShadow: LumiShadows.badge(accentColor),
         ),
-        child: ArcadeIcon(arcadeIcon, size: 20),
+        child: ArcadeIcon(arcadeIcon, size: 20 * scale),
       ),
     );
   }

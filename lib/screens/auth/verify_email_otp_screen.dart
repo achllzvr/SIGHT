@@ -1,16 +1,29 @@
 import 'package:flutter/material.dart';
 
 import '../../services/auth_account_service.dart';
+import '../../services/auth_session_service.dart';
 import '../../services/guardian_setup_service.dart';
 import '../../theme/lumi_theme.dart';
 import '../../widgets/arcade/arcade.dart';
 import '../../widgets/auth_landing_shell.dart';
+import 'login_screen.dart';
 
 /// Guardian email verification via Gmail SMTP OTP (A4 / S2).
 class VerifyEmailOtpScreen extends StatefulWidget {
   final String email;
 
-  const VerifyEmailOtpScreen({super.key, required this.email});
+  /// Kept in memory from register/login so we can obtain a Sanctum token after OTP.
+  final String? password;
+
+  /// When true (e.g. redirected from unverified login), request a fresh code on open.
+  final bool autoResendOnOpen;
+
+  const VerifyEmailOtpScreen({
+    super.key,
+    required this.email,
+    this.password,
+    this.autoResendOnOpen = false,
+  });
 
   @override
   State<VerifyEmailOtpScreen> createState() => _VerifyEmailOtpScreenState();
@@ -22,6 +35,16 @@ class _VerifyEmailOtpScreenState extends State<VerifyEmailOtpScreen> {
   bool _resending = false;
   String? _error;
   String? _info;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoResendOnOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _resend();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -51,6 +74,50 @@ class _VerifyEmailOtpScreenState extends State<VerifyEmailOtpScreen> {
         _loading = false;
         _error = result.message;
       });
+      return;
+    }
+
+    // Session only after OTP — matches server email_verified_at.
+    await AuthSessionService.instance.saveGuardianSession(
+      guardianEmail: widget.email,
+    );
+
+    // Prefer token from verify response; fall back to login for older servers.
+    var token = await AuthSessionService.instance.loadAccessToken();
+    if (token == null || token.isEmpty) {
+      final password = widget.password;
+      if (password != null && password.isNotEmpty) {
+        final login = await AuthAccountService.instance.authenticateGuardian(
+          email: widget.email,
+          password: password,
+        );
+        if (!mounted) return;
+        if (!login.success) {
+          setState(() {
+            _loading = false;
+            _error =
+                '${login.message} Sign in once to finish setting up your session.';
+          });
+          Navigator.of(context).pushAndRemoveUntil(
+            authSlideRoute(const LoginScreen()),
+            (route) => false,
+          );
+          return;
+        }
+        token = await AuthSessionService.instance.loadAccessToken();
+      }
+    }
+
+    if (token == null || token.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Could not start a secure session. Please sign in.';
+      });
+      Navigator.of(context).pushAndRemoveUntil(
+        authSlideRoute(const LoginScreen()),
+        (route) => false,
+      );
       return;
     }
 

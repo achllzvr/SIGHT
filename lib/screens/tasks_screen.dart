@@ -126,7 +126,11 @@ class _TasksScreenState extends State<TasksScreen> {
                     Navigator.pop(ctx);
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const BlinkTestScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const BlinkTestScreen(
+                          taskIdToComplete: 'blink-exercise',
+                        ),
+                      ),
                     );
                   },
                 ),

@@ -15,17 +15,31 @@ class TaskService {
   Timer? _dailyResetTimer;
   Timer? _periodicUpdateTimer;
 
+  static const _blinkTaskId = 'blink-exercise';
+  static const _eyeBreakTaskId = 'eye-break-afternoon';
+  static const _healthyDistanceTaskId = 'healthy-distance-session';
+
+  /// Core daily eye-health goals — completing all three advances the streak.
+  static const coreDailyGoalIds = [
+    _blinkTaskId,
+    _eyeBreakTaskId,
+    _healthyDistanceTaskId,
+  ];
+
   Future<void> initialize() async {
     if (_initialized) {
       return;
     }
 
     await GamificationService.instance.initialize();
-    
+
     _initialized = true;
     await _generateDailyTasks();
     _setupListeners();
     _startTimers();
+
+    // Credit safe-distance minutes from the gamification minute flush.
+    GamificationService.instance.onSafeViewingMinute = recordSafeViewingMinute;
 
     if (kDebugMode) {
       debugPrint('[TaskService] Initialized with ${tasksNotifier.value.length} daily tasks');
@@ -76,7 +90,7 @@ class TaskService {
   List<Task> _generateEyeHealthTasks(DateTime now) {
     return [
       Task(
-        id: 'blink-exercise',
+        id: _blinkTaskId,
         title: 'Blink with Lumi',
         description: 'Blink 15 times to help your eyes.',
         type: TaskType.eyeHealth,
@@ -87,7 +101,7 @@ class TaskService {
         timePeriod: TimePeriod.daily,
       ),
       Task(
-        id: 'eye-break-afternoon',
+        id: _eyeBreakTaskId,
         title: 'Eye Rest Break',
         description: 'Look far away for 20 seconds for a short break.',
         type: TaskType.eyeHealth,
@@ -98,7 +112,7 @@ class TaskService {
         timePeriod: TimePeriod.daily,
       ),
       Task(
-        id: 'healthy-distance-session',
+        id: _healthyDistanceTaskId,
         title: 'Keep a Safe Distance',
         description: 'Stay farther than 30 cm from the screen for 10 minutes.',
         type: TaskType.eyeHealth,
@@ -114,7 +128,7 @@ class TaskService {
   }
 
   List<Task> _generateGamificationTasks(DateTime now) {
-    final currentCoins = GamificationService.instance.coinsNotifier.value; 
+    final currentCoins = GamificationService.instance.coinsNotifier.value;
     final currentStreak = GamificationService.instance.dailyStreakNotifier.value;
 
     return [
@@ -127,12 +141,11 @@ class TaskService {
         targetValue: 25,
         currentValue: currentCoins,
         category: 'coin-goal',
-        rewardCoins: 25, 
+        rewardCoins: 25,
         createdAt: now,
         completedAt: currentCoins >= 25 ? now : null,
         timePeriod: TimePeriod.daily,
       ),
-      
       Task(
         id: 'coin-goal-medium',
         title: 'Earn 50 Stars',
@@ -147,7 +160,6 @@ class TaskService {
         completedAt: currentCoins >= 50 ? now : null,
         timePeriod: TimePeriod.daily,
       ),
-      
       Task(
         id: 'streak-goal',
         title: 'Keep a 3-Day Streak',
@@ -176,7 +188,7 @@ class TaskService {
   void _updateTaskProgress() {
     final currentXp = GamificationService.instance.coinsNotifier.value;
     final currentStreak = GamificationService.instance.dailyStreakNotifier.value;
-    
+
     final updatedTasks = tasksNotifier.value.map((task) {
       if (task.isCompleted) return task;
 
@@ -221,40 +233,93 @@ class TaskService {
     _evaluateDailyGoalStreak();
   }
 
-  /// Core daily eye-health goals — completing all three advances the streak.
-  static const _coreDailyGoalIds = ['blink-exercise', 'eye-break-afternoon', 'healthy-distance-session'];
-
   void _evaluateDailyGoalStreak() {
-    final coreTasks = tasksNotifier.value.where((t) => _coreDailyGoalIds.contains(t.id)).toList();
+    final coreTasks =
+        tasksNotifier.value.where((t) => coreDailyGoalIds.contains(t.id)).toList();
     if (coreTasks.length < GamificationService.dailyGoalCountForStreak) return;
     final allCoreDone = coreTasks.every((t) => t.isCompleted);
     unawaited(GamificationService.instance.evaluateDailyStreak(dailyGoalMet: allCoreDone));
   }
 
-  /// Manually mark a task as completed (for manual tasks or testing)
-  Future<void> completeTask(String taskId) async {
-    final tasks = tasksNotifier.value;
+  /// Mark blink / eye-break / other tasks done. When [grantRewards] is false,
+  /// HP/Stars were already applied by the activity (avoids double-counting).
+  Future<void> completeTask(String taskId, {bool grantRewards = true}) async {
+    await initialize();
+
+    final tasks = List<Task>.from(tasksNotifier.value);
     final taskIndex = tasks.indexWhere((t) => t.id == taskId);
-    if (taskIndex != -1) {
-      final task = tasks[taskIndex];
-      
+    if (taskIndex == -1) return;
+
+    final task = tasks[taskIndex];
+    if (task.isCompleted) return;
+
+    if (grantRewards) {
       if (task.rewardHealth != null && task.rewardHealth! > 0) {
-        GamificationService.instance.healthScoreNotifier.value = 
-            (GamificationService.instance.healthScoreNotifier.value + task.rewardHealth!).clamp(0, 100);
+        await GamificationService.instance.applyHealthDelta(task.rewardHealth!);
       }
       if (task.rewardCoins != null && task.rewardCoins! > 0) {
-        GamificationService.instance.coinsNotifier.value += task.rewardCoins!;
+        await GamificationService.instance.applyCoinsDelta(task.rewardCoins!);
       }
+    }
 
+    tasks[taskIndex] = task.copyWith(
+      status: TaskStatus.completed,
+      currentValue: task.targetValue ?? task.currentValue,
+      completedAt: DateTime.now(),
+    );
+    tasksNotifier.value = tasks;
+    _updateCompletedCount();
+    await FeedbackService.instance.taskCompleted();
+  }
+
+  /// Called after blink game success — restores HP and marks the blink task done.
+  Future<void> onBlinkExerciseFinished() async {
+    await initialize();
+    await GamificationService.instance.recordBlinkExerciseCompleted();
+    await completeTask(_blinkTaskId, grantRewards: false);
+  }
+
+  /// Called after 20-20-20 success — restores HP and marks the eye-rest task done.
+  Future<void> onEyeBreakFinished() async {
+    await initialize();
+    await GamificationService.instance.recordBreakCompleted202020();
+    await completeTask(_eyeBreakTaskId, grantRewards: false);
+  }
+
+  /// One safe Watch-Area minute (≥30 cm). Completes after 10 minutes with +15 HP.
+  Future<void> recordSafeViewingMinute() async {
+    await initialize();
+
+    final tasks = List<Task>.from(tasksNotifier.value);
+    final taskIndex = tasks.indexWhere((t) => t.id == _healthyDistanceTaskId);
+    if (taskIndex == -1) return;
+
+    final task = tasks[taskIndex];
+    if (task.isCompleted) return;
+
+    final target = task.targetValue ?? 10;
+    final next = (task.currentValue ?? 0) + 1;
+
+    if (next >= target) {
+      if (task.rewardHealth != null && task.rewardHealth! > 0) {
+        await GamificationService.instance.applyHealthDelta(task.rewardHealth!);
+      }
       tasks[taskIndex] = task.copyWith(
         status: TaskStatus.completed,
-        currentValue: task.targetValue,
+        currentValue: target,
         completedAt: DateTime.now(),
       );
-      tasksNotifier.value = List.from(tasks);
+      tasksNotifier.value = tasks;
       _updateCompletedCount();
       await FeedbackService.instance.taskCompleted();
+      return;
     }
+
+    tasks[taskIndex] = task.copyWith(
+      status: TaskStatus.inProgress,
+      currentValue: next,
+    );
+    tasksNotifier.value = tasks;
   }
 
   /// Get tasks for the current day
@@ -285,7 +350,11 @@ class TaskService {
   void dispose() {
     _dailyResetTimer?.cancel();
     _periodicUpdateTimer?.cancel();
+    if (GamificationService.instance.onSafeViewingMinute == recordSafeViewingMinute) {
+      GamificationService.instance.onSafeViewingMinute = null;
+    }
     GamificationService.instance.coinsNotifier.removeListener(_onXpChanged);
     GamificationService.instance.dailyStreakNotifier.removeListener(_onStreakChanged);
+    _initialized = false;
   }
 }

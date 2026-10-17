@@ -95,8 +95,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final mascotW = (constraints.maxWidth * 0.72).clamp(180.0, 270.0);
-                  final mascotH = (constraints.maxHeight * 0.72).clamp(200.0, 340.0);
+                  final scale = ArcadeSizes.chromeScale(context);
+                  final mascotW = (constraints.maxWidth * 0.72).clamp(180.0, 270.0 * scale);
+                  final mascotH = (constraints.maxHeight * 0.72).clamp(200.0, 340.0 * scale);
                   return Column(
                     children: [
                       Expanded(
@@ -532,13 +533,14 @@ class _SubtleHealthBar extends StatelessWidget {
             ? LumiColors.redAlert
             : (hp < 70 ? LumiColors.badgeAmber : LumiColors.primaryGreen);
         final clamped = (hp.clamp(0, 100)) / 100.0;
+        final scale = ArcadeSizes.chromeScale(context);
         return Row(
           children: [
-            const ArcadeIcon('heart', size: 20),
-            const SizedBox(width: LumiSpacing.sm),
+            ArcadeIcon('heart', size: 20 * scale),
+            SizedBox(width: LumiSpacing.sm * scale),
             Expanded(
               child: Container(
-                height: 16,
+                height: 16 * scale,
                 decoration: BoxDecoration(
                   color: LumiColors.primaryLight,
                   borderRadius: BorderRadius.circular(LumiRadii.pill),
@@ -565,8 +567,8 @@ class _SubtleHealthBar extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: LumiSpacing.sm),
-            Text('$hp', style: LumiTheme.clanMedium(14, color: barColor)),
+            SizedBox(width: LumiSpacing.sm * scale),
+            Text('$hp', style: LumiTheme.clanMedium(14 * scale, color: barColor)),
           ],
         );
       },
