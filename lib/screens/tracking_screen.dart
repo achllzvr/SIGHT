@@ -282,11 +282,11 @@ class _OfflineRuleBanner extends StatelessWidget {
       case 'face temporarily lost':
         return 'No face';
       case 'critical proximity or eye fatigue':
-        return 'Critical';
+        return 'Too close';
       case 'adjust distance or blink rhythm':
-        return 'Adjust';
+        return 'Sit back';
       case 'minor correction needed':
-        return 'Nudge';
+        return 'A little closer';
       default:
         return raw.length > 18 ? '${raw.substring(0, 16)}…' : raw;
     }

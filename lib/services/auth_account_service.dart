@@ -6,6 +6,7 @@ import 'package:lumi/services/auth_session_service.dart';
 import 'connectivity_service.dart';
 import 'api_client_service.dart';
 import 'api_config_service.dart';
+import 'clinical_analytics_helpers.dart';
 
 class GuardianAccount {
   final String email;
@@ -58,7 +59,7 @@ class ChildAccount {
     guardianEmail: (json['guardianEmail'] as String? ?? '').toLowerCase(),
     childId: (json['childId'] as num?)?.toInt(),
     createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
-    birthdate: json['birthdate'] != null ? DateTime.tryParse(json['birthdate'] as String) : null,
+    birthdate: ClinicalAnalyticsHelpers.parseBirthdate(json['birthdate']),
   );
 }
 
@@ -359,9 +360,7 @@ class AuthAccountService {
           }
         } catch (_) {}
 
-        final serverBirth = c['birthdate'] != null
-            ? DateTime.tryParse(c['birthdate'].toString())
-            : null;
+        final serverBirth = ClinicalAnalyticsHelpers.parseBirthdate(c['birthdate']);
 
         return ChildAccount(
           loginCode: serverCode,
@@ -550,6 +549,59 @@ class AuthAccountService {
       }
 
       return const AccountActionResult(success: true, message: 'Child password updated successfully.');
+    } catch (e) {
+      return AccountActionResult(success: false, message: _friendlyException(e));
+    }
+  }
+
+  /// Guardian-authenticated update of a child's birthdate (server + local cache).
+  Future<AccountActionResult> updateChildBirthdate({
+    required int childId,
+    required DateTime birthdate,
+  }) async {
+    if (!await ConnectivityService.instance.isOnline()) {
+      return const AccountActionResult(success: false, message: 'Internet connection required.');
+    }
+
+    final birthStr =
+        '${birthdate.year.toString().padLeft(4, '0')}-'
+        '${birthdate.month.toString().padLeft(2, '0')}-'
+        '${birthdate.day.toString().padLeft(2, '0')}';
+
+    try {
+      final endpoint = ApiConfigService.updateChildBirthdateEndpoint.replaceFirst(
+        '{child_id}',
+        childId.toString(),
+      );
+      final uri = ApiConfigService.buildUri(endpoint);
+      final response = await ApiClientService.instance.put(
+        uri,
+        jsonBody: {'birthdate': birthStr},
+      );
+      if (!response.isSuccess) {
+        return AccountActionResult(
+          success: false,
+          message: _friendlyErrorMessage(response, fallback: 'Could not update birthdate.'),
+        );
+      }
+
+      final accounts = await _loadChildAccounts();
+      final index = accounts.indexWhere((a) => a.childId == childId);
+      if (index != -1) {
+        final old = accounts[index];
+        accounts[index] = ChildAccount(
+          loginCode: old.loginCode,
+          displayName: old.displayName,
+          passwordHash: old.passwordHash,
+          guardianEmail: old.guardianEmail,
+          childId: old.childId,
+          createdAt: old.createdAt,
+          birthdate: DateTime(birthdate.year, birthdate.month, birthdate.day),
+        );
+        await _saveChildAccounts(accounts);
+      }
+
+      return const AccountActionResult(success: true, message: 'Birthdate updated successfully.');
     } catch (e) {
       return AccountActionResult(success: false, message: _friendlyException(e));
     }

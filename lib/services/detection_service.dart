@@ -329,7 +329,8 @@ class DetectionService {
   }
 
   bool detectBlink({required double currentEAR, required double baselineEAR}) {
-    // Softened absolute thresholds for eye-open probability (not true EAR).
+    // Schmitt Trigger hysteresis FSM on ML Kit eye-open probability (not classical EAR).
+    // Closed ≤ 0.50, open ≥ 0.60; rising-edge registers one blink.
     const closedThreshold = 0.50;
     const openThreshold = 0.60;
 

@@ -81,23 +81,23 @@ class _ChildDashboardShareTabState extends State<ChildDashboardShareTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const GuardianSectionTitle('Share Telemetry', size: 20),
+                const GuardianSectionTitle('Share with Doctor', size: 20),
                 const SizedBox(height: LumiSpacing.md),
                 Text(
                   _childName != null
-                      ? 'Generate a temporary OTP code so ${_childName!}\'s clinician can view eye-care data.'
-                      : 'Generate a temporary OTP code for your clinician to view eye-care data.',
+                      ? 'Create a short visit code so ${_childName!}\'s eye doctor can safely view today’s eye-care summary.'
+                      : 'Create a short visit code so an eye doctor can safely view today’s eye-care summary.',
                   style: LumiTheme.clanRegular(14, color: LumiColors.textMuted, height: 1.45),
                 ),
                 const SizedBox(height: LumiSpacing.lg),
                 ArcadeButton(
-                  text: 'SHARE WITH CLINICIAN',
+                  text: 'SHARE WITH DOCTOR',
                   fontSize: 14,
                   onTap: _openShare,
                 ),
                 const SizedBox(height: LumiSpacing.md),
                 Text(
-                  'You can end the clinician session anytime from the share screen.',
+                  'You can end the doctor visit anytime from the share screen.',
                   style: LumiTheme.clanRegular(12, color: LumiColors.textMuted, height: 1.4),
                 ),
               ],

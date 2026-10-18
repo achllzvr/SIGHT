@@ -6,12 +6,17 @@ import 'active_child_context_service.dart';
 import 'offline_database_service.dart';
 import 'offline_models.dart';
 import 'feedback_service.dart';
+import 'local_metrics_service.dart';
+import 'server_sync_service.dart';
 import 'watch_tracking_session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class GamificationService {
   GamificationService._private();
   static final GamificationService instance = GamificationService._private();
+
+  /// When true (usage tier ≥ 3), safe-minute Stars are halted.
+  bool haltStarEconomy = false;
 
   // === Dual-Loop Notifiers ===
   final ValueNotifier<int> healthScoreNotifier = ValueNotifier<int>(100);
@@ -133,11 +138,16 @@ class GamificationService {
     await _persistState();
   }
 
-  // === THE CLINICAL SCORING ALGORITHM ===
+  // === CLINICAL SCORING (Obj #3) — adopted models ===
+  // Distance: Pinhole Camera / Triangle Similarity → distance_cm ≈ k / faceWidthPx (DetectionService).
+  // Blink: Schmitt Trigger hysteresis FSM (eye-open ≤0.50 closed / ≥0.60 open).
+  // Diopters: Optical Vergence D = 100/d; hinge-loss Pd = M1·max(0, D−3.33).
+  // Tear film: Ousler OPI = TBUT/IBI; Pb = M2·max(0, 10−B) as ocular protection deficit.
+  // HP: MAUT bounded 0–100 state; Stars: Fixed-Interval 60s token economy when HPloss==0.
   int _calculateHpLoss({required double averageDistanceCm, required double averageBlinkRatePerMin}) {
     if (averageDistanceCm <= 0) return 0; // Ignore invalid/calibrating data
 
-    // Step 1: Accommodative Demand (Diopters)
+    // Step 1: Accommodative Demand (Diopters) — Optical Vergence
     final double demand = 100.0 / averageDistanceCm;
 
     // Step 2: Dioptric Penalty (Safe Baseline: 30cm = ~3.33 D)
@@ -230,7 +240,8 @@ class GamificationService {
       final bool safeMinute = trackingActive &&
           hpLoss == 0 &&
           _distanceSamples.isNotEmpty &&
-          averageDistance >= _safeDistanceCm;
+          averageDistance >= _safeDistanceCm &&
+          !haltStarEconomy;
 
       int coinsEarned = 0;
       if (safeMinute) {
@@ -256,10 +267,28 @@ class GamificationService {
         await _notifySafeViewingMinute();
       }
 
+      // Concurrent cross-platform: flush pending metrics + presence heartbeat each 60s while Watch Area is active.
+      if (trackingActive) {
+        unawaited(_watchAreaHeartbeat());
+      }
+
       _distanceSamples.clear();
       _blinkRateSamples.clear();
     } finally {
       _isFlushingMinuteBuffer = false;
+    }
+  }
+
+  Future<void> _watchAreaHeartbeat() async {
+    try {
+      final childId = await ActiveChildContextService.instance.getActiveChildId();
+      if (childId == null) return;
+      await LocalMetricsService.instance.attemptBackgroundSync();
+      await ServerSyncService.instance.devicePing(childId);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[GamificationService] Watch Area heartbeat failed: $e');
+      }
     }
   }
 

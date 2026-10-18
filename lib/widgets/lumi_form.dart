@@ -17,6 +17,7 @@ class LumiPillField extends StatelessWidget {
     this.maxLength,
     this.inputFormatters,
     this.errorText,
+    this.onChanged,
   });
 
   final String label;
@@ -27,6 +28,7 @@ class LumiPillField extends StatelessWidget {
   final int? maxLength;
   final List<TextInputFormatter>? inputFormatters;
   final String? errorText;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +41,7 @@ class LumiPillField extends StatelessWidget {
       maxLength: maxLength,
       inputFormatters: inputFormatters,
       errorText: errorText,
+      onChanged: onChanged,
     );
   }
 }

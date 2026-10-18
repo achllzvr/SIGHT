@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../services/auth_account_service.dart';
+import '../../../services/auth_session_service.dart';
+import '../../../services/clinical_analytics_helpers.dart';
 import '../../../services/guardian_preferences_service.dart';
 import '../../../services/rule_engine_service.dart';
 import '../../../services/session_timer_service.dart';
@@ -19,6 +22,8 @@ class _ChildDashboardLimitsTabState extends State<ChildDashboardLimitsTab> {
   late GuardianPreferences _preferences;
   bool _loading = true;
   bool _saving = false;
+  int _ageMaxMinutes = 120;
+  int _ageYears = 12;
 
   @override
   void initState() {
@@ -29,9 +34,22 @@ class _ChildDashboardLimitsTabState extends State<ChildDashboardLimitsTab> {
   Future<void> _loadPreferences() async {
     try {
       final prefs = await GuardianPreferencesService.instance.loadPreferences();
+      DateTime? birthdate;
+      final session = await AuthSessionService.instance.loadUserSession();
+      final email = session?.guardianEmail;
+      if (email != null && email.isNotEmpty) {
+        final accounts = await AuthAccountService.instance.listChildrenForGuardian(email);
+        final match = accounts.where((c) => c.childId == (widget.childId ?? prefs.selectedChildId));
+        if (match.isNotEmpty) birthdate = match.first.birthdate;
+      }
+      final age = ClinicalAnalyticsHelpers.chronologicalAgeYears(birthdate);
+      final ageMax = ClinicalAnalyticsHelpers.ageMaxMinutes(age);
+      final clamped = ClinicalAnalyticsHelpers.clampDailyLimit(prefs.dailyScreenLimitMinutes, ageMax);
       if (mounted) {
         setState(() {
-          _preferences = prefs;
+          _ageYears = age;
+          _ageMaxMinutes = ageMax;
+          _preferences = prefs.copyWith(dailyScreenLimitMinutes: clamped);
           _loading = false;
         });
       }
@@ -133,17 +151,37 @@ class _ChildDashboardLimitsTabState extends State<ChildDashboardLimitsTab> {
                   ],
                 ),
                 const SizedBox(height: LumiSpacing.sm),
+                Text(
+                  'Age $_ageYears · Daily Play Area limit $_ageMaxMinutes min '
+                  '(${_ageYears < 6 ? '90 min unlocks at age 6 · ' : ''}'
+                  '${_ageYears < 9 ? '120 min unlocks at age 9' : 'highest daily limit unlocked'})',
+                  style: LumiTheme.clanRegular(12, color: LumiColors.textMuted, height: 1.35),
+                ),
+                const SizedBox(height: LumiSpacing.sm),
                 _arcadeSlider(
-                  value: _preferences.dailyScreenLimitMinutes.toDouble(),
+                  value: _preferences.dailyScreenLimitMinutes
+                      .clamp(15, _ageMaxMinutes)
+                      .toDouble(),
                   min: 15,
-                  max: 240,
-                  divisions: 15,
+                  max: 120,
+                  divisions: ((120 - 15) / 5).round(),
                   accent: LumiColors.primaryGreen,
                   track: LumiColors.secondaryLight,
-                  onChanged: (v) => setState(
-                    () => _preferences = _preferences.copyWith(dailyScreenLimitMinutes: v.toInt()),
-                  ),
+                  onChanged: (v) {
+                    final next = ClinicalAnalyticsHelpers.clampDailyLimit(v.round(), _ageMaxMinutes);
+                    setState(
+                      () => _preferences = _preferences.copyWith(dailyScreenLimitMinutes: next),
+                    );
+                  },
                 ),
+                if (_ageMaxMinutes < 120)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'You can set up to $_ageMaxMinutes minutes for this age. Higher limits unlock as your child grows.',
+                      style: LumiTheme.clanRegular(11, color: LumiColors.textMuted),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -171,7 +209,7 @@ class _ChildDashboardLimitsTabState extends State<ChildDashboardLimitsTab> {
                 ),
                 const SizedBox(height: LumiSpacing.sm),
                 Text(
-                  'Critical below ${_preferences.criticalDistanceThresholdCm.toStringAsFixed(0)} cm',
+                  'Pause Play Area below ${_preferences.criticalDistanceThresholdCm.toStringAsFixed(0)} cm',
                   style: LumiTheme.clanMedium(14, color: LumiColors.textDark),
                 ),
                 _arcadeSlider(
@@ -251,8 +289,8 @@ class _ChildDashboardLimitsTabState extends State<ChildDashboardLimitsTab> {
                 const SizedBox(height: LumiSpacing.md),
                 Text(
                   isRelaxed
-                      ? 'Relaxed: gentler reminders, fewer forced breaks.'
-                      : 'Strict: stronger enforcement of distance and blink habits.',
+                      ? 'Gentle mode: softer reminders and fewer forced breaks.'
+                      : 'Careful mode: stronger reminders for distance and blinking.',
                   style: LumiTheme.clanRegular(12, color: LumiColors.textMuted, height: 1.4),
                 ),
               ],

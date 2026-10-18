@@ -4,8 +4,10 @@ import '../../services/active_child_context_service.dart';
 import '../../services/auth_account_service.dart';
 import '../../services/legal_document_service.dart';
 import '../../theme/lumi_theme.dart';
+import '../../utils/password_strength.dart';
 import '../../widgets/arcade/arcade.dart';
 import '../../widgets/auth_landing_shell.dart';
+import '../../widgets/password_strength_checklist.dart';
 import 'login_screen.dart';
 import 'verify_email_otp_screen.dart';
 
@@ -29,6 +31,9 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
   bool _loading = false;
   String? _error;
   List<int> _legalIds = const [];
+  bool _showPasswordChecklist = false;
+  String _passwordDraft = '';
+  String _confirmDraft = '';
 
   @override
   void initState() {
@@ -100,12 +105,13 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
       setState(() => _error = 'Please enter a valid email.');
       return;
     }
-    if (password.length < 6) {
-      setState(() => _error = 'Password must be at least 6 characters.');
-      return;
-    }
-    if (password != confirm) {
-      setState(() => _error = 'Passwords don’t match.');
+    final strength = evaluatePasswordStrength(password: password, confirm: confirm);
+    final strengthError = passwordStrengthErrorMessage(strength);
+    if (strengthError != null) {
+      setState(() {
+        _error = strengthError;
+        _showPasswordChecklist = true;
+      });
       return;
     }
 
@@ -244,6 +250,12 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
             controller: _passwordController,
             obscureText: true,
             textInputAction: TextInputAction.next,
+            onChanged: (value) {
+              setState(() {
+                _passwordDraft = value;
+                _showPasswordChecklist = true;
+              });
+            },
           ),
           const SizedBox(height: LumiSpacing.md),
           ArcadeTextField(
@@ -251,6 +263,17 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
             controller: _confirmController,
             obscureText: true,
             textInputAction: TextInputAction.done,
+            onChanged: (value) {
+              setState(() {
+                _confirmDraft = value;
+                _showPasswordChecklist = true;
+              });
+            },
+          ),
+          PasswordStrengthChecklist(
+            password: _passwordDraft,
+            confirm: _confirmDraft,
+            visible: _showPasswordChecklist,
           ),
           if (_error != null) ...[
             const SizedBox(height: LumiSpacing.md),
@@ -264,7 +287,11 @@ class _RegisterGuardianScreenState extends State<RegisterGuardianScreen> {
           const SizedBox(height: LumiSpacing.xl),
           AuthPrimaryButton(
             label: _loading ? 'Please wait…' : 'Register',
-            enabled: !_loading,
+            enabled: !_loading &&
+                evaluatePasswordStrength(
+                  password: _passwordDraft,
+                  confirm: _confirmDraft,
+                ).isFullyValid,
             onTap: _register,
           ),
         ],

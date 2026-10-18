@@ -191,47 +191,70 @@ class _ShareTelemetryScreenState extends State<ShareTelemetryScreen> {
                 else
                   Expanded(
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: LumiSpacing.lg,
-                            vertical: LumiSpacing.sm,
-                          ),
-                          decoration: BoxDecoration(
-                            color: LumiColors.secondaryPurple,
-                            borderRadius: BorderRadius.circular(LumiRadii.md),
-                            border: Border.all(color: LumiColors.primaryPurple, width: ArcadeSizes.cardBorder),
-                            boxShadow: LumiShadows.card(LumiColors.primaryPurple),
-                          ),
-                          child: Text(
-                            code,
-                            style: LumiTheme.joyful(38, color: LumiColors.primaryPurple, letterSpacing: 6),
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: LumiSpacing.lg,
+                              vertical: LumiSpacing.sm,
+                            ),
+                            decoration: BoxDecoration(
+                              color: LumiColors.secondaryPurple,
+                              borderRadius: BorderRadius.circular(LumiRadii.md),
+                              border: Border.all(color: LumiColors.primaryPurple, width: ArcadeSizes.cardBorder),
+                              boxShadow: LumiShadows.card(LumiColors.primaryPurple),
+                            ),
+                            child: Text(
+                              code,
+                              textAlign: TextAlign.center,
+                              style: LumiTheme.joyful(38, color: LumiColors.primaryPurple, letterSpacing: 6),
+                            ),
                           ),
                         ),
                         const SizedBox(height: LumiSpacing.lg),
                         if (payload.isNotEmpty)
-                          Flexible(
-                            child: Container(
-                              padding: const EdgeInsets.all(LumiSpacing.md),
-                              decoration: BoxDecoration(
-                                color: LumiColors.cardWhite,
-                                borderRadius: BorderRadius.circular(LumiRadii.lg),
-                                border: Border.all(
-                                  color: LumiColors.secondaryLight,
-                                  width: ArcadeSizes.cardBorder,
-                                ),
-                                boxShadow: LumiShadows.card(),
-                              ),
-                              child: QrImageView(
-                                data: payload,
-                                version: QrVersions.auto,
-                                size: 200,
+                          Expanded(
+                            child: Center(
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final side = constraints.biggest.shortestSide;
+                                  final qrSize = (side * 0.72).clamp(220.0, 280.0);
+                                  return Container(
+                                    padding: const EdgeInsets.all(LumiSpacing.md),
+                                    decoration: BoxDecoration(
+                                      color: LumiColors.cardWhite,
+                                      borderRadius: BorderRadius.circular(LumiRadii.lg),
+                                      border: Border.all(
+                                        color: LumiColors.secondaryLight,
+                                        width: ArcadeSizes.cardBorder,
+                                      ),
+                                      boxShadow: LumiShadows.card(),
+                                    ),
+                                    child: QrImageView(
+                                      data: payload,
+                                      version: QrVersions.auto,
+                                      size: qrSize,
+                                      eyeStyle: const QrEyeStyle(
+                                        eyeShape: QrEyeShape.square,
+                                        color: Colors.black,
+                                      ),
+                                      dataModuleStyle: const QrDataModuleStyle(
+                                        dataModuleShape: QrDataModuleShape.square,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
                             ),
-                          ),
-                        const Spacer(),
+                          )
+                        else
+                          const Spacer(),
+                        const SizedBox(height: LumiSpacing.md),
                         Text(
                           'Waiting for doctor to scan…',
+                          textAlign: TextAlign.center,
                           style: LumiTheme.clanRegular(14, color: LumiColors.textMuted),
                         ),
                         const SizedBox(height: LumiSpacing.md),

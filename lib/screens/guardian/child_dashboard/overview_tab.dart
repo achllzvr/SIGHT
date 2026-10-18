@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../../services/active_child_context_service.dart';
 import '../../../services/auth_session_service.dart';
+import '../../../services/clinical_analytics_helpers.dart';
+import '../../../services/gamification_service.dart';
 import '../../../services/local_metrics_service.dart';
 import '../../../services/offline_database_service.dart';
 import '../../../services/offline_models.dart';
+import '../../../services/server_sync_service.dart';
 import '../../../theme/lumi_theme.dart';
 import '../../../widgets/arcade/arcade.dart';
+import '../../../widgets/clinical_trend_alert_card.dart';
 import 'charts.dart';
 import 'shared_widgets.dart';
 
@@ -24,8 +28,10 @@ class _ChildDashboardOverviewTabState extends State<ChildDashboardOverviewTab> {
   bool _loading = true;
   bool _hasData = false;
 
-  String _selectedPeriod = '7 days';
+  String _selectedRangeApi = '7d';
+  String _selectedPeriod = 'Last 7 Days';
   Map<String, dynamic>? _analyticsData;
+  Map<String, dynamic>? _dashboardRemote;
   List<CuratedMetricBatch> _batches = [];
   Map<DateTime, List<CuratedMetricBatch>> _batchesByDay = {};
 
@@ -84,14 +90,22 @@ class _ChildDashboardOverviewTabState extends State<ChildDashboardOverviewTab> {
       final childId = widget.childId ?? await ActiveChildContextService.instance.getActiveChildId();
       if (childId == null) return;
 
+      final remote = await ServerSyncService.instance.fetchChildDashboard(
+        childId,
+        range: _selectedRangeApi,
+      );
+      if (remote.success && remote.data != null) {
+        _dashboardRemote = remote.data;
+        final usage = remote.data!['usage_threshold'];
+        if (usage is Map && (usage['tier'] as num?) != null) {
+          GamificationService.instance.haltStarEconomy = ((usage['tier'] as num).toInt() >= 3);
+        }
+      }
+
       await LocalMetricsService.instance.initialize();
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final startDate = switch (_selectedPeriod) {
-        '30 days' => today.subtract(const Duration(days: 30)),
-        '3 months' => today.subtract(const Duration(days: 90)),
-        _ => today.subtract(const Duration(days: 7)),
-      };
+      final startDate = today.subtract(ClinicalAnalyticsHelpers.lookbackForRange(_selectedRangeApi));
 
       final batches = await OfflineDatabaseService.instance.loadBatchesForChild(
         childId,
@@ -262,7 +276,7 @@ class _ChildDashboardOverviewTabState extends State<ChildDashboardOverviewTab> {
                 children: [
                   const Expanded(child: GuardianSectionTitle('Usage Analytics', size: 17)),
                   PopupMenuButton<String>(
-                    initialValue: _selectedPeriod,
+                    initialValue: _selectedRangeApi,
                     color: LumiColors.cardWhite,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -270,23 +284,21 @@ class _ChildDashboardOverviewTabState extends State<ChildDashboardOverviewTab> {
                       side: const BorderSide(color: LumiColors.primaryPurple, width: 3),
                     ),
                     onSelected: (value) async {
-                      setState(() => _selectedPeriod = value);
+                      final opt = ClinicalAnalyticsHelpers.rangeOptions
+                          .firstWhere((o) => o.api == value, orElse: () => ClinicalAnalyticsHelpers.rangeOptions.first);
+                      setState(() {
+                        _selectedRangeApi = opt.api;
+                        _selectedPeriod = opt.label;
+                      });
                       await _loadAnalyticsData();
                       if (mounted) setState(() {});
                     },
                     itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: '7 days',
-                        child: Text('7 days', style: LumiTheme.clanMedium(14, color: LumiColors.textDark)),
-                      ),
-                      PopupMenuItem(
-                        value: '30 days',
-                        child: Text('30 days', style: LumiTheme.clanMedium(14, color: LumiColors.textDark)),
-                      ),
-                      PopupMenuItem(
-                        value: '3 months',
-                        child: Text('3 months', style: LumiTheme.clanMedium(14, color: LumiColors.textDark)),
-                      ),
+                      for (final opt in ClinicalAnalyticsHelpers.rangeOptions)
+                        PopupMenuItem(
+                          value: opt.api,
+                          child: Text(opt.label, style: LumiTheme.clanMedium(14, color: LumiColors.textDark)),
+                        ),
                     ],
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: LumiSpacing.md, vertical: 6),
@@ -312,8 +324,21 @@ class _ChildDashboardOverviewTabState extends State<ChildDashboardOverviewTab> {
               ),
             ),
             const SizedBox(height: LumiSpacing.md),
+            ClinicalTrendAlertCard(
+              alert: _dashboardRemote?['clinical_trend_alert'] is Map
+                  ? Map<String, dynamic>.from(_dashboardRemote!['clinical_trend_alert'] as Map)
+                  : null,
+              usageThreshold: _dashboardRemote?['usage_threshold'] is Map
+                  ? Map<String, dynamic>.from(_dashboardRemote!['usage_threshold'] as Map)
+                  : null,
+              opi: _dashboardRemote?['ocular_protection_index'] is Map
+                  ? Map<String, dynamic>.from(_dashboardRemote!['ocular_protection_index'] as Map)
+                  : null,
+              childId: widget.childId,
+            ),
+            const SizedBox(height: LumiSpacing.md),
             if (_batches.isEmpty)
-              const EmptyDataIndicator(message: 'No analytical data available for this time period.')
+              const EmptyDataIndicator(message: 'No eye-care data for this time period yet.')
             else ...[
               AnalyticsMetricCard(
                 title: 'Avg Screen Time',

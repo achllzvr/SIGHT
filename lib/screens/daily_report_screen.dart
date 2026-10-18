@@ -100,6 +100,21 @@ class _DailyReportScreenState extends State<DailyReportScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 16, height: 24 / 16, color: LumiColors.textMuted),
                 ),
+                const SizedBox(height: LumiSpacing.md),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: LumiColors.pinkUnsafe.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: LumiColors.redAlert.withValues(alpha: 0.35)),
+                  ),
+                  child: const Text(
+                    'You finished today’s Play Area time. '
+                    'Rest your eyes, stretch, and come back tomorrow for more stars!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, height: 1.35, color: LumiColors.textDark),
+                  ),
+                ),
                 const SizedBox(height: LumiSpacing.xxl),
 
                 RoundedCard(

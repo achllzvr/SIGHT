@@ -220,6 +220,45 @@ class BlinkRateTrendsChart extends StatelessWidget {
             'Daily average blinks',
             style: TextStyle(fontSize: 12, color: LumiColors.textMuted),
           ),
+          Builder(
+            builder: (context) {
+              final rates = chartData.map((e) => e.blinkRate).where((r) => r > 0).toList();
+              if (rates.isEmpty) return const SizedBox.shrink();
+              final avg = rates.reduce((a, b) => a + b) / rates.length;
+              // Ousler OPI live badge (TBUT≈6s): Levels 1–4 tear-film risk.
+              final ibi = 60.0 / avg;
+              final opi = 6.0 / ibi;
+              final level = avg >= 12 && opi >= 1.2
+                  ? 1
+                  : avg >= 10 && opi >= 1.0
+                      ? 2
+                      : avg >= 6 && opi >= 0.6
+                          ? 3
+                          : 4;
+              final label = switch (level) {
+                1 => 'Eyes look comfortable',
+                2 => 'Blinking a bit less than ideal',
+                3 => 'Eyes may feel dry — more blinks help',
+                _ => 'Eyes need a break — try the blink game',
+              };
+              return Padding(
+                padding: const EdgeInsets.only(top: LumiSpacing.sm),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(LumiSpacing.md),
+                  decoration: BoxDecoration(
+                    color: LumiColors.secondaryLight,
+                    borderRadius: BorderRadius.circular(LumiRadii.md),
+                    border: Border.all(color: LumiColors.outline, width: 2),
+                  ),
+                  child: Text(
+                    'Blink comfort · Level $level — $label',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: LumiColors.textDark),
+                  ),
+                ),
+              );
+            },
+          ),
           if (hasWarning) ...[
             const SizedBox(height: LumiSpacing.md),
             Container(

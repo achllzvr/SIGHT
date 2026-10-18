@@ -290,4 +290,103 @@ class ServerSyncService {
       return SyncOperationResult(success: false, error: 'Pet sync exception: $e');
     }
   }
+
+  /// 60s Watch Area heartbeat — updates last_sync + child user presence for concurrent web viewing.
+  Future<SyncOperationResult<void>> devicePing(int childId) async {
+    if (!ApiConfigService.isConfigured) {
+      return const SyncOperationResult(success: false, error: 'API base URL is not configured.');
+    }
+    try {
+      final uri = ApiConfigService.buildUri(ApiConfigService.devicePingEndpoint);
+      final response = await ApiClientService.instance.post(
+        uri,
+        jsonBody: {'child_id': childId},
+      );
+      if (!response.isSuccess) {
+        return SyncOperationResult(
+          success: false,
+          error: 'Device ping failed (${response.statusCode})',
+        );
+      }
+      return const SyncOperationResult(success: true);
+    } catch (e) {
+      return SyncOperationResult(success: false, error: 'Device ping exception: $e');
+    }
+  }
+
+  /// Multi-horizon dashboard payload (alerts, OPI, usage tiers, series).
+  Future<SyncOperationResult<Map<String, dynamic>>> fetchChildDashboard(
+    int childId, {
+    String range = '7d',
+  }) async {
+    if (!ApiConfigService.isConfigured) {
+      return const SyncOperationResult(success: false, error: 'API base URL is not configured.');
+    }
+    try {
+      final uri = ApiConfigService.buildUri(
+        ApiConfigService.childDashboardEndpoint(childId),
+        queryParameters: {'range': range},
+      );
+      final response = await ApiClientService.instance.get(uri);
+      if (!response.isSuccess) {
+        return SyncOperationResult(
+          success: false,
+          error: 'Dashboard fetch failed (${response.statusCode})',
+        );
+      }
+      final data = response.data;
+      if (data is Map && data['data'] is Map) {
+        return SyncOperationResult(
+          success: true,
+          data: Map<String, dynamic>.from(data['data'] as Map),
+        );
+      }
+      if (data is Map<String, dynamic>) {
+        return SyncOperationResult(success: true, data: data);
+      }
+      return const SyncOperationResult(success: false, error: 'Invalid dashboard payload.');
+    } catch (e) {
+      return SyncOperationResult(success: false, error: 'Dashboard fetch exception: $e');
+    }
+  }
+
+  Future<SyncOperationResult<List<Map<String, dynamic>>>> fetchPartneredProfessionals({
+    String? specialty,
+    String? query,
+  }) async {
+    if (!ApiConfigService.isConfigured) {
+      return const SyncOperationResult(success: false, error: 'API base URL is not configured.');
+    }
+    try {
+      final params = <String, String>{};
+      if (specialty != null && specialty.isNotEmpty) params['specialty'] = specialty;
+      if (query != null && query.isNotEmpty) params['q'] = query;
+      final uri = ApiConfigService.buildUri(
+        ApiConfigService.partneredProfessionalsEndpoint,
+        queryParameters: params.isEmpty ? null : params,
+      );
+      final response = await ApiClientService.instance.get(uri);
+      if (!response.isSuccess) {
+        return SyncOperationResult(
+          success: false,
+          error: 'Professionals fetch failed (${response.statusCode})',
+        );
+      }
+      final data = response.data;
+      final list = <Map<String, dynamic>>[];
+      if (data is Map) {
+        final pros = data['data'] is Map
+            ? (data['data'] as Map)['professionals']
+            : data['professionals'];
+        if (pros is List) {
+          for (final item in pros) {
+            if (item is Map) list.add(Map<String, dynamic>.from(item));
+          }
+        }
+      }
+      return SyncOperationResult(success: true, data: list);
+    } catch (e) {
+      return SyncOperationResult(success: false, error: 'Professionals fetch exception: $e');
+    }
+  }
 }

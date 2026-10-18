@@ -7,6 +7,7 @@ class ApiConfigService {
   static const String resendVerificationEndpoint = '/api/mobile/guardian/resend-verification';
   static const String resetPasswordEndpoint = '/api/mobile/guardian/reset-password';
   static const String updateChildPasswordEndpoint = '/api/mobile/child/{child_id}/password';
+  static const String updateChildBirthdateEndpoint = '/api/mobile/child/{child_id}/birthdate';
   static const String loginChildEndpoint = '/api/mobile/child/login';
   static const String guardianChildrenEndpoint = '/api/mobile/guardian/children';
   static const String sharedLoginEndpoint = '/api/shared/login';
@@ -23,6 +24,10 @@ class ApiConfigService {
       '/api/mobile/child/$childId/sync/pet';
   static String calibrationEndpoint(int childId) =>
       '/api/mobile/child/$childId/sync/calibration';
+  static String devicePingEndpoint = '/api/mobile/device/ping';
+  static String partneredProfessionalsEndpoint = '/api/mobile/partnered-professionals';
+  static String childDashboardEndpoint(int childId) =>
+      '/api/mobile/child/$childId/dashboard';
 
   static bool get isConfigured => baseUrl.trim().isNotEmpty;
 

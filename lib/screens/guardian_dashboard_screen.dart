@@ -11,9 +11,12 @@ import '../services/cleanup_service.dart';
 import '../services/connectivity_service.dart';
 import '../services/guardian_setup_service.dart';
 import '../theme/lumi_theme.dart';
+import '../utils/password_strength.dart';
 import '../widgets/arcade/arcade.dart';
 import '../widgets/lumi_dialog.dart';
 import '../widgets/lumi_form.dart';
+import '../widgets/password_strength_checklist.dart';
+import '../services/clinical_analytics_helpers.dart';
 import '../services/local_metrics_service.dart';
 import 'auth/verify_email_otp_screen.dart';
 import 'guardian_access_audit_screen.dart';
@@ -98,17 +101,17 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
         final childAccounts = await AuthAccountService.instance.listChildrenForGuardian(_guardianEmail!);
 
         final children = childAccounts.map((child) {
-          int age = 0;
-          if (child.birthdate != null) {
-            age = _calculateAge(child.birthdate!);
-          }
+          final birthdate = ClinicalAnalyticsHelpers.parseBirthdate(child.birthdate);
+          final age = birthdate == null
+              ? -1
+              : ClinicalAnalyticsHelpers.chronologicalAgeYears(birthdate);
 
           return ChildInfo(
             childId: child.childId ?? 0,
             displayName: child.displayName,
             ageYears: age,
             loginCode: child.loginCode,
-            birthdate: child.birthdate,
+            birthdate: birthdate,
           );
         }).toList();
 
@@ -147,13 +150,33 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
     }
   }
 
-  int _calculateAge(DateTime birthDate) {
-    final today = DateTime.now();
-    int age = today.year - birthDate.year;
-    if (today.month < birthDate.month || (today.month == birthDate.month && today.day < birthDate.day)) {
-      age--;
+  Future<void> _editChildBirthdate(ChildInfo child) async {
+    final now = DateTime.now();
+    final initial = child.birthdate ?? DateTime(now.year - 8, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 18),
+      lastDate: now.subtract(const Duration(days: 1)),
+      helpText: 'Child birthdate',
+    );
+    if (picked == null || !mounted) return;
+
+    final result = await AuthAccountService.instance.updateChildBirthdate(
+      childId: child.childId,
+      birthdate: picked,
+    );
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.message),
+        backgroundColor: result.success ? LumiColors.success : LumiColors.redAlert,
+      ),
+    );
+    if (result.success) {
+      await _loadChildren();
     }
-    return age;
   }
 
   void _selectChild(int childId) {
@@ -318,9 +341,16 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
         builder: (dialogContext) {
           String? error;
           bool inProgress = false;
+          bool showChecklist = false;
+          String passwordDraft = '';
+          String confirmDraft = '';
 
           return StatefulBuilder(
             builder: (_, setDialogState) {
+              final strength = evaluatePasswordStrength(
+                password: passwordDraft,
+                confirm: confirmDraft,
+              );
               return LumiDialog(
                 title: 'Change Account Password',
                 content: Column(
@@ -336,6 +366,12 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                       label: 'New Password',
                       controller: newController,
                       obscureText: true,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          passwordDraft = value;
+                          showChecklist = true;
+                        });
+                      },
                     ),
                     const SizedBox(height: LumiSpacing.md),
                     LumiPillField(
@@ -343,6 +379,17 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                       controller: confirmController,
                       obscureText: true,
                       errorText: error,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          confirmDraft = value;
+                          showChecklist = true;
+                        });
+                      },
+                    ),
+                    PasswordStrengthChecklist(
+                      password: passwordDraft,
+                      confirm: confirmDraft,
+                      visible: showChecklist,
                     ),
                   ],
                 ),
@@ -369,16 +416,20 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                       label: 'Update Password',
                       backgroundColor: LumiColors.greenMid,
                       foregroundColor: Colors.white,
-                      onPressed: () async {
+                      onPressed: !strength.isFullyValid
+                          ? null
+                          : () async {
                         setDialogState(() {
                           inProgress = true;
                           error = null;
+                          showChecklist = true;
                         });
 
-                        if (newController.text != confirmController.text) {
+                        final strengthError = passwordStrengthErrorMessage(strength);
+                        if (strengthError != null) {
                           setDialogState(() {
                             inProgress = false;
-                            error = 'New passwords do not match.';
+                            error = strengthError;
                           });
                           return;
                         }
@@ -884,9 +935,33 @@ class _GuardianDashboardScreenState extends State<GuardianDashboardScreen> {
                                               style: LumiTheme.joyful(17, color: LumiColors.textDark),
                                             ),
                                             const SizedBox(height: LumiSpacing.xs),
-                                            Text(
-                                              '${child.ageYears} years old',
-                                              style: LumiTheme.clanRegular(13, color: LumiColors.textMuted),
+                                            GestureDetector(
+                                              onTap: child.birthdate == null
+                                                  ? () => _editChildBirthdate(child)
+                                                  : null,
+                                              child: Row(
+                                                children: [
+                                                  Flexible(
+                                                    child: Text(
+                                                      ClinicalAnalyticsHelpers.ageDisplayLabel(child.birthdate),
+                                                      style: LumiTheme.clanRegular(
+                                                        13,
+                                                        color: child.birthdate == null
+                                                            ? LumiColors.warning
+                                                            : LumiColors.textMuted,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if (child.birthdate == null) ...[
+                                                    const SizedBox(width: 4),
+                                                    const Icon(
+                                                      Icons.edit_calendar_outlined,
+                                                      size: 16,
+                                                      color: LumiColors.warning,
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
                                             ),
                                           ],
                                         ),
