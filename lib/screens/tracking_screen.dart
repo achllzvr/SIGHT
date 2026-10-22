@@ -57,16 +57,19 @@ class _TrackingScreenState extends State<TrackingScreen> {
                               title: 'Eye Blinks',
                               statusBuilder: (context) => const _StatusPill(label: 'GOOD'),
                               valueBuilder: (context) => ValueListenableBuilder<int>(
-                                valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
-                                builder: (_, value, __) => Text(
-                                  '$value',
+                                valueListenable: MetricsService.instance.blinkCountNotifier,
+                                builder: (_, total, __) => Text(
+                                  '$total',
                                   style: LumiTheme.clanMedium(32, color: LumiColors.primaryGreen, height: 1),
                                 ),
                               ),
-                              unitText: ' blinks per minute',
-                              footnoteBuilder: (context) => Text(
-                                'Keep blinking — aim for 10 or more each minute',
-                                style: LumiTheme.clanRegular(12),
+                              unitText: ' blinks this session',
+                              footnoteBuilder: (context) => ValueListenableBuilder<int>(
+                                valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
+                                builder: (_, rate, __) => Text(
+                                  'Keeps counting until you log out · $rate / min right now',
+                                  style: LumiTheme.clanRegular(12),
+                                ),
                               ),
                               onTap: () => Navigator.push(
                                 context,

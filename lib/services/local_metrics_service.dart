@@ -258,8 +258,8 @@ class LocalMetricsService {
     Map<String, dynamic> payloadFor(CuratedMetricBatch b) => {
           'timestamp': formatTimestamp(b.windowEnd),
           'screen_time_minutes': b.screenTimeMinutes,
-          'avg_blink_rate': b.averageBlinkRate ?? 0.0,
-          'avg_distance': b.averageDistanceCm ?? 0.0,
+          'avg_blink_rate': b.averageBlinkRate,
+          'avg_distance': b.averageDistanceCm,
           'strain_events': b.strainEvents,
           'health_score': b.healthScore ?? 100,
           'coins': b.coins ?? 0,

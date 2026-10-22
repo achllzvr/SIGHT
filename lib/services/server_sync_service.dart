@@ -44,8 +44,8 @@ class ServerSyncService {
             {
               'timestamp': formattedTimestamp,
               'screen_time_minutes': batch.screenTimeMinutes,
-              'avg_blink_rate': batch.averageBlinkRate ?? 0.0,
-              'avg_distance': batch.averageDistanceCm ?? 0.0,
+              'avg_blink_rate': batch.averageBlinkRate,
+              'avg_distance': batch.averageDistanceCm,
               'strain_events': batch.strainEvents,
               'health_score': batch.healthScore ?? 100,
               'coins': batch.coins ?? 0,

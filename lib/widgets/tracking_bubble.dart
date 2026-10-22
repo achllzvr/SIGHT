@@ -118,7 +118,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
             valueListenable: SessionTimerService.instance.remainingSecondsNotifier,
             builder: (_, seconds, __) {
               return ValueListenableBuilder<int>(
-                valueListenable: MetricsService.instance.blinkRatePerMinNotifier,
+                valueListenable: MetricsService.instance.blinkCountNotifier,
                 builder: (_, blinks, __) {
                   return AnimatedSwitcher(
                     duration: const Duration(milliseconds: 320),
@@ -138,7 +138,7 @@ class _TrackingBubbleState extends State<TrackingBubble> {
                       key: ValueKey(_mode),
                       icon: _showingTime ? 'timer' : 'eye',
                       value: _showingTime ? LumiTheme.formatRemaining(seconds) : '$blinks',
-                      caption: _showingTime ? 'TIME LEFT' : 'BLINKS/MIN',
+                      caption: _showingTime ? 'TIME LEFT' : 'BLINKS',
                       accent: accent,
                       expanded: _expanded,
                     ),
