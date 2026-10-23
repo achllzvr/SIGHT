@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 
 import 'active_child_context_service.dart';
+import 'mascot_skin_service.dart';
 import 'offline_database_service.dart';
 import 'offline_models.dart';
 import 'feedback_service.dart';
@@ -26,9 +27,19 @@ class GamificationService {
   final ValueNotifier<PetMood> petMoodNotifier = ValueNotifier<PetMood>(PetMood.happy);
 
   final ValueNotifier<String> mascotNameNotifier = ValueNotifier<String>('LUMI');
-  final ValueNotifier<String?> equippedItemKeyNotifier = ValueNotifier<String?>(null);
+  final ValueNotifier<String> equippedItemKeyNotifier =
+      ValueNotifier<String>(MascotSkinCatalog.frogKey);
 
-  static const _equippedPrefsKey = 'lumi_equipped_item';
+  static const _legacyEquippedPrefsKey = 'lumi_equipped_item';
+
+  static String _equippedPrefsKeyFor(int? childId) =>
+      'lumi_equipped_item:${childId ?? 'none'}';
+
+  /// Set when the child explicitly equips a skin on this device, cleared once
+  /// the server acknowledges it — so a fresh install's frog default never
+  /// overwrites an equipped skin saved on the account.
+  static String equippedDirtyKeyFor(int childId) =>
+      'lumi_equipped_dirty:$childId';
 
   Timer? _faceLossTimer;
 
@@ -94,11 +105,51 @@ class GamificationService {
     petMoodNotifier.value = state.petMood;
     mascotNameNotifier.value = state.mascotName;
 
+    // Legacy placeholder purchases are discarded (no refund): drop any
+    // local inventory rows that are not real skins.
+    await OfflineDatabaseService.instance
+        .deleteInventoryExcept(MascotSkinCatalog.all.map((s) => s.key).toSet());
+
     final prefs = await SharedPreferences.getInstance();
-    equippedItemKeyNotifier.value = prefs.getString(_equippedPrefsKey);
+    await prefs.remove(_legacyEquippedPrefsKey);
+    await _loadEquippedForActiveChild();
+    ActiveChildContextService.instance.activeChildIdNotifier
+        .addListener(_onActiveChildChanged);
 
     _startMinuteBufferTimer();
     _initialized = true;
+  }
+
+  void _onActiveChildChanged() {
+    unawaited(() async {
+      await _loadEquippedForActiveChild();
+      final childId = ActiveChildContextService.instance.activeChildIdNotifier.value;
+      if (childId != null) {
+        // Restore/refresh account-owned skins (login, child switch, reinstall).
+        await ServerSyncService.instance.syncInventoryForChild(childId);
+      }
+    }());
+  }
+
+  /// Reload the equipped skin for whoever the active child now is.
+  Future<void> _loadEquippedForActiveChild() async {
+    final childId = await ActiveChildContextService.instance.getActiveChildId();
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString(_equippedPrefsKeyFor(childId));
+    final skin = MascotSkinCatalog.byKey(stored);
+    equippedItemKeyNotifier.value = skin.key;
+    if (stored != skin.key) {
+      await prefs.setString(_equippedPrefsKeyFor(childId), skin.key);
+    }
+  }
+
+  /// Apply an equipped skin coming from the server (no server echo).
+  Future<void> applyEquippedSkin(String? itemKey) async {
+    final skin = MascotSkinCatalog.byKey(itemKey);
+    equippedItemKeyNotifier.value = skin.key;
+    final childId = await ActiveChildContextService.instance.getActiveChildId();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_equippedPrefsKeyFor(childId), skin.key);
   }
 
   void _startMinuteBufferTimer() {
@@ -308,11 +359,16 @@ class GamificationService {
     required int itemCost,
   }) async {
     await initialize();
+    if (!MascotSkinCatalog.isKnownKey(itemKey)) return false;
+    if (await ownsItem(itemKey)) {
+      await equipItem(itemKey);
+      return true;
+    }
     if (coinsNotifier.value < itemCost) {
       return false;
     }
     coinsNotifier.value -= itemCost;
-    
+
     final childId = await ActiveChildContextService.instance.getActiveChildId();
     await OfflineDatabaseService.instance.addInventoryItem(
       childId: childId,
@@ -323,26 +379,35 @@ class GamificationService {
 
     await equipItem(itemKey);
     await _persistState();
+    if (childId != null) {
+      unawaited(ServerSyncService.instance.pushPurchase(childId, itemKey));
+    }
     return true;
   }
 
   Future<bool> ownsItem(String itemKey) async {
     await initialize();
+    if (itemKey == MascotSkinCatalog.frogKey) return true;
     final childId = await ActiveChildContextService.instance.getActiveChildId();
     return OfflineDatabaseService.instance.hasInventoryItem(childId: childId, itemKey: itemKey);
   }
 
-  Future<void> equipItem(String itemKey) async {
+  Future<void> equipItem(String itemKey, {bool syncToServer = true}) async {
     await initialize();
-    equippedItemKeyNotifier.value = itemKey;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_equippedPrefsKey, itemKey);
+    await applyEquippedSkin(itemKey);
+    final childId = await ActiveChildContextService.instance.getActiveChildId();
+    if (childId != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(equippedDirtyKeyFor(childId), true);
+      if (syncToServer) {
+        unawaited(ServerSyncService.instance.pushEquip(childId, equippedItemKeyNotifier.value));
+      }
+    }
   }
 
+  /// Back to the default Green Frog skin.
   Future<void> unequipItem() async {
-    equippedItemKeyNotifier.value = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_equippedPrefsKey);
+    await equipItem(MascotSkinCatalog.frogKey);
   }
 
   Future<int> evaluateDailyStreak({required bool dailyGoalMet}) async {

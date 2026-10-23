@@ -28,6 +28,12 @@ class ApiConfigService {
   static String partneredProfessionalsEndpoint = '/api/mobile/partnered-professionals';
   static String childDashboardEndpoint(int childId) =>
       '/api/mobile/child/$childId/dashboard';
+  static String inventoryEndpoint(int childId) =>
+      '/api/mobile/child/$childId/inventory';
+  static String inventoryPurchaseEndpoint(int childId) =>
+      '/api/mobile/child/$childId/inventory/purchase';
+  static String inventoryEquipEndpoint(int childId) =>
+      '/api/mobile/child/$childId/inventory/equip';
 
   static bool get isConfigured => baseUrl.trim().isNotEmpty;
 

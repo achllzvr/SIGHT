@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/lumi_theme.dart';
 import 'arcade/arcade_button.dart';
+import 'looping_asset_image.dart';
 
 /// Primary pressable button — arcade pill style.
 class LumiPressButton extends StatefulWidget {
@@ -219,11 +220,15 @@ class LumiInterventionModal extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset(
-              mascotAsset,
-              height: 96,
-              errorBuilder: (_, __, ___) => const Icon(Icons.pets, size: 72, color: LumiColors.greenMid),
-            ),
+            // Skin WebPs are multi-frame; PNGs (legacy head/great) stay static.
+            mascotAsset.endsWith('.webp')
+                ? LoopingAssetImage(asset: mascotAsset, height: 96)
+                : Image.asset(
+                    mascotAsset,
+                    height: 96,
+                    errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.pets, size: 72, color: LumiColors.greenMid),
+                  ),
             const SizedBox(height: LumiSpacing.lg),
             Text(
               LumiTheme.caps(title),

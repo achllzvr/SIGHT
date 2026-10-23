@@ -1,7 +1,11 @@
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'api_client_service.dart';
 import 'api_config_service.dart';
 import 'gamification_service.dart';
 import 'guardian_preferences_service.dart';
+import 'mascot_skin_service.dart';
+import 'offline_database_service.dart';
 import 'offline_models.dart';
 
 class SyncOperationResult<T> {
@@ -348,6 +352,94 @@ class ServerSyncService {
     } catch (e) {
       return SyncOperationResult(success: false, error: 'Dashboard fetch exception: $e');
     }
+  }
+
+  // === Mascot skin inventory sync ===
+
+  Future<SyncOperationResult<Map<String, dynamic>>> fetchInventory(int childId) async {
+    if (!ApiConfigService.isConfigured) {
+      return const SyncOperationResult(success: false, error: 'API base URL is not configured.');
+    }
+    try {
+      final uri = ApiConfigService.buildUri(ApiConfigService.inventoryEndpoint(childId));
+      final response = await ApiClientService.instance.get(uri);
+      if (!response.isSuccess) {
+        return SyncOperationResult(success: false, error: 'Inventory fetch failed (${response.statusCode})');
+      }
+      final data = response.data;
+      if (data is Map && data['data'] is Map) {
+        return SyncOperationResult(success: true, data: Map<String, dynamic>.from(data['data'] as Map));
+      }
+      return const SyncOperationResult(success: false, error: 'Invalid inventory payload.');
+    } catch (e) {
+      return SyncOperationResult(success: false, error: 'Inventory fetch exception: $e');
+    }
+  }
+
+  /// Push one locally-purchased skin to the account. Safe to retry: the
+  /// server records purchases idempotently.
+  Future<bool> pushPurchase(int childId, String itemKey) async {
+    if (!ApiConfigService.isConfigured) return false;
+    try {
+      final uri = ApiConfigService.buildUri(ApiConfigService.inventoryPurchaseEndpoint(childId));
+      final response = await ApiClientService.instance.post(uri, jsonBody: {'item_key': itemKey});
+      if (!response.isSuccess) return false;
+      final data = response.data;
+      final remoteId = (data is Map && data['data'] is Map) ? (data['data'] as Map)['inventory_id']?.toString() : null;
+      await OfflineDatabaseService.instance.markInventoryItemSynced(childId: childId, itemKey: itemKey, remoteId: remoteId);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> pushEquip(int childId, String itemKey) async {
+    if (!ApiConfigService.isConfigured) return false;
+    try {
+      final uri = ApiConfigService.buildUri(ApiConfigService.inventoryEquipEndpoint(childId));
+      final response = await ApiClientService.instance.put(uri, jsonBody: {'item_key': itemKey});
+      if (response.isSuccess) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(GamificationService.equippedDirtyKeyFor(childId));
+      }
+      return response.isSuccess;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Full reconcile for a child: push offline purchases, push the locally
+  /// equipped skin, then pull the server record (account truth when online)
+  /// into the local cache and equipped notifier.
+  Future<void> syncInventoryForChild(int childId) async {
+    final db = OfflineDatabaseService.instance;
+    final pending = await db.listPendingInventoryItems(childId: childId);
+    for (final row in pending) {
+      final key = row['itemKey'] as String?;
+      if (key != null && MascotSkinCatalog.isKnownKey(key)) {
+        await pushPurchase(childId, key);
+      }
+    }
+    // Only push the equipped skin if it was explicitly changed on this
+    // device; otherwise the server's saved skin wins (reinstall restore).
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(GamificationService.equippedDirtyKeyFor(childId)) == true) {
+      final localEquipped = GamificationService.instance.equippedItemKeyNotifier.value;
+      await pushEquip(childId, localEquipped);
+    }
+
+    final result = await fetchInventory(childId);
+    if (!result.success || result.data == null) return;
+    final owned = result.data!['owned_item_keys'];
+    if (owned is List) {
+      for (final raw in owned) {
+        final key = raw?.toString();
+        if (key == null || !MascotSkinCatalog.isKnownKey(key) || key == MascotSkinCatalog.frogKey) continue;
+        final skin = MascotSkinCatalog.byKey(key);
+        await db.addInventoryItem(childId: childId, itemKey: skin.key, itemName: skin.name, cost: skin.cost, synced: true);
+      }
+    }
+    await GamificationService.instance.applyEquippedSkin(result.data!['equipped_skin_key']?.toString());
   }
 
   Future<SyncOperationResult<List<Map<String, dynamic>>>> fetchPartneredProfessionals({

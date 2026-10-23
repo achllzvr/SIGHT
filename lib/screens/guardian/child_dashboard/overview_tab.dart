@@ -11,6 +11,7 @@ import '../../../services/server_sync_service.dart';
 import '../../../theme/lumi_theme.dart';
 import '../../../widgets/arcade/arcade.dart';
 import '../../../widgets/clinical_trend_alert_card.dart';
+import '../how_lumi_works_screen.dart';
 import 'charts.dart';
 import 'shared_widgets.dart';
 
@@ -86,6 +87,8 @@ class _ChildDashboardOverviewTabState extends State<ChildDashboardOverviewTab> {
   }
 
   Future<void> _loadAnalyticsData() async {
+    // Stars halt must never go stale: only a fresh remote tier >= 3 may set it.
+    GamificationService.instance.haltStarEconomy = false;
     try {
       final childId = widget.childId ?? await ActiveChildContextService.instance.getActiveChildId();
       if (childId == null) return;
@@ -97,9 +100,28 @@ class _ChildDashboardOverviewTabState extends State<ChildDashboardOverviewTab> {
       if (remote.success && remote.data != null) {
         _dashboardRemote = remote.data;
         final usage = remote.data!['usage_threshold'];
-        if (usage is Map && (usage['tier'] as num?) != null) {
-          GamificationService.instance.haltStarEconomy = ((usage['tier'] as num).toInt() >= 3);
-        }
+        GamificationService.instance.haltStarEconomy =
+            usage is Map && (usage['tier'] as num?) != null && ((usage['tier'] as num).toInt() >= 3);
+      } else {
+        _dashboardRemote = null;
+        GamificationService.instance.haltStarEconomy = false;
+      }
+
+      final isSevenDays = _selectedRangeApi == '7d';
+
+      // Non-7d ranges chart from the online DB (server series), not local SQLite.
+      if (!isSevenDays) {
+        _batches = [];
+        _batchesByDay = {};
+        final d = _dashboardRemote;
+        String fmt(dynamic v, {int dp = 1}) =>
+            v is num ? v.toStringAsFixed(dp) : '-';
+        _analyticsData = {
+          'avg_screen_time': fmt(d?['mean_screen_time_minutes'], dp: 0) == '-' ? '0' : fmt(d?['mean_screen_time_minutes'], dp: 0),
+          'avg_blink_rate': fmt(d?['mean_blink_rate']),
+          'avg_distance': fmt(d?['mean_distance_cm']),
+        };
+        return;
       }
 
       await LocalMetricsService.instance.initialize();
@@ -149,8 +171,21 @@ class _ChildDashboardOverviewTabState extends State<ChildDashboardOverviewTab> {
         'avg_blink_rate': batchCount > 0 ? (totalBlinkRate / batchCount).toStringAsFixed(1) : '-',
         'avg_distance': dayCount > 0 ? (totalDistance / dayCount).toStringAsFixed(1) : '-',
       };
-    } catch (_) {}
+    } catch (_) {
+      GamificationService.instance.haltStarEconomy = false;
+    }
   }
+
+  Map<String, dynamic>? get _remoteSeries {
+    final s = _dashboardRemote?['series'];
+    return s is Map ? Map<String, dynamic>.from(s) : null;
+  }
+
+  bool get _hasChartData =>
+      _selectedRangeApi == '7d' ? _batches.isNotEmpty : (_remoteSeries?['labels'] as List?)?.isNotEmpty == true;
+
+  int get _recommendedMinutes =>
+      (_dashboardRemote?['age_max_minutes'] as num?)?.toInt() ?? 120;
 
   @override
   Widget build(BuildContext context) {
@@ -275,6 +310,16 @@ class _ChildDashboardOverviewTabState extends State<ChildDashboardOverviewTab> {
               child: Row(
                 children: [
                   const Expanded(child: GuardianSectionTitle('Usage Analytics', size: 17)),
+                  Tooltip(
+                    message: 'How LUMI measures distance, blinks, and screen time',
+                    child: IconButton(
+                      icon: const Icon(Icons.info_outline, color: LumiColors.primaryPurple),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const HowLumiWorksScreen()),
+                      ),
+                    ),
+                  ),
                   PopupMenuButton<String>(
                     initialValue: _selectedRangeApi,
                     color: LumiColors.cardWhite,
@@ -337,37 +382,59 @@ class _ChildDashboardOverviewTabState extends State<ChildDashboardOverviewTab> {
               childId: widget.childId,
             ),
             const SizedBox(height: LumiSpacing.md),
-            if (_batches.isEmpty)
+            if (!_hasChartData)
               const EmptyDataIndicator(message: 'No eye-care data for this time period yet.')
             else ...[
-              AnalyticsMetricCard(
-                title: 'Avg Screen Time',
-                value: _analyticsData?['avg_screen_time'] ?? '0',
-                unit: 'min/day',
-                change: _selectedPeriod,
+              Tooltip(
+                message: 'Average Watch time per day in $_selectedPeriod. Shorter is gentler for young eyes.',
+                child: AnalyticsMetricCard(
+                  title: 'Avg Screen Time',
+                  value: _analyticsData?['avg_screen_time'] ?? '0',
+                  unit: 'min/day',
+                  change: _selectedPeriod,
+                ),
               ),
               const SizedBox(height: LumiSpacing.md),
-              AnalyticsMetricCard(
-                title: 'Avg Blinks',
-                value: _analyticsData?['avg_blink_rate'] ?? '-',
-                unit: 'blinks/min',
-                change: _selectedPeriod,
+              Tooltip(
+                message: 'Blinking keeps eyes moist. Around 12 or more per minute is comfy.',
+                child: AnalyticsMetricCard(
+                  title: 'Avg Blinks',
+                  value: _analyticsData?['avg_blink_rate'] ?? '-',
+                  unit: 'blinks/min',
+                  change: _selectedPeriod,
+                ),
               ),
               const SizedBox(height: LumiSpacing.md),
-              AnalyticsMetricCard(
-                title: 'Avg Distance',
-                value: _analyticsData?['avg_distance'] ?? '-',
-                unit: 'cm',
-                change: _selectedPeriod,
+              Tooltip(
+                message: 'About an arm\'s length (30 cm or more) is the comfy zone.',
+                child: AnalyticsMetricCard(
+                  title: 'Avg Distance',
+                  value: _analyticsData?['avg_distance'] ?? '-',
+                  unit: 'cm',
+                  change: _selectedPeriod,
+                ),
               ),
               const SizedBox(height: LumiSpacing.xl),
-              WeeklyScreenTimeChart(batches: _batches, batchesByDay: _batchesByDay),
-              const SizedBox(height: LumiSpacing.xl),
-              BlinkRateTrendsChart(batches: _batches, batchesByDay: _batchesByDay),
-              const SizedBox(height: LumiSpacing.xl),
-              ViewingDistanceTrendsChart(batches: _batches, batchesByDay: _batchesByDay),
-              const SizedBox(height: LumiSpacing.xl),
-              DailyUsagePatternChart(batches: _batches, batchesByDay: _batchesByDay),
+              if (_selectedRangeApi == '7d') ...[
+                WeeklyScreenTimeChart(
+                  batches: _batches,
+                  batchesByDay: _batchesByDay,
+                  recommendedMinutes: _recommendedMinutes,
+                  rangeLabel: _selectedPeriod,
+                ),
+                const SizedBox(height: LumiSpacing.xl),
+                BlinkRateTrendsChart(batches: _batches, batchesByDay: _batchesByDay),
+                const SizedBox(height: LumiSpacing.xl),
+                ViewingDistanceTrendsChart(batches: _batches, batchesByDay: _batchesByDay),
+                const SizedBox(height: LumiSpacing.xl),
+                DailyUsagePatternChart(batches: _batches, batchesByDay: _batchesByDay),
+              ] else ...[
+                SeriesScreenTimeChart(series: _remoteSeries!, rangeLabel: _selectedPeriod, recommendedMinutes: _recommendedMinutes),
+                const SizedBox(height: LumiSpacing.xl),
+                SeriesBlinkChart(series: _remoteSeries!, rangeLabel: _selectedPeriod),
+                const SizedBox(height: LumiSpacing.xl),
+                SeriesDistanceChart(series: _remoteSeries!, rangeLabel: _selectedPeriod),
+              ],
             ],
           ],
         ),

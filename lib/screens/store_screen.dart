@@ -1,20 +1,43 @@
 import 'package:flutter/material.dart';
 
+import '../services/active_child_context_service.dart';
 import '../services/gamification_service.dart';
+import '../services/mascot_skin_service.dart';
+import '../services/server_sync_service.dart';
 import '../theme/lumi_theme.dart';
 import '../widgets/arcade/arcade.dart';
+import '../widgets/looping_asset_image.dart';
 
-class StoreScreen extends StatelessWidget {
+/// Star Shop: mascot skins only.
+/// Green Frog is the free default; Brown Bear costs 150 Stars.
+/// Purchases are recorded on the child's account (server inventory) with the
+/// local SQLite inventory as offline cache.
+class StoreScreen extends StatefulWidget {
   const StoreScreen({super.key});
 
-  static const List<Map<String, dynamic>> storeItems = [
-    {'key': 'skin_blue', 'name': 'Blue Tint', 'cost': 50, 'icon': 'plus', 'desc': 'Cool blue glow for LUMI'},
-    {'key': 'skin_pink', 'name': 'Pink Tint', 'cost': 50, 'icon': 'like', 'desc': 'Soft pink sparkle'},
-    {'key': 'acc_hat', 'name': 'Party Hat', 'cost': 100, 'icon': 'star', 'desc': 'Celebrate good habits!'},
-    {'key': 'acc_shades', 'name': 'Cool Shades', 'cost': 75, 'icon': 'play', 'desc': 'Eye-care hero look'},
-    {'key': 'acc_scarf', 'name': 'Cozy Scarf', 'cost': 80, 'icon': 'tshirt', 'desc': 'Snug and stylish'},
-    {'key': 'acc_crown', 'name': 'Star Crown', 'cost': 150, 'icon': 'star', 'desc': 'For streak champions'},
-  ];
+  static const List<MascotSkin> storeItems = MascotSkinCatalog.all;
+
+  @override
+  State<StoreScreen> createState() => _StoreScreenState();
+}
+
+class _StoreScreenState extends State<StoreScreen> {
+  int _syncGen = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncInventory();
+  }
+
+  Future<void> _syncInventory() async {
+    final childId = await ActiveChildContextService.instance.getActiveChildId();
+    if (childId != null) {
+      await ServerSyncService.instance.syncInventoryForChild(childId);
+    }
+    // Bump the generation so cards re-check ownership after a server restore.
+    if (mounted) setState(() => _syncGen++);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,12 +84,13 @@ class StoreScreen extends StatelessWidget {
                 crossAxisCount: 2,
                 crossAxisSpacing: LumiSpacing.md,
                 mainAxisSpacing: LumiSpacing.md,
-                // Tall enough for icon + copy + compact CTA without overflow.
-                mainAxisExtent: 232,
+                // Tall enough for skin preview + state strip + copy + CTA.
+                mainAxisExtent: 318,
               ),
-              itemCount: storeItems.length,
+              itemCount: StoreScreen.storeItems.length,
               itemBuilder: (context, index) {
-                return _StoreItemCard(item: storeItems[index]);
+                final skin = StoreScreen.storeItems[index];
+                return _SkinCard(key: ValueKey('${skin.key}-$_syncGen'), skin: skin);
               },
             ),
           ),
@@ -76,15 +100,15 @@ class StoreScreen extends StatelessWidget {
   }
 }
 
-class _StoreItemCard extends StatefulWidget {
-  final Map<String, dynamic> item;
-  const _StoreItemCard({required this.item});
+class _SkinCard extends StatefulWidget {
+  final MascotSkin skin;
+  const _SkinCard({super.key, required this.skin});
 
   @override
-  State<_StoreItemCard> createState() => _StoreItemCardState();
+  State<_SkinCard> createState() => _SkinCardState();
 }
 
-class _StoreItemCardState extends State<_StoreItemCard> {
+class _SkinCardState extends State<_SkinCard> {
   bool? _owned;
 
   @override
@@ -94,23 +118,19 @@ class _StoreItemCardState extends State<_StoreItemCard> {
   }
 
   Future<void> _refreshOwned() async {
-    final owned = await GamificationService.instance.ownsItem(widget.item['key'] as String);
+    final owned = await GamificationService.instance.ownsItem(widget.skin.key);
     if (mounted) setState(() => _owned = owned);
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = widget.item['name'] as String;
-    final desc = widget.item['desc'] as String?;
-    final cost = widget.item['cost'] as int;
-    final icon = widget.item['icon'] as String;
-    final key = widget.item['key'] as String;
+    final skin = widget.skin;
 
-    return ValueListenableBuilder<String?>(
+    return ValueListenableBuilder<String>(
       valueListenable: GamificationService.instance.equippedItemKeyNotifier,
       builder: (context, equipped, _) {
-        final isEquipped = equipped == key;
-        final owned = _owned == true;
+        final isEquipped = equipped == skin.key;
+        final owned = skin.isDefault || _owned == true;
 
         return ArcadeCard(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
@@ -122,8 +142,8 @@ class _StoreItemCardState extends State<_StoreItemCard> {
                 child: Column(
                   children: [
                     Container(
-                      width: 56,
-                      height: 56,
+                      width: 84,
+                      height: 84,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: isEquipped ? LumiColors.secondaryGreen : LumiColors.secondaryPurple,
@@ -133,48 +153,62 @@ class _StoreItemCardState extends State<_StoreItemCard> {
                           width: 2,
                         ),
                       ),
-                      child: ArcadeIcon(icon, size: 28),
+                      child: LoopingAssetImage(asset: skin.previewAsset, fit: BoxFit.contain),
+                    ),
+                    const SizedBox(height: 6),
+                    // State strip: first frame only (full loops are for the hero).
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        for (final asset in skin.allStateAssets)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: Image.asset(asset, width: 26, height: 26, fit: BoxFit.contain),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: LumiSpacing.sm),
                     Text(
-                      name,
+                      skin.name,
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: LumiTheme.clanMedium(14, color: LumiColors.textDark, height: 1.15),
                     ),
-                    if (desc != null) ...[
-                      const SizedBox(height: 4),
-                      Expanded(
-                        child: Text(
-                          desc,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: LumiTheme.clanRegular(11, color: LumiColors.textMuted, height: 1.25),
-                        ),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: Text(
+                        skin.isDefault ? 'Owned · Default\n${skin.description}' : skin.description,
+                        textAlign: TextAlign.center,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: LumiTheme.clanRegular(11, color: LumiColors.textMuted, height: 1.25),
                       ),
-                    ] else
-                      const Spacer(),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: LumiSpacing.sm),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const ArcadeIcon('star', size: 14),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      '$cost',
+              if (!owned)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const ArcadeIcon('star', size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${skin.cost}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: LumiTheme.clanMedium(13, color: LumiColors.primaryGreen, height: 1.1),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                )
+              else
+                Text(
+                  skin.isDefault ? 'FREE' : 'OWNED',
+                  textAlign: TextAlign.center,
+                  style: LumiTheme.clanMedium(11, color: LumiColors.textMuted, height: 1.1),
+                ),
               const SizedBox(height: LumiSpacing.sm),
               _StoreActionButton(
                 label: owned ? (isEquipped ? 'Wearing' : 'Wear') : 'Buy',
@@ -182,10 +216,8 @@ class _StoreItemCardState extends State<_StoreItemCard> {
                 fill: owned && isEquipped ? LumiColors.secondaryGreen : LumiColors.secondaryPurple,
                 onTap: () async {
                   if (owned) {
-                    if (isEquipped) {
-                      await GamificationService.instance.unequipItem();
-                    } else {
-                      await GamificationService.instance.equipItem(key);
+                    if (!isEquipped) {
+                      await GamificationService.instance.equipItem(skin.key);
                     }
                   } else {
                     await _handlePurchase(context);
@@ -201,9 +233,9 @@ class _StoreItemCardState extends State<_StoreItemCard> {
 
   Future<void> _handlePurchase(BuildContext context) async {
     final success = await GamificationService.instance.processWalletTransaction(
-      itemKey: widget.item['key'] as String,
-      itemName: widget.item['name'] as String,
-      itemCost: widget.item['cost'] as int,
+      itemKey: widget.skin.key,
+      itemName: widget.skin.name,
+      itemCost: widget.skin.cost,
     );
 
     if (!context.mounted) return;
@@ -212,7 +244,7 @@ class _StoreItemCardState extends State<_StoreItemCard> {
       await _refreshOwned();
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('You bought ${widget.item['name']}! Tap Wear to put it on.')),
+        SnackBar(content: Text('You bought ${widget.skin.name}! LUMI is wearing it now.')),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(

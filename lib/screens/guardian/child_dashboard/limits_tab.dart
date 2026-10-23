@@ -66,6 +66,13 @@ class _ChildDashboardLimitsTabState extends State<ChildDashboardLimitsTab> {
   Future<void> _savePreferences() async {
     setState(() => _saving = true);
     try {
+      // Hard age cap: never persist a limit above this child's age tier.
+      _preferences = _preferences.copyWith(
+        dailyScreenLimitMinutes: ClinicalAnalyticsHelpers.clampDailyLimit(
+          _preferences.dailyScreenLimitMinutes,
+          _ageMaxMinutes,
+        ),
+      );
       await GuardianPreferencesService.instance.savePreferences(_preferences);
       await GuardianPreferencesService.instance.pushSessionLimitsToServer(_preferences);
       await RuleEngineService.instance.applyGuardianPreferences(_preferences);
@@ -163,8 +170,9 @@ class _ChildDashboardLimitsTabState extends State<ChildDashboardLimitsTab> {
                       .clamp(15, _ageMaxMinutes)
                       .toDouble(),
                   min: 15,
-                  max: 120,
-                  divisions: ((120 - 15) / 5).round(),
+                  // Hard cap: positions above the age tier are not selectable.
+                  max: _ageMaxMinutes.toDouble(),
+                  divisions: ((_ageMaxMinutes - 15) / 5).round().clamp(1, 21),
                   accent: LumiColors.primaryGreen,
                   track: LumiColors.secondaryLight,
                   onChanged: (v) {

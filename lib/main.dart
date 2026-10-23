@@ -32,6 +32,7 @@ import 'services/detection_service.dart';
 import 'services/session_timer_service.dart';
 import 'services/gamification_service.dart';
 import 'services/guardian_login_sync_service.dart';
+import 'services/mascot_skin_service.dart';
 import 'services/guardian_preferences_service.dart';
 import 'services/guardian_setup_service.dart';
 import 'services/local_metrics_service.dart';
@@ -481,7 +482,7 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
                     title: '${LumiTheme.formatRemainingFriendly(seconds)} left!',
                     message:
                         'Finish early for +20 Stars, or keep watching — you\'re almost there!',
-                    mascotAsset: 'assets/mascot/mascot_great_v1.png',
+                    mascotAsset: _equippedMascotAsset(),
                     barrierColor: Colors.black54,
                     ignorePointer: false,
                     primaryLabel: 'FINISH NOW (+20 STARS)',
@@ -497,6 +498,15 @@ class _RootAppState extends State<RootApp> with WidgetsBindingObserver {
       ],
     );
   }
+}
+
+/// Equipped skin's image for the child's current HP (big mascot moments).
+String _equippedMascotAsset() {
+  final g = GamificationService.instance;
+  return MascotSkinCatalog.assetFor(
+    skinKey: g.equippedItemKeyNotifier.value,
+    hp: g.healthScoreNotifier.value,
+  );
 }
 
 class _OfflineAlertOverlay extends StatelessWidget {
@@ -593,9 +603,9 @@ class _OfflineAlertOverlay extends StatelessWidget {
             final title = alertLevel == AlertLevel.redOverlay
                 ? (isFaceLoss ? 'Where did you go?' : 'Let\'s move back a little')
                 : 'Blink with Lumi!';
-            final mascot = alertLevel == AlertLevel.screenLock
-                ? 'assets/mascot/mascot_great_v1.png'
-                : 'assets/mascot/mascot_head_v1.png';
+            // Big intervention modal follows the equipped skin; only the
+            // tiny blink-bubble icon above keeps the frog head crop.
+            final mascot = _equippedMascotAsset();
             final barrier = alertLevel == AlertLevel.redOverlay
                 ? LumiColors.coralTrack.withValues(alpha: 0.38)
                 : Colors.black.withValues(alpha: 0.35);

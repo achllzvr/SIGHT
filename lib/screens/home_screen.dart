@@ -7,10 +7,12 @@ import '../services/cleanup_service.dart';
 import '../services/feedback_service.dart';
 import '../services/gamification_service.dart';
 import '../services/guardian_auth_service.dart';
+import '../services/mascot_skin_service.dart';
 import '../services/session_timer_service.dart';
 import '../services/task_service.dart';
 import '../theme/lumi_theme.dart';
 import '../widgets/arcade/arcade.dart';
+import '../widgets/looping_asset_image.dart';
 import '../widgets/lumi_dialog.dart';
 import '../widgets/lumi_form.dart';
 
@@ -111,10 +113,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             child: SizedBox(
                               width: mascotW,
                               height: mascotH,
-                              child: ValueListenableBuilder<int>(
-                                valueListenable: GamificationService.instance.healthScoreNotifier,
-                                builder: (_, hp, __) {
-                                  final path = resolveHomeMascotAsset(hp: hp);
+                              child: ValueListenableBuilder<String>(
+                                valueListenable: GamificationService.instance.equippedItemKeyNotifier,
+                                builder: (_, skinKey, __) {
+                                  return ValueListenableBuilder<int>(
+                                    valueListenable: GamificationService.instance.healthScoreNotifier,
+                                    builder: (_, hp, __) {
+                                      final path = resolveHomeMascotAsset(hp: hp, skinKey: skinKey);
                                   return AnimatedSwitcher(
                                     duration: LumiMotion.slow,
                                     switchInCurve: LumiMotion.easeStandard,
@@ -126,11 +131,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                         child: child,
                                       ),
                                     ),
-                                    child: Image.asset(
-                                      path,
-                                      key: ValueKey(path),
-                                      fit: BoxFit.contain,
-                                    ),
+                                      child: LoopingAssetImage(
+                                        key: ValueKey(path),
+                                        asset: path,
+                                        fit: BoxFit.contain,
+                                      ),
+                                      );
+                                    },
                                   );
                                 },
                               ),
@@ -448,11 +455,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 }
 
-/// Home mascot reflects persisted HP (same thresholds as GamificationService.updatePetState).
-String resolveHomeMascotAsset({required int hp}) {
-  if (hp >= 70) return 'assets/mascot/mascot_great_v1.png';
-  if (hp >= 30) return 'assets/mascot/mascot_good_v1.png';
-  return 'assets/mascot/mascot_bad_v1.png';
+/// Home mascot = equipped skin in the HP state band:
+/// Healthy >=70, Decreasing 30-69, Low 1-29, Zero == 0.
+String resolveHomeMascotAsset({required int hp, String? skinKey}) {
+  return MascotSkinCatalog.assetFor(skinKey: skinKey, hp: hp);
 }
 
 class _HomeTopChrome extends StatelessWidget {

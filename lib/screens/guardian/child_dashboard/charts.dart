@@ -10,11 +10,15 @@ import '../../../widgets/rounded_card.dart';
 class WeeklyScreenTimeChart extends StatelessWidget {
   final List<CuratedMetricBatch> batches;
   final Map<DateTime, List<CuratedMetricBatch>> batchesByDay;
+  final int recommendedMinutes;
+  final String rangeLabel;
 
   const WeeklyScreenTimeChart({
     super.key,
     required this.batches,
     required this.batchesByDay,
+    this.recommendedMinutes = 120,
+    this.rangeLabel = 'Last 7 Days',
   });
 
   @override
@@ -22,9 +26,8 @@ class WeeklyScreenTimeChart extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // Build 7-day data starting from 6 days ago
+    // Build 7-day data starting from 6 days ago (local SQLite path, 7d only)
     final chartData = <({int dayIndex, String label, int actualMinutes, int recommendedMinutes})>[];
-    const recommendedMinutes = 110;
 
     for (int i = 6; i >= 0; i--) {
       final dayDate = today.subtract(Duration(days: i));
@@ -43,14 +46,14 @@ class WeeklyScreenTimeChart extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Weekly Screen Time',
-            style: TextStyle(fontSize: 16, height: 24 / 16, fontWeight: FontWeight.w600, color: LumiColors.textDark),
+          Text(
+            'Screen Time — $rangeLabel',
+            style: const TextStyle(fontSize: 16, height: 24 / 16, fontWeight: FontWeight.w600, color: LumiColors.textDark),
           ),
           const SizedBox(height: LumiSpacing.sm),
-          const Text(
-            'Actual vs Recommended Usage',
-            style: TextStyle(fontSize: 12, color: LumiColors.textMuted),
+          Text(
+            'Actual vs Recommended Usage ($recommendedMinutes min/day for this age)',
+            style: const TextStyle(fontSize: 12, color: LumiColors.textMuted),
           ),
           const SizedBox(height: LumiSpacing.lg),
           SizedBox(
@@ -791,4 +794,145 @@ class DailyUsagePatternChart extends StatelessWidget {
       ),
     );
   }
+}
+/// Online-DB series charts for non-7d ranges (server-bucketed labels/values).
+List<String> _seriesLabels(Map<String, dynamic> s) =>
+    ((s['labels'] as List?) ?? []).map((e) => e.toString()).toList();
+
+List<double?> _seriesValues(Map<String, dynamic> s, String key) =>
+    ((s[key] as List?) ?? []).map((e) => e is num ? e.toDouble() : null).toList();
+
+class _SeriesLineChart extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final List<String> labels;
+  final List<double?> values;
+  final Color color;
+  final String unit;
+  final double? threshold;
+
+  const _SeriesLineChart({
+    required this.title,
+    required this.subtitle,
+    required this.labels,
+    required this.values,
+    required this.color,
+    required this.unit,
+    this.threshold,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final nums = values.whereType<double>().toList();
+    final maxV = nums.isEmpty ? 10.0 : nums.reduce((a, b) => a > b ? a : b);
+    final maxY = (maxV * 1.25).clamp(10.0, 10000.0);
+    return RoundedCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontSize: 16, height: 24 / 16, fontWeight: FontWeight.w600, color: LumiColors.textDark)),
+          const SizedBox(height: LumiSpacing.sm),
+          Text(subtitle, style: const TextStyle(fontSize: 12, color: LumiColors.textMuted)),
+          const SizedBox(height: LumiSpacing.lg),
+          SizedBox(
+            height: 180,
+            child: LineChart(
+              LineChartData(
+                minY: 0,
+                maxY: maxY.toDouble(),
+                lineTouchData: LineTouchData(enabled: true, touchTooltipData: LineTouchTooltipData(getTooltipColor: (_) => LumiColors.textDark)),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40, getTitlesWidget: (v, _) => Text('${v.toInt()}$unit', style: const TextStyle(fontSize: 10, color: LumiColors.textMuted)))),
+                  bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, getTitlesWidget: (v, _) {
+                    final i = v.toInt();
+                    if (i < 0 || i >= labels.length) return const SizedBox.shrink();
+                    // Thin out crowded bucket labels.
+                    if (labels.length > 8 && i % 2 != 0) return const SizedBox.shrink();
+                    return Text(labels[i], style: const TextStyle(fontSize: 9, color: LumiColors.textMuted));
+                  })),
+                ),
+                gridData: FlGridData(show: true, drawVerticalLine: false, getDrawingHorizontalLine: (v) => v == threshold ? FlLine(color: LumiColors.redAlert.withValues(alpha: 0.3), strokeWidth: 2, dashArray: [5, 5]) : const FlLine(color: LumiColors.outline, strokeWidth: 1)),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: [for (var i = 0; i < values.length; i++) if (values[i] != null) FlSpot(i.toDouble(), values[i]!)],
+                    isCurved: true,
+                    color: color,
+                    barWidth: 3,
+                    dotData: const FlDotData(show: true),
+                    belowBarData: BarAreaData(show: true, color: color.withValues(alpha: 0.1)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class SeriesScreenTimeChart extends StatelessWidget {
+  final Map<String, dynamic> series;
+  final String rangeLabel;
+  final int recommendedMinutes;
+  const SeriesScreenTimeChart({super.key, required this.series, required this.rangeLabel, this.recommendedMinutes = 120});
+  @override
+  Widget build(BuildContext context) => _SeriesLineChart(
+        title: 'Screen Time — $rangeLabel',
+        subtitle: 'Online records · recommended $recommendedMinutes min/day for this age',
+        labels: _seriesLabels(series),
+        values: _seriesValues(series, 'screen_times'),
+        color: LumiColors.purpleMid,
+        unit: 'm',
+        threshold: recommendedMinutes.toDouble(),
+      );
+}
+
+class SeriesBlinkChart extends StatelessWidget {
+  final Map<String, dynamic> series;
+  final String rangeLabel;
+  const SeriesBlinkChart({super.key, required this.series, required this.rangeLabel});
+  @override
+  Widget build(BuildContext context) {
+    final values = _seriesValues(series, 'blink_rates');
+    final nums = values.whereType<double>().toList();
+    Widget badge = const SizedBox.shrink();
+    if (nums.isNotEmpty) {
+      final avg = nums.reduce((a, b) => a + b) / nums.length;
+      final ibi = avg > 0 ? 60.0 / avg : 0.0;
+      final opi = ibi > 0 ? 6.0 / ibi : 0.0;
+      final level = avg >= 12 && opi >= 1.2 ? 1 : avg >= 10 && opi >= 1.0 ? 2 : avg >= 6 && opi >= 0.6 ? 3 : 4;
+      final label = switch (level) { 1 => 'Eyes look comfortable', 2 => 'Blinking a bit less than ideal', 3 => 'Eyes may feel dry — more blinks help', _ => 'Eyes need a break — try the blink game' };
+      badge = Padding(
+        padding: const EdgeInsets.only(bottom: LumiSpacing.md),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(LumiSpacing.md),
+          decoration: BoxDecoration(color: LumiColors.secondaryLight, borderRadius: BorderRadius.circular(LumiRadii.md), border: Border.all(color: LumiColors.outline, width: 2)),
+          child: Text('Blink comfort · Level $level — $label', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: LumiColors.textDark)),
+        ),
+      );
+    }
+    return Column(children: [badge, _SeriesLineChart(title: 'Blink Trends — $rangeLabel', subtitle: 'Online daily/weekly/monthly averages', labels: _seriesLabels(series), values: values, color: LumiColors.greenMid, unit: '')]);
+  }
+}
+
+class SeriesDistanceChart extends StatelessWidget {
+  final Map<String, dynamic> series;
+  final String rangeLabel;
+  const SeriesDistanceChart({super.key, required this.series, required this.rangeLabel});
+  @override
+  Widget build(BuildContext context) => _SeriesLineChart(
+        title: 'Viewing Distance — $rangeLabel',
+        subtitle: 'Online averages · 30 cm or farther is the comfy zone',
+        labels: _seriesLabels(series),
+        values: _seriesValues(series, 'distances'),
+        color: LumiColors.primaryPurple,
+        unit: '',
+        threshold: 30,
+      );
 }

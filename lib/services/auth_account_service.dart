@@ -7,6 +7,7 @@ import 'connectivity_service.dart';
 import 'api_client_service.dart';
 import 'api_config_service.dart';
 import 'clinical_analytics_helpers.dart';
+import 'device_id_service.dart';
 
 class GuardianAccount {
   final String email;
@@ -175,7 +176,11 @@ class AuthAccountService {
     final uri = ApiConfigService.buildUri('/api/shared/login');
     final response = await ApiClientService.instance.post(
       uri,
-      jsonBody: {'email': normalizedEmail, 'password': password},
+      jsonBody: {
+        'email': normalizedEmail,
+        'password': password,
+        'device_id': await DeviceIdService.instance.getDeviceId(),
+      },
     );
 
     if (!response.isSuccess) {
@@ -711,7 +716,11 @@ class AuthAccountService {
         final uri = ApiConfigService.buildUri(ApiConfigService.loginChildEndpoint);
         response = await ApiClientService.instance.post(
           uri,
-          jsonBody: {'login_code': normalizedCode, 'password': password},
+          jsonBody: {
+            'login_code': normalizedCode,
+            'password': password,
+            'device_id': await DeviceIdService.instance.getDeviceId(),
+          },
         );
       } catch (e) {
         debugPrint('Child online login network failure, falling back to cache: $e');

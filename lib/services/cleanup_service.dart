@@ -5,6 +5,7 @@ import 'app_lifecycle_service.dart';
 import 'auth_session_service.dart';
 import 'detection_service.dart';
 import 'gamification_service.dart';
+import 'mascot_skin_service.dart';
 import 'local_metrics_service.dart';
 import 'metrics_service.dart';
 import 'offline_models.dart';
@@ -66,7 +67,9 @@ class CleanupService {
       GamificationService.instance.healthScoreNotifier.value = 100;
       GamificationService.instance.coinsNotifier.value = 0;
       GamificationService.instance.dailyStreakNotifier.value = 0;
-      GamificationService.instance.equippedItemKeyNotifier.value = null;
+      // Reset to the default frog for the next login screen; the per-child
+      // stored/server equipped skin is kept and restored on next login.
+      GamificationService.instance.equippedItemKeyNotifier.value = MascotSkinCatalog.frogKey;
       if (kDebugMode) {
         debugPrint('[CleanupService] ✓ GamificationService cleared');
       }

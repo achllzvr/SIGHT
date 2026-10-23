@@ -420,8 +420,14 @@ class OfflineDatabaseService {
     required String itemKey,
     required String itemName,
     required int cost,
+    bool synced = false,
+    String? remoteId,
   }) async {
     await initialize();
+    if (await hasInventoryItem(childId: childId, itemKey: itemKey)) {
+      if (synced) await markInventoryItemSynced(childId: childId, itemKey: itemKey, remoteId: remoteId);
+      return 0;
+    }
     return _db.insert('child_inventory', {
       'childId': childId,
       'itemKey': itemKey,
@@ -429,7 +435,8 @@ class OfflineDatabaseService {
       'cost': cost,
       'quantity': 1,
       'acquiredAt': DateTime.now().millisecondsSinceEpoch,
-      'syncState': SyncState.pending.key,
+      'syncState': synced ? SyncState.synced.key : SyncState.pending.key,
+      'remoteId': remoteId,
     });
   }
 
@@ -442,5 +449,49 @@ class OfflineDatabaseService {
       limit: 1,
     );
     return rows.isNotEmpty;
+  }
+
+  Future<List<String>> listInventoryItemKeys({int? childId}) async {
+    await initialize();
+    final rows = await _db.query(
+      'child_inventory',
+      columns: ['itemKey'],
+      where: childId == null ? null : 'childId = ?',
+      whereArgs: childId == null ? null : [childId],
+    );
+    return rows.map((r) => r['itemKey'] as String).toList(growable: false);
+  }
+
+  Future<List<Map<String, Object?>>> listPendingInventoryItems({int? childId}) async {
+    await initialize();
+    return _db.query(
+      'child_inventory',
+      where: childId == null
+          ? 'syncState != ?'
+          : 'childId = ? AND syncState != ?',
+      whereArgs: childId == null ? [SyncState.synced.key] : [childId, SyncState.synced.key],
+    );
+  }
+
+  Future<void> markInventoryItemSynced({int? childId, required String itemKey, String? remoteId}) async {
+    await initialize();
+    await _db.update(
+      'child_inventory',
+      {'syncState': SyncState.synced.key, if (remoteId != null) 'remoteId': remoteId},
+      where: childId == null ? 'itemKey = ?' : 'childId = ? AND itemKey = ?',
+      whereArgs: childId == null ? [itemKey] : [childId, itemKey],
+    );
+  }
+
+  /// Discard inventory rows outside [allowedKeys] (legacy shop placeholders).
+  Future<int> deleteInventoryExcept(Set<String> allowedKeys) async {
+    await initialize();
+    if (allowedKeys.isEmpty) return _db.delete('child_inventory');
+    final placeholders = List.filled(allowedKeys.length, '?').join(',');
+    return _db.delete(
+      'child_inventory',
+      where: 'itemKey NOT IN ($placeholders)',
+      whereArgs: allowedKeys.toList(),
+    );
   }
 }
